@@ -44,50 +44,50 @@ a.link {
   transition: var(--transition);
   position: relative;
   font-weight: 600;
-}
 
-a.link:hover {
-  color: var(--accent-50);
-  cursor: pointer;
-}
+  &:hover {
+    color: var(--accent-50);
+    cursor: pointer;
+  }
 
-a.link:before,
-a.link:after {
+  &:before,
+  &:after {
   content: "";
-  position: absolute;
-  bottom: -5px;
-  width: 10px;
-  height: 8px;
-  margin: 5px 0 0;
-  transition: var(--transition);
-  opacity: 0;
-  background-color: var(--other);
-  left: 0;
-}
+    position: absolute;
+    bottom: -5px;
+    width: 10px;
+    height: 8px;
+    margin: 5px 0 0;
+    transition: var(--transition);
+    opacity: 0;
+    background-color: var(--other);
+    left: 0;
+  }
 
-a.link:hover:before,
-a.link:hover:after {
-  width: 100%;
-  opacity: 1;
+  &:hover::before,
+  &:hover::after {
+    width: 100%;
+    opacity: 1;
+  }
 }
 
 .icons {
   display: flex;
-}
 
-.icons a {
-  color: var(--accent);
-}
+  a {
+    color: var(--accent);
+  }
 
-.icons li {
-  font-size: 2em;
-  margin-right: 1em;
-}
+  li {
+    font-size: 2em;
+    margin-right: 1em;
 
-.icons li a:hover {
-  cursor: pointer;
-  color: var(--other);
-  transition: all 0.2s;
+    a:hover {
+      cursor: pointer;
+      color: var(--other);
+      transition: all 0.2s;
+    }
+  }
 }
 
 /* --- Tooltip --- */
