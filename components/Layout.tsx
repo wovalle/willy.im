@@ -1,40 +1,26 @@
-import React, { ReactNode } from 'react'
-import Link from 'next/link'
-import Head from 'next/head'
+import React, { ReactNode } from "react"
+import Head from "next/head"
 
 type Props = {
   children?: ReactNode
   title?: string
 }
 
-const Layout = ({ children, title = 'This is the default title' }: Props) => (
+const Layout: React.FC<Props> = ({ children, title = "Willy Ovalle" }) => (
   <div>
     <Head>
-      <title>{title}</title>
       <meta charSet="utf-8" />
-      <meta name="viewport" content="initial-scale=1.0, width=device-width" />
+      <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+      <title>{title}</title>
+      <meta name="keywords" content="willy,ovalle,wovalle,personal,site" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <meta property="og:image" content="/android-chrome-512x512.png" />
+      <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+      <link rel="icon" type="image/png" sizes="32x32" href="/favicon-16x16.png" />
+      <link rel="icon" type="image/png" sizes="16x16" href="/favicon-32x32.png" />
+      <link rel="manifest" href="/site.webmanifest" />
     </Head>
-    <header>
-      <nav>
-        <Link href="/">
-          <a>Home</a>
-        </Link>{' '}
-        |{' '}
-        <Link href="/about">
-          <a>About</a>
-        </Link>{' '}
-        |{' '}
-        <Link href="/users">
-          <a>Users List</a>
-        </Link>{' '}
-        | <a href="/api/users">Users API</a>
-      </nav>
-    </header>
     {children}
-    <footer>
-      <hr />
-      <span>I'm here to stay (Footer)</span>
-    </footer>
   </div>
 )
 
