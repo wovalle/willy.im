@@ -65,7 +65,7 @@ const IndexPage = () => (
             <Link href={playlistLink}>
               <a className="link"> music </a>
             </Link>
-            and ocassionally writes.
+            and occassionally writes.
           </p>
           <ul className="icons">{socialMedia}</ul>
         </div>
