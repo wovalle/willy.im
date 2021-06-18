@@ -5,6 +5,7 @@ const links = {
     linkedin: "https://www.linkedin.com/in/willyovalle/",
     telegram: "https://t.me/wovalle",
     github: "https://github.com/wovalle",
+    resume: "/resume.pdf",
   },
   aliases: {
     twitter: ["tw"],
