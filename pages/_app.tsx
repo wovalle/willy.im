@@ -1,9 +1,14 @@
+import "../styles/global.css"
+
 import { AppProps } from "next/app"
-import "../styles/global.scss"
-import "@fortawesome/fontawesome-svg-core/styles.css"
+import { ThemeProvider } from "next-themes"
 
 const App = ({ Component, pageProps }: AppProps) => {
-  return <Component {...pageProps} />
+  return (
+    <ThemeProvider attribute="class" defaultTheme="system">
+      <Component {...pageProps} />
+    </ThemeProvider>
+  )
 }
 
 export default App
