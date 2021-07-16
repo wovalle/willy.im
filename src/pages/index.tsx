@@ -7,9 +7,9 @@ const playlistLink =
 const HomePage = () => {
   return (
     <Layout title="Home | Willy Ovalle">
-      <main className="flex flex-col flex-grow p-10 mt-10">
+      <main className="flex flex-col flex-grow w-full p-10 mt-10">
         <p>Hi there 👋🏼</p>
-        <h1 className="text-4xl my-4 font-bold">
+        <h1 className="my-4 text-4xl font-bold">
           I'm Willy<span className="text-yellow-500">!</span>
         </h1>
 
