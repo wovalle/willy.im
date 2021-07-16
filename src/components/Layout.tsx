@@ -13,13 +13,12 @@ const Layout: React.FC<Props> = ({ children, title }) => (
     {title && (
       <Head>
         <title>{title}</title>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
     )}
-    <div className="flex flex-col justify-between min-h-screen text-gray-700 dark:text-gray-200">
+    <div className="flex flex-col justify-between w-full max-w-4xl min-h-screen mx-auto text-gray-700 dark:text-gray-200">
       <Header />
       {children}
+      {/* footer a bit more dark (see ) */}
       <Footer />
     </div>
   </>
