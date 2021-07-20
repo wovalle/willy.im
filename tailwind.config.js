@@ -9,6 +9,9 @@ module.exports = {
       fontFamily: {
         sans: ["Lato", ...fontFamily.sans],
       },
+      animation: {
+        "ping-2s": "ping 2s linear infinite",
+      },
     },
   },
 }

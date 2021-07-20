@@ -1,52 +1,70 @@
 import clsx from "clsx"
-import React, { Suspense } from "react"
-import { FaSpotify, FaSpinner } from "react-icons/fa"
+import Link from "next/link"
+import React from "react"
+import { FaSpotify } from "react-icons/fa"
+
 import { useNowPlaying } from "../hooks/useNowPlaying"
+import { github, linkedin, twitter, ama } from "../lib/static"
 
 const NowPlaying: React.FC = () => {
   const nowPlaying = useNowPlaying()
 
-  if (!nowPlaying.isPlaying) {
-    return <>Nothing 🙃</>
-  }
+  const title = nowPlaying.isPlaying ? nowPlaying.songName ?? "" : "not playing"
+  const subtitle = nowPlaying.isPlaying ? nowPlaying.artistName ?? "" : "anything"
+  const spotifyIconClass = clsx(
+    "absolute inline-flex w-full h-full bg-green-400 rounded-full opacity-75",
+    { "animate-ping-2s": nowPlaying.isPlaying },
+    { hidden: !nowPlaying.isPlaying }
+  )
 
   return (
-    <a href={nowPlaying?.url || ""}>
-      {nowPlaying?.songName} - {nowPlaying?.artistName}
-    </a>
+    <>
+      <div className="flex mx-4">
+        <div className="relative h-8">
+          <span className={spotifyIconClass}></span>
+          <FaSpotify size="2em" />
+        </div>
+      </div>
+      <div className="flex flex-col">
+        <div className="flex">
+          <a href={nowPlaying.url || ""} className="font-semibold text-title">
+            {title}
+          </a>
+        </div>
+        <p className="text-subsubtitle">{subtitle}</p>
+      </div>
+    </>
   )
 }
 
 const Footer = () => {
-  const links = [["About"], ["Twitter"], ["Github"], ["LinkedIn"], ["Contact"]].map((e) => (
-    <li className="pt-2" key={e[0]}>
-      {e[0]}
-    </li>
+  const links = [
+    ["about", "/about"],
+    ["twitter", twitter],
+    ["github", github],
+    ["linkedIn", linkedin],
+    ["ama", ama],
+  ].map(([title, link]) => (
+    <Link key={title} href={link}>
+      {title}
+    </Link>
   ))
-
-  const { isPlaying } = useNowPlaying()
-  const spotifyIconClass = clsx("mr-2", { "animate-spin": isPlaying })
 
   return (
     <>
-      <hr className="w-full border-gray-200 border-1 dark:border-gray-800" />
-      <footer className="flex flex-row px-8 py-4">
-        <ul className="w-full">
-          <li className="flex flex-col py-1 md:flex-row md:space-x-2">
-            <div className="flex items-center">
-              <FaSpotify
-                className={spotifyIconClass}
-                size="1.2rem"
-                color={isPlaying ? "#1DB954" : ""}
-              />{" "}
-              {"Now Playing:   "}
-            </div>
-            <Suspense fallback={<FaSpinner />}>
-              <NowPlaying />
-            </Suspense>
-          </li>
-          {links}
-        </ul>
+      <hr className="w-4/5 mx-auto border-gray-200 border-1 dark:border-gray-800" />
+      <footer className="flex flex-col px-8 py-4 space-y-4 sm sm:flex-col">
+        <div className="flex flex-row-reverse items-center justify-between px-8 sm:px-0 sm:justify-center sm:flex-row">
+          <NowPlaying />
+        </div>
+        <div className="flex justify-center">
+          <ul className="flex flex-col items-center space-y-4 sm:space-x-4 sm:space-y-0 sm:flex-row">
+            {links}
+          </ul>
+        </div>
+        <div className="flex justify-center text-subtitle">
+          © Willy Ovalle {new Date().getFullYear()}
+        </div>
       </footer>
     </>
   )
