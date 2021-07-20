@@ -15,6 +15,6 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ children, title, sub
       <p className="text-sm font-bold text-subtitle">{subtitle}</p>
     </div>
 
-    <div className="container pt-2 pb-4 mx-auto">{children}</div>
+    <div className="pt-2 pb-4">{children}</div>
   </section>
 )

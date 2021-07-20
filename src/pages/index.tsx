@@ -12,7 +12,7 @@ const HomePage = () => {
 
         <p>
           Software Developer from 🇩🇴 living in 🇸🇪 who loves{" "}
-          <Link href="/about#top-tracks">music</Link>, videogames and to binge watch random youtube
+          <Link href="/about#top-tracks">music</Link>, videogames and to binge watch random YouTube
           videos.
         </p>
       </main>

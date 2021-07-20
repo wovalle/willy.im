@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useEffect } from "react"
 import { FaBars } from "react-icons/fa"
 import Link from "next/link"
-import { socialMedia } from "../lib/static"
+import { paths, socialMedia } from "../lib/static"
 
 const socialMediaIcons = socialMedia.map(({ name, tooltip, link, icon: Icon }) => (
   <li key={name}>
@@ -14,10 +14,7 @@ const socialMediaIcons = socialMedia.map(({ name, tooltip, link, icon: Icon }) =
   </li>
 ))
 
-const menu = [
-  { name: "Home", url: "/" },
-  { name: "About", url: "/about" },
-].map((e) => (
+const menu = paths.map((e) => (
   <Link href={e.url} passHref key={e.url}>
     <a>{e.name}</a>
   </Link>

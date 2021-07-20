@@ -1,5 +1,4 @@
 import type { GetStaticProps } from "next"
-import { FaSpotify } from "react-icons/fa"
 
 import { MarkdownContent } from "../components/MarkdownContent"
 import { AboutSection } from "../components/AboutSection"
@@ -35,10 +34,10 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews }) => {
       subtitle={r.author || ""}
       url={r.url}
       id={r.id}
-      titleSide={
-        <span className="flex items-center pl-2 text-xs font-bold text-subtitle">
+      rightPanel={
+        <div className="flex text-xs font-bold leading-6 text-subtitle whitespace-nowrap">
           {r.rating} ⭐️
-        </span>
+        </div>
       }
     />
   ))
@@ -54,14 +53,13 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews }) => {
           id="top-tracks"
           title="what i've been jamming to"
           subtitle={
-            <span className="flex items-center">
-              <FaSpotify size="0.9em" className="pr-1" />
+            <>
               in the last few weeks.
-              <a href="/playlist" className="pl-1">
+              <a href="/playlist" className="ml-1">
                 here
               </a>
               's a playlist to know me better
-            </span>
+            </>
           }
         >
           <ul>{topTracksList}</ul>

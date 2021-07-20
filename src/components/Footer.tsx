@@ -4,13 +4,15 @@ import React from "react"
 import { FaSpotify } from "react-icons/fa"
 
 import { useNowPlaying } from "../hooks/useNowPlaying"
-import { github, linkedin, twitter, ama } from "../lib/static"
+import { footerLinks, playlist } from "../lib/static"
 
 const NowPlaying: React.FC = () => {
   const nowPlaying = useNowPlaying()
 
   const title = nowPlaying.isPlaying ? nowPlaying.songName ?? "" : "not playing"
   const subtitle = nowPlaying.isPlaying ? nowPlaying.artistName ?? "" : "anything"
+  const url = nowPlaying.isPlaying ? nowPlaying.url ?? "" : playlist
+
   const spotifyIconClass = clsx(
     "absolute inline-flex w-full h-full bg-green-400 rounded-full opacity-75",
     { "animate-ping-2s": nowPlaying.isPlaying },
@@ -19,51 +21,40 @@ const NowPlaying: React.FC = () => {
 
   return (
     <>
-      <div className="flex mx-4">
-        <div className="relative h-8">
-          <span className={spotifyIconClass}></span>
-          <FaSpotify size="2em" />
-        </div>
-      </div>
       <div className="flex flex-col">
         <div className="flex">
-          <a href={nowPlaying.url || ""} className="font-semibold text-title">
+          <a href={url} className="font-semibold text-title">
             {title}
           </a>
         </div>
         <p className="text-subsubtitle">{subtitle}</p>
+      </div>
+      <div className="relative h-8 md:mr-4">
+        <span className={spotifyIconClass}></span>
+        <FaSpotify size="2em" />
       </div>
     </>
   )
 }
 
 const Footer = () => {
-  const links = [
-    ["about", "/about"],
-    ["twitter", twitter],
-    ["github", github],
-    ["linkedIn", linkedin],
-    ["ama", ama],
-  ].map(([title, link]) => (
-    <Link key={title} href={link}>
-      {title}
+  const links = footerLinks.map(({ name, url }) => (
+    <Link key={name} href={url}>
+      {name}
     </Link>
   ))
 
   return (
     <>
       <hr className="w-4/5 mx-auto border-gray-200 border-1 dark:border-gray-800" />
-      <footer className="flex flex-col px-8 py-4 space-y-4 sm sm:flex-col">
-        <div className="flex flex-row-reverse items-center justify-between px-8 sm:px-0 sm:justify-center sm:flex-row">
+      <footer className="flex flex-col px-8 py-6 space-y-4 md md:flex-col">
+        <div className="flex flex-row items-center justify-between md:px-0 md:justify-center md:flex-row-reverse">
           <NowPlaying />
         </div>
         <div className="flex justify-center">
-          <ul className="flex flex-col items-center space-y-4 sm:space-x-4 sm:space-y-0 sm:flex-row">
+          <ul className="grid w-full grid-cols-2 gap-2 md:justify-center md:flex md:space-y-0 md:flex-row">
             {links}
           </ul>
-        </div>
-        <div className="flex justify-center text-subtitle">
-          © Willy Ovalle {new Date().getFullYear()}
         </div>
       </footer>
     </>
