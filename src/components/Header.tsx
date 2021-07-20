@@ -4,44 +4,23 @@ import { useState } from "react"
 import { useEffect } from "react"
 import { FaGithub, FaTwitter, FaInstagram, FaLinkedin, FaTelegram, FaBars } from "react-icons/fa"
 import Link from "next/link"
+import { socialMedia } from "../lib/static"
 
-const socialMedia = [
-  {
-    name: "twitter",
-    tooltip: "Willy's Twitter",
-    link: "//twitter.com/wovalle",
-    icon: FaTwitter,
-  },
-  {
-    name: "github",
-    tooltip: "Willy's Github",
-    link: "//github.com/wovalle",
-    icon: FaGithub,
-  },
-  {
-    name: "instagram",
-    tooltip: "Willy's Instagram",
-    link: "//instagram.com/wovalle",
-    icon: FaInstagram,
-  },
-  {
-    name: "linkedin",
-    tooltip: "Willy's LinkedIn",
-    link: "//linkedin.com/in/willyovalle",
-    icon: FaLinkedin,
-  },
-  {
-    name: "telegram",
-    tooltip: "Willy's Telegram",
-    link: "//t.me/wovalle",
-    icon: FaTelegram,
-  },
-].map(({ name, tooltip, link, icon: Icon }) => (
+const socialMediaIcons = socialMedia.map(({ name, tooltip, link, icon: Icon }) => (
   <li key={name}>
     <a data-tooltip={tooltip} href={link}>
-      <Icon size="1.5em" className="dark:text-white text-black" />
+      <Icon size="1.5em" className="text-black dark:text-white" />
     </a>
   </li>
+))
+
+const menu = [
+  { name: "Home", url: "/" },
+  { name: "About", url: "/about" },
+].map((e) => (
+  <Link href={e.url} passHref key={e.url}>
+    <a>{e.name}</a>
+  </Link>
 ))
 
 const Header = () => {
@@ -62,17 +41,9 @@ const Header = () => {
       <BiMoon className="text-indigo-500" size="1.5em" />
     )
 
-  const menu = [
-    { name: "Home", url: "/" },
-    { name: "About", url: "/about" },
-  ].map((e) => (
-    <Link href={e.url} passHref key={e.url}>
-      <a>{e.name}</a>
-    </Link>
-  ))
   return (
     <>
-      <header className="p-6 flex flex-row justify-between">
+      <header className="flex flex-row justify-between p-6">
         {mounted ? (
           <button
             aria-label={`Switch to ${resolvedTheme} theme`}
@@ -87,11 +58,11 @@ const Header = () => {
           <div></div>
         )}
         <div className="flex flex-row items-center">
-          <nav className="hidden md:flex space-x-3 justify-center">{menu}</nav>
-          <div className="hidden md:flex px-4">|</div>
-          <ul className="flex space-x-1">{socialMedia}</ul>
+          <nav className="justify-center hidden space-x-3 md:flex">{menu}</nav>
+          <div className="hidden px-4 md:flex">|</div>
+          <ul className="flex space-x-1">{socialMediaIcons}</ul>
           <button
-            className="md:hidden ml-3 w-8 h-8 bg-gray-200 dark:bg-gray-800 flex justify-center items-center"
+            className="flex items-center justify-center w-8 h-8 ml-3 bg-gray-200 md:hidden dark:bg-gray-800"
             onClick={() => setMenuIsExpanded(!menuIsExpanded)}
           >
             <FaBars />
@@ -99,7 +70,7 @@ const Header = () => {
         </div>
       </header>
       {menuIsExpanded && (
-        <div className="flex flex-col space-y-4 py-4 px-7 md:hidden font-semibold absolute w-full mt-20 bg-white dark:bg-black shadow-xl">
+        <div className="absolute flex flex-col w-full py-4 mt-20 space-y-4 font-semibold bg-white shadow-xl px-7 md:hidden dark:bg-black">
           {menu}
         </div>
       )}

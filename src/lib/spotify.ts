@@ -60,10 +60,11 @@ export const getNowPlaying = async (): Promise<SimpleNowPlaying> => {
   }
 }
 
-export const getTopTracks = async (): Promise<SimpleSpotifySong[]> => {
+export const getTopTracks = async ({ limit }: { limit: number }): Promise<SimpleSpotifySong[]> => {
   const client = await createSpotifyClient()
 
-  const tracks = await client.user.getTopTracks({ limit: 10 })
+  // todo: add selector to time_range
+  const tracks = await client.user.getTopTracks({ limit, time_range: "short_term" })
 
   return tracks.items.map((t) => ({
     songName: t.name,

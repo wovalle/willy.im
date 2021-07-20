@@ -14,8 +14,9 @@ const HomePage = () => {
         </h1>
 
         <p>
-          Software Developer from 🇩🇴 living in 🇸🇪 who loves <Link href={playlistLink}>music</Link>{" "}
-          and occassionally writes.
+          Software Developer from 🇩🇴 living in 🇸🇪 who loves{" "}
+          <Link href="/about#top-tracks">music</Link>, videogames and to binge watch random youtube
+          videos.
         </p>
 
         {/* <section className="mt-5">

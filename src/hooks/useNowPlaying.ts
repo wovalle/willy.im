@@ -1,13 +1,11 @@
 import useSWR from "swr"
+import { fetcher } from "../lib/fetcher"
 import { SimpleNowPlaying } from "../lib/spotify"
 
-const fetcher = async function (input: RequestInfo) {
-  const res = await fetch(input)
-  return res.json()
-}
-
 export const useNowPlaying = () => {
-  const { data } = useSWR<SimpleNowPlaying>("/api/now-playing", fetcher)
+  const { data } = useSWR<SimpleNowPlaying>("/api/now-playing", fetcher, {
+    refreshInterval: 3 * 60 * 1000, // refresh each 3 mins
+  })
 
   return data || { isPlaying: false }
 }

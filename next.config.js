@@ -1,11 +1,21 @@
+const twitter = "https://twitter.com/wovalle"
+const instagram = "https://instagram.com/wovalle"
+const linkedin = "https://linkedin.com/in/willyovalle"
+const telegram = "https://t.me/wovalle"
+const github = "https://github.com/wovalle"
+const resume = "/resume.pdf"
+const playlist =
+  "https://open.spotify.com/playlist/2DTIGceTBxntcToaVl0lxR?si=M5aF2T7OQjCyO2lS2wxMzw"
+
 const links = {
   redirects: {
-    twitter: "https://twitter.com/wovalle",
-    instagram: "https://instagram.com/wovalle",
-    linkedin: "https://www.linkedin.com/in/willyovalle/",
-    telegram: "https://t.me/wovalle",
-    github: "https://github.com/wovalle",
-    resume: "/resume.pdf",
+    twitter,
+    instagram,
+    linkedin,
+    telegram,
+    github,
+    resume,
+    playlist,
   },
   aliases: {
     twitter: ["tw"],
