@@ -2,7 +2,7 @@ import { BiSun, BiMoon } from "react-icons/bi"
 import { useTheme } from "next-themes"
 import { useState } from "react"
 import { useEffect } from "react"
-import { FaGithub, FaTwitter, FaInstagram, FaLinkedin, FaTelegram, FaBars } from "react-icons/fa"
+import { FaBars } from "react-icons/fa"
 import Link from "next/link"
 import { socialMedia } from "../lib/static"
 
