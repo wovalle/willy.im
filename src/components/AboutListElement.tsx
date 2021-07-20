@@ -24,15 +24,17 @@ export const AboutListElement: React.FC<AboutListElementProps> = ({
     className="flex py-4 text-sm border-b border-gray-100 dark:border-gray-800 last:border-b-0"
   >
     {leftPanel && <div className="pr-4">{leftPanel}</div>}
-    <div className="flex flex-col">
-      <div className="flex">
-        <a href={url} className="font-semibold text-title">
-          {title}
-        </a>
-        {titleSide}
+    <div className="flex flex-row justify-between w-full md:justify-start">
+      <div className="flex flex-col">
+        <div className="flex">
+          <a href={url} className="font-semibold text-title">
+            {title}
+          </a>
+          {titleSide}
+        </div>
+        <p className="text-subsubtitle">{subtitle}</p>
       </div>
-      <p className="text-subsubtitle">{subtitle}</p>
+      {rightPanel && <div className="flex flex-row md:ml-2">{rightPanel}</div>}
     </div>
-    {rightPanel && <div className="flex pl-4 pr-4">{rightPanel}</div>}
   </li>
 )
