@@ -35,12 +35,12 @@ export const socialMedia = [
     link: linkedin,
     icon: FaLinkedin,
   },
-  // {
-  //   name: "telegram",
-  //   tooltip: "Willy's Telegram",
-  //   link: instagram,
-  //   icon: FaTelegram,
-  // },
+  {
+    name: "telegram",
+    tooltip: "Willy's Telegram",
+    link: instagram,
+    icon: FaTelegram,
+  },
 ]
 
 export const paths = [
