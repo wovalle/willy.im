@@ -37,16 +37,22 @@ const NowPlaying: React.FC = () => {
   )
 }
 
-const Footer = () => {
+const Footer = (
+  { withFooterDivider }: { withFooterDivider?: boolean } = { withFooterDivider: true }
+) => {
   const links = footerLinks.map(({ name, url }) => (
     <Link key={name} href={url}>
       {name}
     </Link>
   ))
 
+  console.log({ withFooterDivider })
+
   return (
     <>
-      <hr className="w-4/5 mx-auto border-gray-200 border-1 dark:border-gray-800" />
+      {withFooterDivider && (
+        <hr className="w-4/5 mx-auto border-gray-200 border-1 dark:border-gray-800" />
+      )}
       <footer className="flex flex-col px-8 py-6 space-y-4 md md:flex-col">
         <div className="flex flex-row items-center justify-between md:px-0 md:justify-center md:flex-row-reverse">
           <NowPlaying />
