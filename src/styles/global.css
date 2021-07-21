@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@tailwind screens;
+
+@layer base {
+  a {
+    @apply text-indigo-500;
+  }
+
+  a:hover {
+    @apply text-indigo-700;
+    @apply font-bold;
+    @apply underline;
+  }
+
+  .dark a {
+    @apply text-yellow-500;
+  }
+
+  .dark a:hover {
+    @apply text-yellow-700;
+    @apply font-bold;
+    @apply underline;
+  }
+
+  .text-title {
+    @apply text-gray-800;
+    @apply dark:text-gray-100;
+  }
+
+  .text-subtitle {
+    @apply text-gray-500;
+    @apply dark:text-gray-400;
+  }
+
+  .text-subsubtitle {
+    @apply text-gray-400;
+    @apply dark:text-gray-500;
+  }
+
+  .markddown p {
+    @apply pb-2;
+  }
+}
