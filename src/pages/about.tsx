@@ -9,12 +9,12 @@ import { getReviews } from "../lib/goodreads"
 import { toHtml } from "../lib/markdown"
 import { getTopTracks } from "../lib/spotify"
 import { markdownBio } from "../lib/static"
-import type { PromiseValue } from "../types"
+import type { ExtractReturnedPromiseFn } from "../types"
 
 export type AboutProps = {
   bio: string
-  topTracks: PromiseValue<ReturnType<typeof getTopTracks>>
-  reviews: PromiseValue<ReturnType<typeof getReviews>>
+  topTracks: ExtractReturnedPromiseFn<typeof getTopTracks>
+  reviews: ExtractReturnedPromiseFn<typeof getReviews>
 }
 
 const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews }) => {
