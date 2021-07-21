@@ -6,7 +6,7 @@ class NextDocument extends Document {
       <Html lang="en">
         <Head>
           <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-          <meta name="keywords" content="willy,ovalle,willyovalle,wovalle,personal,site" />
+          <meta name="keywords" content="willy,ovalle,willyovalle,wovalle,personal,site,home" />
           <meta property="og:image" content="/android-chrome-512x512.png" />
           <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
           <link rel="icon" type="image/png" sizes="32x32" href="/favicon-16x16.png" />
@@ -18,6 +18,7 @@ class NextDocument extends Document {
             rel="stylesheet"
           />
           <meta charSet="utf-8" />
+          <meta name="description" content="Willy Ovalle's home on the internet" />
         </Head>
         <body className="bg-white dark:bg-black">
           <Main />

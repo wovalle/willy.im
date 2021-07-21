@@ -6,9 +6,10 @@ import Footer from "./Footer"
 type Props = {
   children?: ReactNode
   title?: string
+  withFooterDivider?: boolean
 }
 
-const Layout: React.FC<Props> = ({ children, title }) => (
+const Layout: React.FC<Props> = ({ children, title, withFooterDivider }) => (
   <>
     {title && (
       <Head>
@@ -22,7 +23,7 @@ const Layout: React.FC<Props> = ({ children, title }) => (
       <Header />
       {children}
       {/* footer a bit more dark (see ) */}
-      <Footer />
+      <Footer withFooterDivider={withFooterDivider} />
     </div>
   </>
 )
