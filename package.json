@@ -9,8 +9,10 @@
     "type-check": "tsc"
   },
   "dependencies": {
+    "@octokit/rest": "^18.6.8",
     "cheerio": "^1.0.0-rc.10",
     "clsx": "^1.1.1",
+    "github-lang-colors": "^1.0.4",
     "next": "^11.0.0",
     "next-themes": "^0.0.14",
     "react": "^18.0.0-alpha-9212d994b",

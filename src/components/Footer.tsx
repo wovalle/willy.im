@@ -23,7 +23,7 @@ const NowPlaying: React.FC = () => {
     <>
       <div className="flex flex-col">
         <div className="flex">
-          <a href={url} className="font-semibold text-title">
+          <a href={url} className="text-title">
             {title}
           </a>
         </div>

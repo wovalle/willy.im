@@ -4,3 +4,6 @@ export type PromiseValue<PromiseType, Otherwise = PromiseType> = PromiseType ext
 >
   ? { 0: PromiseValue<Value>; 1: Value }[PromiseType extends Promise<unknown> ? 0 : 1]
   : Otherwise
+
+//https://stackoverflow.com/a/60889260/2533474
+export type ExtractReturnedPromiseFn<T extends (...args: any) => any> = PromiseValue<ReturnType<T>>

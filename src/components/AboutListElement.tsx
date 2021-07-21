@@ -27,7 +27,7 @@ export const AboutListElement: React.FC<AboutListElementProps> = ({
     <div className="flex flex-row justify-between w-full md:justify-start">
       <div className="flex flex-col">
         <div className="flex">
-          <a href={url} className="font-semibold text-title">
+          <a href={url} className="text-title">
             {title}
           </a>
           {titleSide}
