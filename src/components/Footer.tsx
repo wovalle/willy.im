@@ -46,8 +46,6 @@ const Footer = (
     </Link>
   ))
 
-  console.log({ withFooterDivider })
-
   return (
     <>
       {withFooterDivider && (
