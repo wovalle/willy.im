@@ -53,7 +53,7 @@ export const footerLinks = [
   { name: "twitter", url: twitter },
   { name: "github", url: github },
   { name: "linkedIn", url: linkedin },
-  { name: "ama", url: ama },
+  { name: "AMA", url: ama },
 ]
 
 export const markdownBio = `

@@ -22,7 +22,7 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
           I'm Willy<span className="text-yellow-500">!</span>
         </h1>
         <p>
-          Software Developer from 🇩🇴 living in 🇸🇪 who loves{" "}
+          Software Developer from 🇩🇴 living in 🇩🇪 who loves{" "}
           <Link href="/about#top-tracks">music</Link>, videogames and to binge watch random YouTube
           videos.
         </p>
