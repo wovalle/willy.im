@@ -12,7 +12,7 @@ export const RepositoryCard: React.FC<RepositoryCardProps> = ({ repo }) => {
       <div className="flex items-center">
         <FaBook size=".9em" className="mr-1" />
         <a
-          href="repository.html_url"
+          href={repo.url}
           target="_blank"
           className="font-medium text-purple-800 dark:text-purple-200"
         >

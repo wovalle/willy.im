@@ -50,7 +50,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews }) => {
         </AboutSection>
 
         <AboutSection
-          id="top-tracks"
+          id="songs"
           title="what i've been jamming to"
           subtitle={
             <>
@@ -66,7 +66,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews }) => {
         </AboutSection>
 
         <AboutSection
-          id="book-reviews"
+          id="books"
           title="what i've been reading"
           subtitle="or listening, whatever, love audiobooks"
         >

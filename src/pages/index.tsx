@@ -23,7 +23,7 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
         </h1>
         <p>
           Software Developer from 🇩🇴 living in 🇩🇪 who loves{" "}
-          <Link href="/about#top-tracks">music</Link>, videogames and to binge watch random YouTube
+          <Link href="/about#songs">music</Link>, videogames and to binge watch random YouTube
           videos.
         </p>
         <div className="pt-8"></div>
