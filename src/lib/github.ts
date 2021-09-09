@@ -10,6 +10,7 @@ export type SimpleRepository = {
   stars: number
   forks: number
   langColor: string | null
+  url: string
 }
 
 export const getRepository = async ({
@@ -34,5 +35,6 @@ export const getRepository = async ({
     stars: response.data.stargazers_count,
     forks: response.data.forks,
     langColor: color,
+    url: response.data.html_url
   }
 }
