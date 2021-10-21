@@ -3,6 +3,8 @@ import cheerio from "cheerio"
 const publicGoodReadsProfile =
   "https://www.goodreads.com/review/list/70187794-willy-ovalle?sort=date_read&order=d&shelf=read&per_page=10"
 
+const baseGoodReadsUrl = "https://goodreads.com"
+
 export type GoodReadsReview = {
   id: string
   title: string
@@ -45,7 +47,7 @@ export const getReviews = async ({ limit }: { limit: number }): Promise<GoodRead
       author: `${name} ${lastName}`,
       finishedOn: dateRead ? new Date(dateRead).toISOString() : null,
       rating,
-      url: url || "",
+      url: url ? `${baseGoodReadsUrl}/${url}` : "",
     }
   })
 
