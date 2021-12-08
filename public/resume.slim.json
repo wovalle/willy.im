@@ -16,7 +16,7 @@
       {
         "network": "LinkedIn",
         "username": "willyovalle",
-        "url": "https://www.linkedin.com/in/willyovalle/"
+        "url": "https://linkedin.com/in/willyovalle/"
       },
       {
         "network": "Twitter",
@@ -41,14 +41,6 @@
       "studyType": "Telematics Engineer",
       "startDate": "2009-09-22",
       "endDate": "2013-12-20",
-      "location": "Santo Domingo, Dominican Republic"
-    },
-    {
-      "institution": "Politécnico Rafaela Ybarra",
-      "area": "Accounting",
-      "studyType": "High school",
-      "startDate": "2003-09-01",
-      "endDate": "2009-07-12",
       "location": "Santo Domingo, Dominican Republic"
     }
   ],
@@ -84,7 +76,7 @@
       "summary": "- Writing robust APIs for one of the hottest startups in Latin America.\n- Developing custom microservices fueled by Node.js.\n- Containers, containers, containers (docker management).\n- Writing our custom auction platform with React/Redux.\n- Constantly working side by side with my teammates defining scopes and development times of features.\nTechnologies: Node.js, Docker, Angular, MongoDB, ReactJS.",
       "url": "https://instacarro.com",
       "company": "Instacarro",
-      "location": "Santo Domingo, Dominican Republic"
+      "location": "Santo Domingo, Dominican Rep."
     },
     {
       "name": "AIME - Artificial Intelligence in Medical Epidemiology",
@@ -108,8 +100,6 @@
       "highlights": [
         "Helped the company grow over 2000% in revenue in one year.",
         "Developed five new integrations with third parties CRM's (Zendesk, Microsoft Dynamics CRM, SmartOffice CRM for Financial Advisors, Oracle CRM On Demand, Netsuite CRM).",
-        "Made many customizations to our product to meet the requirements of our small and large customers.",
-        "Implemented an API Server written in C# using ASP.NET MVC5 and other Microsoft technologies.",
         "Technologies: NodeJS, MongoDB, AngularJS, ExpressJS, Git, Github, Slack, Gulp."
       ],
       "position": "Software Engineer",
@@ -132,45 +122,26 @@
       "summary": "- Ensure compliance with safety measures, information systems, and access gained with regard to  systems under my responsibility. \n- Receive and evaluate system improvements requirements. \n- Quality assurance, monitoring, and maintenance of systems development and publishing to the production environment. \n- Implemented the \"Subsidies Extraordinary\" (Subsidios Extraordinarios) project that helps poor Dominican mothers to get government help if, for any reason, they couldn't complete the process for receiving maternity or breastfeeding benefits.\n- Created a new subsidies evaluation platform that increased productivity among the \nevaluators by 27% in a three months timeframe.\n- Technologies used on daily basis: SQL Server, ASP.Net MVC, C#, Bootstrap, jQuery, Microsoft Dynamics CRM, Microsoft Dynamics GP, Reporting Services, Integration Services.",
       "url": "http://www.sisalril.gov.do/",
       "company": "SISALRIL (Superintendencia de Salud y Riesgos Laborales)",
-      "location": "Santo Domingo, Dominican Republic"
+      "location": "Santo Domingo, Dominican Rep."
     },
     {
       "name": "TeKnowLogic Dominicana",
       "endDate": "2014-10-31",
       "highlights": [
         "Preparation, development and implementation of business processes (Dynamics CRM, Dynamics GP).",
-        "Task coordination within Dynamics dev team: Manage SQL Server databases."
+        "Task coordination within Dynamics dev team: Manage SQL Server databases.",
+        "ASP.NET web programming, MVC4, Visual Basic. NET, C#, Reporting Services, customization of Dynamics GP, implementation and development of solutions with Dynamics CRM, extensive use of SQL Server."
       ],
       "position": "Dynamics Senior Developer",
-      "startDate": "2014-06-30",
+      "startDate": "2012-01-13",
       "summary": "Preparation, development and implementation of business processes (Dynamics CRM, Dynamics GP). Task coordination within Dynamics dev team: Manage SQL Server databases.",
       "url": "https://www.teknowlogic.com",
       "company": "Teknowlogic Dominicana",
-      "location": "Santo Domingo, Dominican Republic"
-    },
-    {
-      "name": "TeKnowLogic Dominicana",
-      "endDate": "2014-06-30",
-      "highlights": [
-        "ASP.NET web programming, MVC4, Visual Basic. NET, C#, Reporting Services, customization of Dynamics GP, implementation and development of solutions with Dynamics CRM, extensive use of SQL Server."
-      ],
-      "position": "Developer Junior",
-      "startDate": "2012-01-13",
-      "summary": "ASP.NET web programming, MVC4, Visual Basic. NET, C#, Reporting Services, customization of Dynamics GP, implementation and development of solutions with Dynamics CRM, extensive use of SQL Server.",
-      "url": "https://www.teknowlogic.com",
-      "company": "Teknowlogic Dominicana",
-      "location": "Santo Domingo, Republica Dominicana"
+      "location": "Santo Domingo, Dominican Rep."
     }
   ],
   "skills": [],
-  "projects": [
-    {
-      "keywords": ["Typescript", "Firestore", "ORM"],
-      "name": "Fireorm",
-      "url": "https://fireorm.js.org/",
-      "description": "Fireorm is an ongoing open source project that I've been working on, it has 250+ stars in github and is used by dozens of other projects. Fireorm is a tiny wrapper on top of firebase-admin that makes life easier when dealing with a Firestore database. Fireorm tries to ease the development of apps that rely on Firestore at the database layer by abstracting the access layer providing and familiar repository pattern. It basically helps us not worrying about Firestore details and focusing in what matters: adding cool new features!"
-    }
-  ],
+  "projects": [],
   "awards": [],
   "sections": []
 }
