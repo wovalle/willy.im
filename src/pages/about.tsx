@@ -5,21 +5,23 @@ import { AboutSection } from "../components/AboutSection"
 import { AboutListElement } from "../components/AboutListElement"
 import Layout from "../components/Layout"
 
-import { getReviews } from "../lib/goodreads"
+import { getCurrentlyReading, getReviews } from "../lib/goodreads"
 import { toHtml } from "../lib/markdown"
 import { getTopTracks } from "../lib/spotify"
 import { markdownBio } from "../lib/static"
-import type { ExtractReturnedPromiseFn } from "../types"
+import { FaBook, FaBookOpen, FaMusic, FaStar } from "react-icons/fa"
 
 export type AboutProps = {
   bio: string
-  topTracks: ExtractReturnedPromiseFn<typeof getTopTracks>
-  reviews: ExtractReturnedPromiseFn<typeof getReviews>
+  topTracks: Awaited<ReturnType<typeof getTopTracks>>
+  reviews: Awaited<ReturnType<typeof getReviews>>
+  currentlyReading: Awaited<ReturnType<typeof getReviews>>
 }
 
-const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews }) => {
+const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyReading }) => {
   const topTracksList = topTracks.map((t, i) => (
     <AboutListElement
+      key={t.url}
       title={t.songName}
       subtitle={t.artistName}
       url={t.url}
@@ -30,16 +32,20 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews }) => {
 
   const reviewList = reviews.map((r) => (
     <AboutListElement
+      id={r.url}
       title={r.title}
       subtitle={r.author || ""}
       url={r.url}
-      id={r.id}
-      rightPanel={
-        <div className="flex text-xs font-bold leading-6 text-subtitle whitespace-nowrap">
-          {r.rating} ⭐️
+      leftPanel={
+        <div className="flex text-xs font-bold leading-6 text-subtitle items-center">
+          {r.rating} <FaStar className="text-yellow-500 ml-1" />
         </div>
       }
     />
+  ))
+
+  const currentlyReadingList = currentlyReading.map((r) => (
+    <AboutListElement id={r.url} title={r.title} subtitle={r.author || ""} url={r.url} />
   ))
 
   return (
@@ -52,6 +58,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews }) => {
         <AboutSection
           id="songs"
           title="what i've been jamming to"
+          icon={<FaMusic className="self-end text-highlight pr-3" size="1em" />}
           subtitle={
             <>
               in the last few weeks.
@@ -62,21 +69,35 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews }) => {
             </>
           }
         >
-          <ul>{topTracksList}</ul>
+          <div className="grid grid-cols-1 md:gap-4 md:grid-cols-2">
+            <ul>{topTracksList.slice(0, 5)}</ul>
+            <ul>{topTracksList.slice(5, 10)}</ul>
+          </div>
+        </AboutSection>
+
+        <AboutSection
+          id="books"
+          title="currently reading..."
+          icon={<FaBookOpen className="self-end text-highlight pr-3" size="1em" />}
+        >
+          <div className="grid grid-cols-1 md:gap-4 md:grid-cols-2">
+            <ul>{currentlyReadingList}</ul>
+          </div>
         </AboutSection>
 
         <AboutSection
           id="books"
           title="what i've been reading"
           subtitle="or listening, whatever, love audiobooks"
+          icon={<FaBook className="self-end text-highlight pr-3" size="1em" />}
         >
-          <ul>{reviewList}</ul>
+          <div className="grid grid-cols-1 md:gap-4 md:grid-cols-2">
+            <ul>{reviewList.slice(0, 5)}</ul>
+            <ul>{reviewList.slice(5, 10)}</ul>
+          </div>
         </AboutSection>
 
-        {/* <AboutSection title="what i've been working on">
-          <span>eventually i'll plug my github data here</span>
-        </AboutSection>
-
+        {/* 
         <AboutSection title="what i've been watching">
           <span>eventually i'll plug my youtube data here</span>
         </AboutSection>
@@ -97,14 +118,16 @@ export const getStaticProps: GetStaticProps<AboutProps> = async () => {
   const bio = await toHtml(markdownBio)
   const topTracks = await getTopTracks({ limit: 10 })
   const reviews = await getReviews({ limit: 10 })
+  const currentlyReading = await getCurrentlyReading({ limit: 2 })
 
   return {
     props: {
       bio,
       topTracks,
       reviews,
+      currentlyReading,
     },
-    revalidate: 60 * 60 * 24, // Revalidate after 24 hours
+    revalidate: 60 * 60 * 1, // Revalidate after 1 hour
   }
 }
 

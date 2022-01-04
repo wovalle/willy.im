@@ -12,7 +12,7 @@ type HomePageProps = {
 }
 
 const HomePage: React.FC<HomePageProps> = ({ repos }) => {
-  const Cards = repos.map((r) => <RepositoryCard repo={r} />)
+  const RepoCards = repos.map((r) => <RepositoryCard key={r.url} repo={r} />)
 
   return (
     <Layout title="Home | Willy Ovalle">
@@ -22,13 +22,12 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
           I'm Willy<span className="text-yellow-500">!</span>
         </h1>
         <p>
-          Software Developer from 🇩🇴 living in 🇩🇪 who loves{" "}
-          <Link href="/about#songs">music</Link>, videogames and to binge watch random YouTube
-          videos.
+          Software Developer from 🇩🇴 living in 🇩🇪 who loves <Link href="/about#songs">music</Link>,
+          videogames and to binge watch random YouTube videos.
         </p>
         <div className="pt-8"></div>
-        <AboutSection title="what i've been working on" subtitle="open source">
-          {Cards}
+        <AboutSection title="what i've been working on" subtitle="open source" id="code">
+          <div className="flex sm:flex-row gap-8 flex-col">{RepoCards}</div>
         </AboutSection>
       </main>
     </Layout>
@@ -37,10 +36,11 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
 
 export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
   const fireorm = await getRepository({ owner: "wovalle", repo: "fireorm" })
+  const angelos = await getRepository({ owner: "wovalle", repo: "angelos" })
 
   return {
     props: {
-      repos: [fireorm],
+      repos: [fireorm, angelos],
     },
     revalidate: 60 * 60 * 24, // Revalidate after 24 hours
   }
