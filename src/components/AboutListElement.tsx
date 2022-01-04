@@ -1,4 +1,5 @@
 import { ReactNode } from "react"
+import { FaExternalLinkAlt, FaLink } from "react-icons/fa"
 
 export type AboutListElementProps = {
   title: string
@@ -21,14 +22,16 @@ export const AboutListElement: React.FC<AboutListElementProps> = ({
 }) => (
   <li
     key={id}
-    className="flex py-4 text-sm border-b border-gray-100 dark:border-gray-800 last:border-b-0"
+    className="flex py-4 text-sm border-b border-gray-100 dark:border-gray-800 md:last:border-b-0"
   >
-    {leftPanel && <div className="pr-4">{leftPanel}</div>}
+    {leftPanel && <div className="pr-2">{leftPanel}</div>}
     <div className="flex flex-row justify-between w-full md:justify-start">
       <div className="flex flex-col">
         <div className="flex">
-          <a href={url} className="text-title">
-            {title}
+          <a href={url} className="text-title" target="_blank">
+            <span className="flex">
+              {title} <FaExternalLinkAlt className="ml-1 self-center" size="0.7em" />
+            </span>
           </a>
           {titleSide}
         </div>

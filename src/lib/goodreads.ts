@@ -1,12 +1,20 @@
-import cheerio from "cheerio"
+import { default as Parser } from "rss-parser"
 
-const publicGoodReadsProfile =
-  "https://www.goodreads.com/review/list/70187794-willy-ovalle?sort=date_read&order=d&shelf=read&per_page=10"
+const baseRss =
+  "https://www.goodreads.com/review/list_rss/70187794?key=nMuMcqozBM267q8gVxE1lcD5d1nBarjTob0CTAfF3RQrFaly&v=2"
 
-const baseGoodReadsUrl = "https://goodreads.com"
+const getHtmlContentField = (html: string | undefined, field: string) => {
+  if (!html) {
+    return null
+  }
+
+  const res = html.match(new RegExp(`${field}:(?<field>[^<]*)<br`))
+  return res ? res[1].trim() : null
+}
+
+const asNumber = (str: string | null) => (str ? Number.parseInt(str.trim()) : null)
 
 export type GoodReadsReview = {
-  id: string
   title: string
   author: string | null
   rating: number
@@ -14,48 +22,29 @@ export type GoodReadsReview = {
   finishedOn: string | null
 }
 
+const parseFeed = async (shelf: string, limit: number = 10): Promise<GoodReadsReview[]> => {
+  const parser = new Parser()
+  const feed = await parser.parseURL(`${baseRss}&shelf=${shelf}&per_page=${limit}`)
+
+  const items = feed.items.length ? feed.items : [feed.item]
+
+  return items.map((i) => ({
+    title: i.title ?? "",
+    url: i.link ?? "",
+    finishedOn: i.pubDate ? new Date(i.pubDate).toISOString() : null,
+    rating: asNumber(getHtmlContentField(i.content, "rating")) ?? 0,
+    author: getHtmlContentField(i.content, "author"),
+  }))
+}
+
 export const getReviews = async ({ limit }: { limit: number }): Promise<GoodReadsReview[]> => {
-  const goodreadsHtml = await (await fetch(publicGoodReadsProfile)).text()
-  const $ = cheerio.load(goodreadsHtml, {
-    normalizeWhitespace: true,
-  })
+  return parseFeed("read", limit)
+}
 
-  const $rows = $("table#books tbody tr").toArray()
-
-  const books = $rows.map((el) => {
-    const $fields = $(el).find("td")
-
-    const titleField = $($fields.get(3)).find(".value a")
-
-    const title = titleField.contents().text().trim()
-    const url = titleField.attr("href")
-    const author = $($fields.get(4)).contents().last().text().trim()
-
-    const rating = $($fields.get(13)).find("span.p10").length
-    const dateRead = $($fields.get(22)).find("span.date_read_value").text()
-
-    const id = el.attribs["id"]
-
-    const [lastName, name] = author
-      .replace(/.*\s\*$/, "")
-      .split(",")
-      .map((v) => v.trim())
-
-    return {
-      id,
-      title,
-      author: `${name} ${lastName}`,
-      finishedOn: dateRead ? new Date(dateRead).toISOString() : null,
-      rating,
-      url: url ? `${baseGoodReadsUrl}/${url}` : "",
-    }
-  })
-
-  return books
-    .sort((a, b) => {
-      if (!a.finishedOn) return 1
-      else if (!b.finishedOn) return -1
-      else return b.finishedOn > a.finishedOn ? 1 : -1
-    })
-    .slice(0, limit)
+export const getCurrentlyReading = async ({
+  limit,
+}: {
+  limit: number
+}): Promise<GoodReadsReview[]> => {
+  return parseFeed("currently-reading", limit)
 }

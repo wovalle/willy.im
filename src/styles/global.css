@@ -10,7 +10,6 @@
 
   a:hover {
     @apply text-indigo-700;
-    @apply font-bold;
     @apply underline;
   }
 
@@ -20,7 +19,6 @@
 
   .dark a:hover {
     @apply text-yellow-700;
-    @apply font-bold;
     @apply underline;
   }
 
@@ -37,6 +35,11 @@
   .text-subsubtitle {
     @apply text-gray-400;
     @apply dark:text-gray-500;
+  }
+
+  .text-highlight {
+    @apply text-yellow-600;
+    @apply dark:text-indigo-400;
   }
 
   .markddown p {
