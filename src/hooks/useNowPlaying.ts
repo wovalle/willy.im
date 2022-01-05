@@ -7,5 +7,5 @@ export const useNowPlaying = () => {
     refreshInterval: 3 * 60 * 1000, // refresh each 3 mins
   })
 
-  return data || { isPlaying: false }
+  return data ?? { isPlaying: false }
 }

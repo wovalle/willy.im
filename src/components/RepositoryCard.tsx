@@ -8,7 +8,7 @@ export type RepositoryCardProps = {
 
 export const RepositoryCard: React.FC<RepositoryCardProps> = ({ repo }) => {
   return (
-    <div className="flex flex-col max-w-sm p-4 border rounded w-1/2 h-30">
+    <div className="flex flex-col p-4 border rounded">
       <div className="flex items-center">
         <FaBook size=".9em" className="mr-1" />
         <a
