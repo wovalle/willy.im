@@ -1,5 +1,5 @@
 import { ReactNode } from "react"
-import { FaExternalLinkAlt, FaLink } from "react-icons/fa"
+import { FaExternalLinkAlt } from "react-icons/fa"
 
 export type AboutListElementProps = {
   title: string
