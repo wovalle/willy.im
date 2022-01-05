@@ -18,7 +18,9 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
   return (
     <Layout title="Home | Willy Ovalle">
       <main className="flex flex-col flex-grow w-full p-10 mt-10">
-        <p>Hi there 👋🏼</p>
+        <p>
+          Hi there <span className="wave">👋🏼</span>
+        </p>
         <h1 className="my-4 text-4xl text-title">
           I'm Willy<span className="text-highlight">!</span>
         </h1>

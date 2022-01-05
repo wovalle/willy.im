@@ -115,7 +115,6 @@ export const getStaticProps: GetStaticProps<AboutProps> = async () => {
   const reviews = await getReviews({ limit: 10 })
   const currentlyReading = await getCurrentlyReading({ limit: 2 })
 
-  console.log({ reviews })
   return {
     props: {
       bio,
