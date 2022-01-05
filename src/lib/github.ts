@@ -26,13 +26,13 @@ export const getRepository = async ({
   let color: string | null = ""
 
   try {
-    color = getColor(response.data.language || "") || null
+    color = getColor(response.data.language ?? "") ?? null
   } catch (error) {}
 
   return {
     name: response.data.name,
     description: response.data.description,
-    language: response.data.language || "unknown",
+    language: response.data.language ?? "unknown",
     stars: response.data.stargazers_count,
     forks: response.data.forks,
     langColor: color,
@@ -53,15 +53,15 @@ export const getRepositories = async ({
     let color: string | null = ""
 
     try {
-      color = getColor(r.language || "") || null
+      color = getColor(r.language ?? "") ?? null
     } catch (error) {}
 
     return {
       name: r.name,
       description: r.description,
-      language: r.language || "unknown",
-      stars: r.stargazers_count || 0,
-      forks: r.forks || 0,
+      language: r.language ?? "unknown",
+      stars: r.stargazers_count ?? 0,
+      forks: r.forks ?? 0,
       langColor: color,
       url: r.html_url,
     }

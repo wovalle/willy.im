@@ -8,7 +8,7 @@ const getHtmlContentField = (html: string | undefined, field: string) => {
     return null
   }
 
-  const res = html.match(new RegExp(`${field}:(?<field>[^<]*)<br`))
+  const res = html.match(new RegExp(`  ${field}:(?<field>[^<]*)<br`))
   return res ? res[1].trim() : null
 }
 
@@ -16,7 +16,7 @@ const asNumber = (str: string | null) => (str ? Number.parseInt(str.trim()) : nu
 
 export type GoodReadsReview = {
   title: string
-  author: string | null
+  author: string
   rating: number
   url: string
   finishedOn: string | null
@@ -33,7 +33,7 @@ const parseFeed = async (shelf: string, limit: number = 10): Promise<GoodReadsRe
     url: i.link ?? "",
     finishedOn: i.pubDate ? new Date(i.pubDate).toISOString() : null,
     rating: asNumber(getHtmlContentField(i.content, "rating")) ?? 0,
-    author: getHtmlContentField(i.content, "author"),
+    author: getHtmlContentField(i.content, "author") ?? "<unknown>",
   }))
 }
 

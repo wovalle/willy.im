@@ -4,7 +4,6 @@ import { FaExternalLinkAlt } from "react-icons/fa"
 export type AboutListElementProps = {
   title: string
   subtitle?: string
-  id: string
   url: string
   leftPanel?: ReactNode | undefined
   rightPanel?: ReactNode | undefined
@@ -14,16 +13,12 @@ export type AboutListElementProps = {
 export const AboutListElement: React.FC<AboutListElementProps> = ({
   title,
   subtitle,
-  id,
   url,
   leftPanel,
   rightPanel,
   titleSide,
 }) => (
-  <li
-    key={id}
-    className="flex py-4 text-sm border-b border-gray-100 dark:border-gray-800 md:last:border-b-0"
-  >
+  <li className="flex py-4 text-sm border-b border-gray-100 dark:border-gray-800 md:last:border-b-0">
     {leftPanel && <div className="pr-2">{leftPanel}</div>}
     <div className="flex flex-row justify-between w-full md:justify-start">
       <div className="flex flex-col">

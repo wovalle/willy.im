@@ -25,16 +25,15 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
       title={t.songName}
       subtitle={t.artistName}
       url={t.url}
-      id={t.url}
       leftPanel={<span className="text-xs font-bold text-subtitle">{i + 1}</span>}
     />
   ))
 
   const reviewList = reviews.map((r) => (
     <AboutListElement
-      id={r.url}
+      key={r.url}
       title={r.title}
-      subtitle={r.author || ""}
+      subtitle={r.author}
       url={r.url}
       leftPanel={
         <div className="flex text-xs font-bold leading-6 text-subtitle items-center">
@@ -45,12 +44,12 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
   ))
 
   const currentlyReadingList = currentlyReading.map((r) => (
-    <AboutListElement id={r.url} title={r.title} subtitle={r.author || ""} url={r.url} />
+    <AboutListElement key={r.url} title={r.title} subtitle={r.author} url={r.url} />
   ))
 
   return (
     <Layout title="About | Willy Ovalle">
-      <main className="flex flex-col flex-grow p-10">
+      <main className="flex flex-col flex-grow p-8 md:p-10">
         <AboutSection id="bio" title="who i am">
           <MarkdownContent content={bio} />
         </AboutSection>
@@ -58,7 +57,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
         <AboutSection
           id="songs"
           title="what i've been jamming to"
-          icon={<FaMusic className="self-end text-highlight pr-3" size="1em" />}
+          Icon={FaMusic}
           subtitle={
             <>
               in the last few weeks.
@@ -75,11 +74,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
           </div>
         </AboutSection>
 
-        <AboutSection
-          id="books"
-          title="currently reading..."
-          icon={<FaBookOpen className="self-end text-highlight pr-3" size="1em" />}
-        >
+        <AboutSection id="books" title="currently reading..." Icon={FaBookOpen}>
           <div className="grid grid-cols-1 md:gap-4 md:grid-cols-2">
             <ul>{currentlyReadingList}</ul>
           </div>
@@ -89,7 +84,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
           id="books"
           title="what i've been reading"
           subtitle="or listening, whatever, love audiobooks"
-          icon={<FaBook className="self-end text-highlight pr-3" size="1em" />}
+          Icon={FaBook}
         >
           <div className="grid grid-cols-1 md:gap-4 md:grid-cols-2">
             <ul>{reviewList.slice(0, 5)}</ul>
@@ -120,6 +115,7 @@ export const getStaticProps: GetStaticProps<AboutProps> = async () => {
   const reviews = await getReviews({ limit: 10 })
   const currentlyReading = await getCurrentlyReading({ limit: 2 })
 
+  console.log({ reviews })
   return {
     props: {
       bio,

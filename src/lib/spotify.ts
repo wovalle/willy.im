@@ -48,7 +48,7 @@ export const getNowPlaying = async (): Promise<SimpleNowPlaying> => {
   if (isEpisode(item)) {
     return {
       isPlaying,
-      artistName: item.show?.name || "",
+      artistName: item.show?.name ?? "",
       songName: item.name,
       url: item.externalURL["spotify"],
     }
@@ -75,6 +75,6 @@ export const getTopTracks = async ({ limit }: { limit: number }): Promise<Simple
   return tracks.map((t) => ({
     songName: t.name,
     artistName: t.artists.map((m) => m.name).join(", "),
-    url: t.previewURL || "",
+    url: t.previewURL ?? "",
   }))
 }
