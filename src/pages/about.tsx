@@ -74,7 +74,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
           </div>
         </AboutSection>
 
-        <AboutSection id="books" title="currently reading..." Icon={FaBookOpen}>
+        <AboutSection id="books" title="currently into..." Icon={FaBookOpen}>
           <div className="grid grid-cols-1 md:gap-4 md:grid-cols-2">
             <ul>{currentlyReadingList}</ul>
           </div>
