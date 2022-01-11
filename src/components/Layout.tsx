@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react"
+import { ReactNode, FunctionComponent } from "react"
 import Head from "next/head"
 import Header from "./Header"
 import Footer from "./Footer"
@@ -9,7 +9,7 @@ type Props = {
   withFooterDivider?: boolean
 }
 
-const Layout: React.FC<Props> = ({ children, title, withFooterDivider }) => (
+const Layout: FunctionComponent<Props> = ({ children, title, withFooterDivider }) => (
   <>
     {title && (
       <Head>
