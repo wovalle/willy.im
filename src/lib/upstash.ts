@@ -1,23 +1,42 @@
 import { ShortenedUrl } from "../shorty/middleware"
 import { default as axios, Options } from "redaxios"
 
-const options: Options = {
+const baseUrl = process.env.UPSTASH_REDIS_URL
+
+const globalOptions: RequestInit = {
   headers: {
     Authorization: `Bearer ${process.env.UPSTASH_AUTH_CODE}`,
   },
-  baseURL: process.env.UPSTASH_REDIS_URL,
 }
 
-const client = axios.create(options)
+const client = {
+  get: async (url: string, opts: RequestInit = {}) => {
+    const res = await fetch(baseUrl + url, { ...globalOptions, ...opts, method: "get" })
+
+    return res.ok ? (await res.json()).result : null
+  },
+  post: async (url: string, data: any, opts: RequestInit = {}) => {
+    const postData = ["string", "undefined"].includes(typeof data) ? data : JSON.stringify(data)
+
+    const res = await fetch(baseUrl + url, {
+      ...globalOptions,
+      ...opts,
+      body: postData,
+      method: "post",
+    })
+
+    return res.ok ? (await res.json()).result : null
+  },
+}
 
 export const setKey = async (key: string, data: ShortenedUrl) => {
-  const req = await client.post("/set/" + key, JSON.stringify(data))
+  const res = await client.post("/set/" + key, data)
 
-  return req.data
+  return res ? JSON.parse(res) : null
 }
 
 export const getKey = async (key: string) => {
-  const req = await client.get("/get/" + key)
+  const res = await client.get("/get/" + key)
 
-  return JSON.parse(req.data.result)
+  return res ? JSON.parse(res) : null
 }
