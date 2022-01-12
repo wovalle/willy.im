@@ -1,5 +1,4 @@
 import { ShortenedUrl } from "../shorty/middleware"
-import { default as axios, Options } from "redaxios"
 
 const baseUrl = process.env.UPSTASH_REDIS_URL
 
