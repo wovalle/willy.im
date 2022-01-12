@@ -21,7 +21,7 @@ type MiddlewareOpts = {
 
 export const registerMiddleware = async (
   req: NextRequest,
-  ev: NextFetchEvent,
+  _ev: NextFetchEvent,
   { onUrlGet, onAccessDenied, onExpired, basePath }: MiddlewareOpts
 ) => {
   const user = ""
