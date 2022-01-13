@@ -30,11 +30,11 @@ export const RepositoryCard: React.FC<RepositoryCardProps> = ({ repo }) => {
         </div>
         <div className="flex items-center mr-4">
           <FaStar />
-          <span>{repo.stars}</span>
+          <span className="ml-0.5">{repo.stars}</span>
         </div>
         <div v-if="repository.forks" className="flex items-center">
           <FaCodeBranch />
-          <span>{repo.forks}</span>
+          <span className="ml-0.5">{repo.forks}</span>
         </div>
       </div>
     </div>
