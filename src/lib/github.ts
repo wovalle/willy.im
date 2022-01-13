@@ -1,7 +1,9 @@
 import { RestEndpointMethodTypes, Octokit } from "@octokit/rest"
 import getColor from "github-lang-colors"
 
-export type GithubRepository = RestEndpointMethodTypes["repos"]["get"]["response"]["data"]
+export type GithubRepository =
+  | RestEndpointMethodTypes["repos"]["get"]["response"]["data"]
+  | RestEndpointMethodTypes["repos"]["listForUser"]["response"]["data"][0]
 
 export type SimpleRepository = {
   name: string
@@ -13,6 +15,23 @@ export type SimpleRepository = {
   url: string
 }
 
+const mapGithubRepoToSimpleRepository = (repo: GithubRepository): SimpleRepository => {
+  let color: string | null = ""
+
+  try {
+    color = getColor(repo.language ?? "") ?? null
+  } catch (error) {}
+  return {
+    name: repo.name,
+    description: repo.description,
+    language: repo.language ?? "unknown",
+    stars: repo.stargazers_count ?? 0,
+    forks: repo.forks ?? 0,
+    langColor: color,
+    url: repo.html_url,
+  }
+}
+
 export const getRepository = async ({
   repo,
   owner,
@@ -22,48 +41,19 @@ export const getRepository = async ({
 }): Promise<SimpleRepository> => {
   const client = new Octokit()
   const response = await client.repos.get({ owner, repo })
-
-  let color: string | null = ""
-
-  try {
-    color = getColor(response.data.language ?? "") ?? null
-  } catch (error) {}
-
-  return {
-    name: response.data.name,
-    description: response.data.description,
-    language: response.data.language ?? "unknown",
-    stars: response.data.stargazers_count,
-    forks: response.data.forks,
-    langColor: color,
-    url: response.data.html_url,
-  }
+  return mapGithubRepoToSimpleRepository(response.data)
 }
 
 export const getRepositories = async ({
-  owner,
+  username,
+  count = 100,
 }: {
-  repo: string
-  owner: string
+  username: string
+  count?: number
 }): Promise<SimpleRepository[]> => {
   const client = new Octokit()
-  const response = await client.repos.listPublic({ owner })
+  const response = await client.repos.listForUser({ username, per_page: count })
+  const portfolio = response.data.filter((repo) => repo.topics?.includes("willy-im"))
 
-  return response.data.map((r) => {
-    let color: string | null = ""
-
-    try {
-      color = getColor(r.language ?? "") ?? null
-    } catch (error) {}
-
-    return {
-      name: r.name,
-      description: r.description,
-      language: r.language ?? "unknown",
-      stars: r.stargazers_count ?? 0,
-      forks: r.forks ?? 0,
-      langColor: color,
-      url: r.html_url,
-    }
-  })
+  return portfolio.map((r) => mapGithubRepoToSimpleRepository(r)).sort((a, b) => b.stars - a.stars)
 }

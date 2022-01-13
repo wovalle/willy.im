@@ -3,7 +3,7 @@ import Link from "next/link"
 import { GetStaticProps } from "next"
 
 import { AboutSection } from "../components/AboutSection"
-import { getRepository } from "../lib/github"
+import { getRepositories, getRepository } from "../lib/github"
 import { RepositoryCard } from "../components/RepositoryCard"
 import type { ExtractReturnedPromiseFn } from "../types"
 import { FaGithub } from "react-icons/fa"
@@ -43,12 +43,11 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
 }
 
 export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
-  const fireorm = await getRepository({ owner: "wovalle", repo: "fireorm" })
-  const angelos = await getRepository({ owner: "wovalle", repo: "angelos" })
+  const repos = await getRepositories({ username: "wovalle" })
 
   return {
     props: {
-      repos: [fireorm, angelos],
+      repos,
     },
     revalidate: 60 * 60 * 24, // Revalidate after 24 hours
   }
