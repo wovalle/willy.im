@@ -33,6 +33,7 @@ const createSpotifyClient = async (): Promise<Client> => {
   return client
 }
 
+
 export const getNowPlaying = async (): Promise<SimpleNowPlaying> => {
   const client = await createSpotifyClient()
   const nowPlaying = await client.user.player.getCurrentlyPlaying("episode")
@@ -66,15 +67,32 @@ export const getNowPlaying = async (): Promise<SimpleNowPlaying> => {
   }
 }
 
-export const getTopTracks = async ({ limit }: { limit: number }): Promise<SimpleSpotifySong[]> => {
+export type ValidTimeframe = "days" | "months" | "years"
+
+export const getTopTracks = async ({
+  limit,
+}: {
+  limit: number
+}): Promise<Record<ValidTimeframe, SimpleSpotifySong[]>> => {
   const client = await createSpotifyClient()
 
-  // todo: add selector to time_range
-  const tracks = await client.user.getTopTracks({ limit, timeRange: TimeRange.Short })
+  const topTracks = await Promise.all([
+    client.user.getTopTracks({ limit, timeRange: TimeRange.Short }),
+    client.user.getTopTracks({ limit, timeRange: TimeRange.Medium }),
+    client.user.getTopTracks({ limit, timeRange: TimeRange.Long }),
+  ])
 
-  return tracks.map((t) => ({
-    songName: t.name,
-    artistName: t.artists.map((m) => m.name).join(", "),
-    url: t.previewURL ?? "",
-  }))
+  const [days, months, years] = topTracks.map((timeframe) =>
+    timeframe.map((t) => ({
+      songName: t.name,
+      artistName: t.artists.map((m) => m.name).join(", "),
+      url: t.previewURL ?? "",
+    }))
+  )
+
+  return {
+    days,
+    months,
+    years,
+  }
 }
