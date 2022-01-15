@@ -7,9 +7,11 @@ import Layout from "../components/Layout"
 
 import { getCurrentlyReading, getReviews } from "../lib/goodreads"
 import { toHtml } from "../lib/markdown"
-import { getTopTracks } from "../lib/spotify"
+import { getTopTracks, ValidTimeframe } from "../lib/spotify"
 import { markdownBio } from "../lib/static"
 import { FaBook, FaBookOpen, FaMusic, FaStar } from "react-icons/fa"
+import { InlineSelect } from "../components/Select"
+import { useState } from "react"
 
 export type AboutProps = {
   bio: string
@@ -18,10 +20,16 @@ export type AboutProps = {
   currentlyReading: Awaited<ReturnType<typeof getReviews>>
 }
 
+// TODO: create runtime union validator for Timeframe
+
 const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyReading }) => {
-  const topTracksList = topTracks.map((t, i) => (
+  const options = ["days", "months", "years"].map((t) => ({ value: t, label: t }))
+
+  const [timeframe, setTimeframe] = useState(options[0].value as ValidTimeframe)
+
+  const topTracksList = topTracks[timeframe].map((t, i) => (
     <AboutListElement
-      key={t.url}
+      key={t.songName}
       title={t.songName}
       subtitle={t.artistName}
       url={t.url}
@@ -60,7 +68,13 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
           Icon={FaMusic}
           subtitle={
             <>
-              in the last few weeks.
+              in the last few{" "}
+              <InlineSelect
+                options={options}
+                onChange={(v) => setTimeframe(v as ValidTimeframe)}
+                selected={timeframe}
+              />
+              .
               <a href="/playlist" className="ml-1">
                 here
               </a>
