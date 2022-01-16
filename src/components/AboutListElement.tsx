@@ -18,7 +18,7 @@ export const AboutListElement: React.FC<AboutListElementProps> = ({
   rightPanel,
   titleSide,
 }) => (
-  <li className="flex py-4 text-sm border-b border-gray-100 dark:border-gray-800 md:last:border-b-0">
+  <li className="flex py-4 text-sm border-b border-gray-100 dark:border-gray-800 last:border-b-0">
     {leftPanel && <div className="pr-2">{leftPanel}</div>}
     <div className="flex flex-row justify-between w-full md:justify-start">
       <div className="flex flex-col">
