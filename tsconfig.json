@@ -20,7 +20,7 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "esnext",
-    "incremental": true
+    "incremental": true,
   },
   "exclude": [
     "node_modules"

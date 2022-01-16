@@ -1,4 +1,4 @@
-import { ShortenedUrl } from "../shorty/middleware"
+import { ShortyEntity } from "../shorty/middleware"
 
 const baseUrl = process.env.UPSTASH_REDIS_URL
 
@@ -28,7 +28,7 @@ const client = {
   },
 }
 
-export const setKey = async (key: string, data: ShortenedUrl) => {
+export const setKey = async (key: string, data: ShortyEntity) => {
   const res = await client.post("/set/" + key, data)
 
   return res ? JSON.parse(res) : null
