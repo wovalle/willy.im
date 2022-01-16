@@ -67,7 +67,7 @@ const Header = () => {
         </div>
       </header>
       {menuIsExpanded && (
-        <div className="absolute flex flex-col w-full py-4 mt-20 space-y-4 font-semibold bg-white shadow-xl px-7 md:hidden dark:bg-black">
+        <div className="absolute flex flex-col w-full py-4 mt-20 z-10 space-y-4 font-semibold bg-white shadow-xl px-7 md:hidden dark:bg-black">
           {menu}
         </div>
       )}

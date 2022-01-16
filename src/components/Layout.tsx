@@ -22,7 +22,6 @@ const Layout: FunctionComponent<Props> = ({ children, title, withFooterDivider }
       </Head>
       <Header />
       {children}
-      {/* footer a bit more dark (see ) */}
       <Footer withFooterDivider={withFooterDivider} />
     </div>
   </>
