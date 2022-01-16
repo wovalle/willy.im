@@ -1,14 +1,15 @@
 import { NextFetchEvent, NextRequest } from "next/server"
-import { getKey } from "../../lib/upstash"
+import { getKey, setKey } from "../../lib/upstash"
 import { registerMiddleware } from "../../shorty/middleware"
 
 export async function middleware(req: NextRequest, ev: NextFetchEvent) {
-  return registerMiddleware(req, ev, {
-    onUrlCreate: async (_url, _data) => {
-      // await setKey(url, data)
+  return registerMiddleware(req, {
+    // WIP
+    onUrlCreate: async ({ key, data }) => {
+      await setKey(key, data)
       throw new Error("Not implemented")
     },
-    onUrlGet: (url) => getKey(url),
+    onUrlGet: async ({ key }) => getKey(key),
     basePath: "/s",
   })
 }
