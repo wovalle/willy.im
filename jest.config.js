@@ -1,10 +1,11 @@
-const nextJest = require("next/jest")
+const skippedModules = ["next"].join("|")
 
-const createJestConfig = nextJest({
-  dir: "./",
-})
-
-// createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
-module.exports = createJestConfig({
-  // transformIgnorePatterns: ["node_modules/(?!@ngrx|(?!deck.gl)|next)"],
-})
+module.exports = {
+  clearMocks: true,
+  transformIgnorePatterns: [`/node_modules/(?!${skippedModules})`],
+  testEnvironment: "jest-environment-jsdom",
+  transform: {
+    "^.+\\.(t|j)sx?$": ["@swc/jest"],
+  },
+  setupFiles: ["<rootDir>/jest.setup.js"],
+}

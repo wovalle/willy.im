@@ -1,13 +1,22 @@
 import { registerMiddleware, ShortyOpts } from "./middleware"
 import { mock } from "jest-mock-extended"
-import { NextRequest } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
-const getMockUrl = (url?: string) => (url ? `/s` + url : url)
+jest.mock("next/server")
+
+const getMockUrl = (method: string, pathname: string) => {
+  const nextUrl = mock<NextRequest["nextUrl"]>({
+    pathname,
+  })
+
+  return {
+    method,
+    nextUrl,
+  }
+}
 
 describe("Shortify Middleware", () => {
   describe("when the middleware is registered", () => {
-    const baseUrl = "/s"
-
     const onUrlCreate = jest.fn()
     const onUrlGet = jest.fn()
     const onAccessDenied = jest.fn()
@@ -16,7 +25,7 @@ describe("Shortify Middleware", () => {
     const callMiddleware = (
       partialReq: Partial<NextRequest> = {},
       opts: ShortyOpts = {
-        basePath: "/",
+        basePath: "",
         onUrlCreate,
         onUrlGet,
         onAccessDenied,
@@ -26,10 +35,85 @@ describe("Shortify Middleware", () => {
     ) => registerMiddleware(mock<NextRequest>(partialReq), opts)
 
     describe("Shorty Middleware", () => {
-      describe("on GET basePath", () => {
-        it("should call onUrlGet", async () => {
-          await callMiddleware({ url: getMockUrl(), method: "GET" })
-          expect(onUrlGet).toHaveBeenCalled()
+      describe("when navigating to /", () => {
+        const params = getMockUrl("GET", "/")
+
+        it("should call next middlewares", async () => {
+          await callMiddleware(params)
+
+          expect(NextResponse.next).toHaveBeenCalled()
+        })
+      })
+
+      describe("when navigating to /key", () => {
+        const params = getMockUrl("GET", "/key")
+
+        describe("and onUrlGet returns a valid entity", () => {
+          const entity = { to: "https://willy.im", key: "key" }
+
+          it("should redirect to the entity url", async () => {
+            onUrlGet.mockResolvedValue(entity)
+
+            await callMiddleware(params)
+
+            expect(NextResponse.redirect).toHaveBeenCalledWith("https://willy.im")
+          })
+        })
+
+        describe("and onUrlGet returns an invalid entity", () => {
+          it("should throw validation error", async () => {
+            onUrlGet.mockResolvedValueOnce(null)
+
+            await expect(callMiddleware(params)).rejects.toThrowError(
+              "Expected an object, but received: null"
+            )
+
+            onUrlGet.mockResolvedValueOnce({ key: "" })
+            await expect(callMiddleware(params)).rejects.toThrowError(
+              "At path: key -- Expected a nonempty string but received an empty one"
+            )
+
+            onUrlGet.mockResolvedValueOnce({})
+            await expect(callMiddleware(params)).rejects.toThrowError(
+              "At path: key -- Expected a string, but received: undefined"
+            )
+          })
+        })
+      })
+
+      describe("when navigating to /key", () => {
+        const params = getMockUrl("GET", "/key")
+
+        describe("and onUrlGet returns a valid entity", () => {
+          const entity = { to: "https://willy.im", key: "key" }
+
+          it("should redirect to the entity url", async () => {
+            onUrlGet.mockResolvedValue(entity)
+
+            await callMiddleware(params)
+
+            expect(NextResponse.redirect).toHaveBeenCalledWith("https://willy.im")
+          })
+        })
+
+        describe("and onUrlGet returns an invalid entity", () => {
+          it("should throw validation error", async () => {
+            onUrlGet.mockResolvedValueOnce(null)
+
+            await expect(callMiddleware(params)).rejects.toThrowError(
+              "Expected an object, but received: null"
+            )
+
+            onUrlGet.mockResolvedValueOnce({ key: "" })
+            await expect(callMiddleware(params)).rejects.toThrowError(
+              "At path: key -- Expected a nonempty string but received an empty one"
+            )
+
+            onUrlGet.mockResolvedValueOnce({})
+            await expect(callMiddleware(params)).rejects.toThrowError(
+              "At path: key -- Expected a string, but received: undefined"
+            )
+          })
         })
       })
     })
