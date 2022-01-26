@@ -1,14 +1,21 @@
 // eslint-disable-next-line @next/next/no-server-import-in-page
 import { NextRequest, NextResponse } from "next/server"
 import { Path } from "path-parser"
+import { array, date, Infer, assert, nonempty, object, optional, refine, string } from "superstruct"
+import isUrl from "validator/lib/isURL"
 
-export interface ShortyEntity {
-  key: string
-  to: string
-  allowedUsers?: string[]
-  password?: string
-  expirationDate?: Date
-}
+const Url = refine(string(), "url", (c) => isUrl(c))
+
+const ShortyEntityStruct = object({
+  key: nonempty(string()),
+  to: Url,
+  allowedUsers: optional(array(string())),
+  password: optional(string()),
+  expirationDate: optional(date()),
+  meta: optional(object()),
+})
+
+export type ShortyEntity = Infer<typeof ShortyEntityStruct>
 
 type ShortyParams = {
   key: string
@@ -39,12 +46,14 @@ const parseRoute = (
   method: string,
   pathName: string
 ): [Routes, Record<string, string>] | [] => {
-  const fullPath = `${method}/${pathName}`
+  const middlewarePath = basePath || "/"
+  const fullPath = `${method}${middlewarePath}${pathName}`
+
   const routes = [
-    [new Path(`get/${basePath}`), "get_view"],
-    [new Path(`get/${basePath}/:key`), "get_link"],
-    [new Path(`post/${basePath}/:key`), "set_link"],
-    [new Path(`get/${basePath}/:user/history`), "get_history"],
+    [new Path(`get${middlewarePath}/`), "get_view"],
+    [new Path(`get${middlewarePath}/:key`), "get_link"],
+    [new Path(`post${middlewarePath}/:key`), "set_link"],
+    [new Path(`get${middlewarePath}/:user/history`), "get_history"],
   ] as const
 
   const matchedPath = routes.find(([p]) => p.test(fullPath))
@@ -59,7 +68,7 @@ export const assertUnreachable = (_: never): never => {
 
 export const registerMiddleware = async (
   req: NextRequest,
-  { onUrlCreate, onUrlGet, onAccessDenied, onExpired, prepend = "", basePath = "/" }: ShortyOpts
+  { onUrlGet, onAccessDenied, onExpired, basePath }: ShortyOpts
 ) => {
   const user = ""
 
@@ -73,31 +82,24 @@ export const registerMiddleware = async (
     case "get_link": {
       const key = required(params?.["key"])
 
-      const url = await onUrlGet({ key })
+      const entity = await onUrlGet({ key })
 
-      if (!url) {
-        return NextResponse.redirect("/404")
-      }
+      // TODO:
+      assert(entity, ShortyEntityStruct)
 
-      if (url.allowedUsers?.length && !url.allowedUsers.includes(user)) {
+      if (entity.allowedUsers?.length && !entity.allowedUsers.includes(user)) {
         return onAccessDenied ? onAccessDenied({ key, user }) : null
       }
 
-      if (url.expirationDate && url.expirationDate < new Date()) {
-        return onExpired ? onExpired({ key, url }) : null
+      if (entity.expirationDate && entity.expirationDate < new Date()) {
+        return onExpired ? onExpired({ key, url: entity }) : null
       }
 
-      return NextResponse.redirect(url.to)
+      return NextResponse.redirect(entity.to)
     }
 
     case "set_link": {
-      // TODO: validate body
-      const data = req.body as unknown as ShortyEntity
-      const key = data.key
-
-      await onUrlCreate({ key, data })
-
-      return NextResponse.json({ saved: true })
+      throw new Error("not implemented")
     }
 
     case "get_history": {
