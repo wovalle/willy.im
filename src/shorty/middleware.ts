@@ -28,7 +28,7 @@ export type ShortyOpts = {
   onExpired?: (params: ShortyParams & { url: ShortyEntity }) => Promise<void>
   getHistory?: (params: ShortyParams) => Promise<void>
   prepend?: string
-  basePath: string
+  basePath?: string
 }
 
 type Routes = "get_view" | "get_link" | "set_link" | "get_history"
@@ -41,19 +41,30 @@ const required = <T>(value: T | undefined | null, error?: string): T => {
   return value
 }
 
+const normalizePath = (basePath?: string) => {
+  if (!basePath || basePath === "/") {
+    return ""
+  }
+
+  if (basePath.startsWith("/")) {
+    return basePath.endsWith("/") ? basePath.slice(0, -1) : basePath
+  }
+
+  throw new Error("Invalid basePath: must start with '/'")
+}
+
 const parseRoute = (
   basePath: string,
   method: string,
   pathName: string
 ): [Routes, Record<string, string>] | [] => {
-  const middlewarePath = basePath || "/"
-  const fullPath = `${method}${middlewarePath}${pathName}`
+  const fullPath = `${method}${pathName}`
 
   const routes = [
-    [new Path(`get${middlewarePath}/`), "get_view"],
-    [new Path(`get${middlewarePath}/:key`), "get_link"],
-    [new Path(`post${middlewarePath}/:key`), "set_link"],
-    [new Path(`get${middlewarePath}/:user/history`), "get_history"],
+    [new Path(`get${basePath}/`), "get_view"],
+    [new Path(`get${basePath}/:key`), "get_link"],
+    [new Path(`post${basePath}/:key`), "set_link"],
+    [new Path(`get${basePath}/:user/history`), "get_history"],
   ] as const
 
   const matchedPath = routes.find(([p]) => p.test(fullPath))
@@ -70,9 +81,10 @@ export const registerMiddleware = async (
   req: NextRequest,
   { onUrlGet, onAccessDenied, onExpired, basePath }: ShortyOpts
 ) => {
+  const normalizedBasePath = normalizePath(basePath)
   const user = ""
 
-  const [route, params] = parseRoute(basePath, req.method, req.nextUrl.pathname)
+  const [route, params] = parseRoute(normalizedBasePath, req.method, req.nextUrl.pathname)
 
   switch (route) {
     case "get_view": {
