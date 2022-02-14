@@ -20,6 +20,12 @@ class NextDocument extends Document {
           />
           <meta charSet="utf-8" />
           <meta name="description" content="Willy Ovalle's home on the internet" />
+          <script
+            async
+            defer
+            data-website-id="1fa07257-8d81-4989-a4d4-db6f0ea176b2"
+            src="https://analytics.willy.im/umami.js"
+          ></script>
         </Head>
         <body className="bg-white dark:bg-black">
           <Main />
