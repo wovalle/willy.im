@@ -1,11 +1,18 @@
-const skippedModules = ["next"].join("|")
+const nextJest = require('next/jest')
 
-module.exports = {
-  clearMocks: true,
-  transformIgnorePatterns: [`/node_modules/(?!${skippedModules})`],
-  testEnvironment: "jest-environment-jsdom",
-  transform: {
-    "^.+\\.(t|j)sx?$": ["@swc/jest"],
+const createJestConfig = nextJest({
+  // Provide the path to your Next.js app to load next.config.js and .env files in your test environment
+  dir: './',
+})
+
+const customJestConfig = {
+  setupFilesAfterEnv: [],
+  moduleNameMapper: {
+    // Handle module aliases (this will be automatically configured for you soon)
+    '^@/components/(.*)$': '<rootDir>/components/$1',
+    '^@/pages/(.*)$': '<rootDir>/pages/$1',
   },
-  setupFiles: ["<rootDir>/jest.setup.js"],
+  testEnvironment: 'jest-environment-jsdom',
 }
+
+module.exports = createJestConfig(customJestConfig)
