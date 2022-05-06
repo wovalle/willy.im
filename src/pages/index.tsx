@@ -1,12 +1,11 @@
-import Layout from "../components/Layout"
-import Link from "next/link"
 import { GetStaticProps } from "next"
-
-import { AboutSection } from "../components/AboutSection"
-import { getRepositories, getRepository } from "../lib/github"
+import Link from "next/link"
+import Layout from "../components/Layout"
+import Logo from "../components/Logo"
+import { PageSection } from "../components/PageSection"
 import { RepositoryCard } from "../components/RepositoryCard"
+import { getRepositories, getRepository } from "../lib/github"
 import type { ExtractReturnedPromiseFn } from "../types"
-import { FaGithub } from "react-icons/fa"
 
 type HomePageProps = {
   repos: ExtractReturnedPromiseFn<typeof getRepository>[]
@@ -14,29 +13,32 @@ type HomePageProps = {
 
 const HomePage: React.FC<HomePageProps> = ({ repos }) => {
   const RepoCards = repos.map((r) => <RepositoryCard key={r.url} repo={r} />)
-
   return (
-    <Layout title="Home | Willy Ovalle">
-      <main className="flex flex-col flex-grow w-full p-10 mt-10">
-        <p>
-          Hi there <span className="wave">👋🏼</span>
-        </p>
-        <h1 className="my-4 text-4xl text-title">
-          I'm Willy<span className="text-highlight">!</span>
-        </h1>
-        <p>
-          Software Developer from 🇩🇴 living in 🇩🇪 who loves <Link href="/about#songs">music</Link>,
-          videogames and to binge watch random YouTube videos.
-        </p>
-        <div className="pt-8"></div>
-        <AboutSection
+    <Layout title="Home | Willy Ovalle" withFooterDivider>
+      <main className="flex flex-col gap-20 p-10">
+        <section id="hero" className="grid md:grid-cols-5">
+          <div className="text-subtitle col-span-4 space-y-6">
+            <p>
+              Hi there <span className="wave">👋🏼</span>
+            </p>
+            <h1 className="text-title text-4xl">I'm Willy!</h1>
+            <p className="text-xl">
+              Dominican Software Developer who loves <Link href="/about#songs">music</Link>,
+              videogames and to binge watch random YouTube videos. Say hello at hi[at]willy.im!
+            </p>
+          </div>
+          <Logo width={200} height={200} className="hidden md:block " />
+        </section>
+
+        <PageSection
           title="what i've been working on"
-          subtitle="open source"
+          subtitle="open source projects"
           id="code"
-          Icon={FaGithub}
+          className="bg-neuli-500/60 dark:bg-neuda-700"
+          bleed
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">{RepoCards}</div>
-        </AboutSection>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{RepoCards}</div>
+        </PageSection>
       </main>
     </Layout>
   )

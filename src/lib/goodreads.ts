@@ -22,29 +22,37 @@ export type GoodReadsReview = {
   finishedOn: string | null
 }
 
-const parseFeed = async (shelf: string, limit: number = 10): Promise<GoodReadsReview[]> => {
+type ParseFeedOptions = {
+  limit: number
+  trimTitle: boolean
+}
+
+const parseFeed = async (
+  shelf: string,
+  options: ParseFeedOptions = { limit: 10, trimTitle: false }
+): Promise<GoodReadsReview[]> => {
   const parser = new Parser()
-  const feed = await parser.parseURL(`${baseRss}&shelf=${shelf}&per_page=${limit}`)
+  const feed = await parser.parseURL(`${baseRss}&shelf=${shelf}&per_page=${options.limit}`)
 
   const items = feed.items.length ? feed.items : [feed.item]
 
-  return items.map((i) => ({
-    title: i.title ?? "",
-    url: i.link ?? "",
-    finishedOn: i.pubDate ? new Date(i.pubDate).toISOString() : null,
-    rating: asNumber(getHtmlContentField(i.content, "rating")) ?? 0,
-    author: getHtmlContentField(i.content, "author") ?? "<unknown>",
-  }))
+  return items.map((i) => {
+    const title = (i.title ?? "").trim()
+
+    return {
+      title: options.trimTitle && title.length > 40 ? title.slice(0, 37) + "..." : title,
+      url: i.link ?? "",
+      finishedOn: i.pubDate ? new Date(i.pubDate).toISOString() : null,
+      rating: asNumber(getHtmlContentField(i.content, "rating")) ?? 0,
+      author: getHtmlContentField(i.content, "author") ?? "<unknown>",
+    }
+  })
 }
 
-export const getReviews = async ({ limit }: { limit: number }): Promise<GoodReadsReview[]> => {
-  return parseFeed("read", limit)
+export const getReviews = async (opts: ParseFeedOptions): Promise<GoodReadsReview[]> => {
+  return parseFeed("read", opts)
 }
 
-export const getCurrentlyReading = async ({
-  limit,
-}: {
-  limit: number
-}): Promise<GoodReadsReview[]> => {
-  return parseFeed("currently-reading", limit)
+export const getCurrentlyReading = async (opts: ParseFeedOptions): Promise<GoodReadsReview[]> => {
+  return parseFeed("currently-reading", opts)
 }

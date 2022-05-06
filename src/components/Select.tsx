@@ -12,7 +12,7 @@ export const InlineSelect: React.FC<SelectProps> = ({ options, id, onChange, sel
   return (
     <select
       id={id}
-      className="border border-gray-300 shadow-sm"
+      className="cursor-pointer appearance-none border-b-2 border-dotted border-neuda bg-transparent text-center font-bold hover:border-solid hover:border-prim-200"
       onChange={(e) => onChange(e.target.value)}
       value={selected}
     >

@@ -1,4 +1,10 @@
-import { FaGithub, FaTwitter, FaInstagram, FaLinkedin, FaTelegram } from "react-icons/fa"
+import {
+  IconBrandGithub,
+  IconBrandInstagram,
+  IconBrandLinkedin,
+  IconBrandTelegram,
+  IconBrandTwitter,
+} from "@tabler/icons"
 
 export const twitter = "https://twitter.com/wovalle"
 export const instagram = "https://instagram.com/wovalle"
@@ -15,45 +21,37 @@ export const socialMedia = [
     name: "twitter",
     tooltip: "Willy's Twitter",
     link: twitter,
-    icon: FaTwitter,
+    icon: IconBrandTwitter,
   },
   {
     name: "github",
     tooltip: "Willy's Github",
     link: github,
-    icon: FaGithub,
+    icon: IconBrandGithub,
   },
   {
     name: "instagram",
     tooltip: "Willy's Instagram",
     link: instagram,
-    icon: FaInstagram,
+    icon: IconBrandInstagram,
   },
   {
     name: "linkedin",
     tooltip: "Willy's LinkedIn",
     link: linkedin,
-    icon: FaLinkedin,
+    icon: IconBrandLinkedin,
   },
   {
     name: "telegram",
     tooltip: "Willy's Telegram",
     link: instagram,
-    icon: FaTelegram,
+    icon: IconBrandTelegram,
   },
 ]
 
-export const paths = [
-  { name: "home", url: "/" },
-  { name: "about", url: "/about" },
-]
-
 export const footerLinks = [
-  ...paths,
-  { name: "twitter", url: twitter },
-  { name: "github", url: github },
-  { name: "linkedIn", url: linkedin },
-  { name: "AMA", url: ama },
+  { name: "/home", url: "/" },
+  { name: "/about", url: "/about" },
 ]
 
 export const markdownBio = `
