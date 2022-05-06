@@ -1,7 +1,7 @@
 import type { GetStaticProps } from "next"
 
 import { MarkdownContent } from "../components/MarkdownContent"
-import { AboutSection } from "../components/AboutSection"
+import { PageSection } from "../components/PageSection"
 import { AboutListElement } from "../components/AboutListElement"
 import Layout from "../components/Layout"
 
@@ -9,9 +9,11 @@ import { getCurrentlyReading, getReviews } from "../lib/goodreads"
 import { toHtml } from "../lib/markdown"
 import { getTopTracks, ValidTimeframe } from "../lib/spotify"
 import { markdownBio } from "../lib/static"
-import { FaBook, FaBookOpen, FaMusic, FaStar } from "react-icons/fa"
 import { InlineSelect } from "../components/Select"
 import { useState } from "react"
+import Image from "next/image"
+import { IconBrandSpotify, IconStar } from "@tabler/icons"
+import Link from "next/link"
 
 export type AboutProps = {
   bio: string
@@ -27,13 +29,23 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
 
   const [timeframe, setTimeframe] = useState(options[0].value as ValidTimeframe)
 
-  const topTracksList = topTracks[timeframe].map((t, i) => (
+  const topTracksList = topTracks[timeframe].map((t) => (
     <AboutListElement
       key={t.songName}
       title={t.songName}
       subtitle={t.artistName}
       url={t.url}
-      leftPanel={<span className="text-xs font-bold text-subtitle">{i + 1}</span>}
+      leftPanel={
+        t.thumbnailUrl ? (
+          <Image
+            width={60}
+            height={60}
+            src={t.thumbnailUrl}
+            alt={t.songName}
+            className="rounded-xl"
+          />
+        ) : null
+      }
     />
   ))
 
@@ -44,28 +56,28 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
       subtitle={r.author}
       url={r.url}
       leftPanel={
-        <div className="flex text-xs font-bold leading-6 text-subtitle items-center">
-          {r.rating} <FaStar className="text-yellow-500 ml-1" />
+        <div className="text-subtitle flex items-center self-start text-xs font-bold leading-6">
+          {r.rating} <IconStar size="1.2em" className="ml-1 text-yellow-500" />
         </div>
       }
     />
   ))
 
   const currentlyReadingList = currentlyReading.map((r) => (
-    <AboutListElement key={r.url} title={r.title} subtitle={r.author} url={r.url} />
+    <AboutListElement key={r.url} title={r.title} subtitle={<>{r.author}</>} url={r.url} />
   ))
 
   return (
     <Layout title="About | Willy Ovalle">
-      <main className="flex flex-col flex-grow p-8 md:p-10">
-        <AboutSection id="bio" title="who i am">
+      <main className="flex flex-grow flex-col p-8 md:p-10">
+        <PageSection id="bio" title="who i am" bodyClassName="leading-relaxed text-lg">
           <MarkdownContent content={bio} />
-        </AboutSection>
+        </PageSection>
 
-        <AboutSection
+        <PageSection
           id="songs"
           title="what i've been jamming to"
-          Icon={FaMusic}
+          bleed
           subtitle={
             <>
               in the last few{" "}
@@ -74,37 +86,34 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
                 onChange={(v) => setTimeframe(v as ValidTimeframe)}
                 selected={timeframe}
               />
-              .
-              <a href="/playlist" className="ml-1">
-                here
-              </a>
-              's a playlist to know me better
+              . want to know me better?
+              <Link href="/playlist" className="ml-1">
+                have fun
+              </Link>
             </>
           }
         >
-          <div className="grid grid-cols-1 md:gap-4 md:grid-cols-2">
-            <ul>{topTracksList.slice(0, 5)}</ul>
-            <ul>{topTracksList.slice(5, 10)}</ul>
+          <div className="absolute right-20 top-14">
+            <IconBrandSpotify size="3em" color="#1ED760" />
           </div>
-        </AboutSection>
 
-        <AboutSection id="books" title="currently into..." Icon={FaBookOpen}>
-          <div className="grid grid-cols-1 md:gap-4 md:grid-cols-2">
-            <ul>{currentlyReadingList}</ul>
-          </div>
-        </AboutSection>
+          <ul className="-mx-2 grid grid-cols-1 md:grid-cols-2 md:gap-4">{topTracksList}</ul>
+        </PageSection>
 
-        <AboutSection
+        <PageSection
           id="books"
           title="what i've been reading"
           subtitle="or listening, whatever, love audiobooks"
-          Icon={FaBook}
+          bodyClassName="grid gap-4"
         >
-          <div className="grid grid-cols-1 md:gap-4 md:grid-cols-2">
-            <ul>{reviewList.slice(0, 5)}</ul>
-            <ul>{reviewList.slice(5, 10)}</ul>
+          <div className="grid gap-1 rounded-xl">
+            <span className="w-32 rounded bg-blue-100 px-2 py-1 text-center text-xs font-bold text-blue-800 dark:bg-blue-200 dark:text-blue-800">
+              currently reading
+            </span>
+            <ul className="grid grid-cols-1 md:grid-cols-2 md:gap-4">{currentlyReadingList}</ul>
           </div>
-        </AboutSection>
+          <ul className="-mx-2 grid grid-cols-1 md:grid-cols-2 md:gap-4 ">{reviewList}</ul>
+        </PageSection>
 
         {/* 
         <AboutSection title="what i've been watching">
@@ -124,10 +133,12 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
 }
 
 export const getStaticProps: GetStaticProps<AboutProps> = async () => {
-  const bio = await toHtml(markdownBio)
-  const topTracks = await getTopTracks({ limit: 10 })
-  const reviews = await getReviews({ limit: 10 })
-  const currentlyReading = await getCurrentlyReading({ limit: 2 })
+  const [bio, topTracks, reviews, currentlyReading] = await Promise.all([
+    toHtml(markdownBio),
+    getTopTracks({ limit: 10 }),
+    getReviews({ limit: 10, trimTitle: true }),
+    getCurrentlyReading({ limit: 2, trimTitle: true }),
+  ])
 
   return {
     props: {

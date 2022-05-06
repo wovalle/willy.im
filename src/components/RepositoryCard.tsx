@@ -1,5 +1,6 @@
+import Link from "next/link"
 import React from "react"
-import { FaBook, FaStar, FaCodeBranch } from "react-icons/fa"
+import { IconStar } from "@tabler/icons"
 import { SimpleRepository } from "../lib/github"
 
 export type RepositoryCardProps = {
@@ -8,35 +9,16 @@ export type RepositoryCardProps = {
 
 export const RepositoryCard: React.FC<RepositoryCardProps> = ({ repo }) => {
   return (
-    <div className="flex flex-col p-4 border rounded">
-      <div className="flex items-center">
-        <FaBook size=".9em" className="mr-1" />
-        <a
-          href={repo.url}
-          target="_blank"
-          className="font-medium text-purple-800 dark:text-purple-200"
-        >
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between">
+        <Link href={repo.url} target="_blank" className="font-medium">
           {repo.name}
-        </a>
-      </div>
-      <div className="mt-2 mb-4 text-xs">{repo.description}</div>
-      <div className="flex mt-auto text-xs">
-        <div className="flex items-center mr-4">
-          <span
-            style={{ backgroundColor: repo.langColor ?? "" }}
-            className="relative w-3 h-3 rounded-full"
-          ></span>
-          <span className="pl-2">{repo.language}</span>
-        </div>
-        <div className="flex items-center mr-4">
-          <FaStar />
-          <span className="ml-0.5">{repo.stars}</span>
-        </div>
-        <div v-if="repository.forks" className="flex items-center">
-          <FaCodeBranch />
-          <span className="ml-0.5">{repo.forks}</span>
+        </Link>
+        <div className="text-subtitle flex items-center text-xs font-bold leading-6">
+          <div>{repo.stars}</div> <IconStar className="ml-0.5" size="1em" />
         </div>
       </div>
+      <div className="mt-1 text-xs">{repo.description}</div>
     </div>
   )
 }

@@ -1,77 +1,104 @@
-import { BiSun, BiMoon } from "react-icons/bi"
 import { useTheme } from "next-themes"
-import { useState } from "react"
-import { useEffect } from "react"
-import { FaBars } from "react-icons/fa"
+import { FC, useCallback } from "react"
 import Link from "next/link"
-import { paths, socialMedia } from "../lib/static"
+import Logo from "./Logo"
+import { IconMoon, IconSun, IconMenu } from "@tabler/icons"
+import { useRouter } from "next/router"
+import clsx from "clsx"
+import { Menu } from "@headlessui/react"
+import { footerLinks } from "../lib/static"
+import { ClientOnly } from "./ClientOnly"
 
-const socialMediaIcons = socialMedia.map(({ name, tooltip, link, icon: Icon }) => (
-  <li key={name}>
-    <a data-tooltip={tooltip} href={link}>
-      <Icon size="1.5em" className="text-black dark:text-white" />
-    </a>
-  </li>
-))
+type MenuLinkProps = { active: boolean; url: string; content: string }
 
-const menu = paths.map((e) => (
-  <Link href={e.url} passHref key={e.url}>
-    <a>{e.name}</a>
+const MenuLink: FC<MenuLinkProps> = ({ active, url, content }) => (
+  <Link
+    href={url}
+    key={url}
+    className={clsx("leading-10", active ? "active" : "border-transparent")}
+  >
+    {content}
   </Link>
-))
+)
 
 const Header = () => {
   const { setTheme, resolvedTheme } = useTheme()
-  const [menuIsExpanded, setMenuIsExpanded] = useState(false)
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  })
+  const router = useRouter()
 
   const toggleTheme = () => (resolvedTheme === "dark" ? setTheme("light") : setTheme("dark"))
-
   const themeIcon =
     resolvedTheme === "dark" ? (
-      <BiSun className="text-yellow-500" size="1.5em" />
+      <IconSun size="1.5em" className="hover:text-amber-200" />
     ) : (
-      <BiMoon className="text-indigo-500" size="1.5em" />
+      <IconMoon size="1.5em" className="hover:text-neuda" />
     )
 
-  return (
-    <>
-      <header className="flex flex-row justify-between p-6">
-        {mounted ? (
-          <button
-            aria-label={`Switch to ${resolvedTheme} theme`}
-            className="focus:outline-none"
-            onClick={() => {
-              toggleTheme()
-            }}
-          >
-            {themeIcon}
-          </button>
+  const getMenuItems = useCallback(
+    (inMenu: boolean) =>
+      footerLinks.map((e) => {
+        const active = router.pathname === e.url
+
+        return inMenu ? (
+          <Menu.Item as="li" key={e.url}>
+            <MenuLink active={active} url={e.url} content={e.name} />
+          </Menu.Item>
         ) : (
-          <div></div>
+          <li key={e.url}>
+            <MenuLink active={active} url={e.url} content={e.name} />
+          </li>
+        )
+      }),
+    []
+  )
+
+  return (
+    <header className="flex flex-row justify-between p-6">
+      <Link href="/" className="md:hidden">
+        <Logo className="h-10 w-10" />
+      </Link>
+
+      <nav className="hidden list-none justify-between gap-10 md:flex">{getMenuItems(false)}</nav>
+
+      <ClientOnly>
+        <button
+          onClick={() => {
+            toggleTheme()
+          }}
+          className="hidden md:block"
+        >
+          {themeIcon}
+        </button>
+      </ClientOnly>
+      <Menu>
+        {({ open }) => (
+          <>
+            <Menu.Button
+              className={clsx(
+                open && "bg-slate-100",
+                "flex h-10 w-10 items-center justify-center space-y-8 rounded-lg dark:bg-gray-800 md:hidden"
+              )}
+            >
+              <IconMenu className="h-10" />
+            </Menu.Button>
+            <Menu.Items
+              className="absolute right-0 z-10 mt-12 flex w-full flex-col items-center gap-8 rounded-lg bg-white p-8 font-semibold shadow-md dark:bg-black dark:shadow-neuda-700 md:hidden"
+              as="ul"
+            >
+              {getMenuItems(true)}
+              <Menu.Item as="li">
+                <button
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-slate-100 p-4 font-bold hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800"
+                  onClick={() => toggleTheme()}
+                >
+                  {themeIcon}
+                  change to {resolvedTheme === "dark" ? "light" : "dark"} theme
+                </button>
+              </Menu.Item>
+            </Menu.Items>
+          </>
         )}
-        <div className="flex flex-row items-center">
-          <nav className="justify-center hidden space-x-3 md:flex">{menu}</nav>
-          <div className="hidden px-4 md:flex">|</div>
-          <ul className="flex space-x-1">{socialMediaIcons}</ul>
-          <button
-            className="flex items-center justify-center w-8 h-8 ml-3 bg-gray-200 md:hidden dark:bg-gray-800"
-            onClick={() => setMenuIsExpanded(!menuIsExpanded)}
-          >
-            <FaBars />
-          </button>
-        </div>
-      </header>
-      {menuIsExpanded && (
-        <div className="absolute flex flex-col w-full py-4 mt-20 z-10 space-y-4 font-semibold bg-white shadow-xl px-7 md:hidden dark:bg-black">
-          {menu}
-        </div>
-      )}
-    </>
+      </Menu>
+    </header>
   )
 }
 

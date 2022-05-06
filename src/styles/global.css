@@ -4,27 +4,35 @@
 @tailwind screens;
 
 @layer base {
+  .trans {
+    @apply transition;
+    @apply duration-300;
+    @apply ease-in-out;
+  }
+
   a {
-    @apply text-indigo-500;
+    @apply border-b-2;
+    @apply border-dotted;
+    @apply border-neuda;
+    @apply hover:border-solid;
+    @apply hover:border-prim-200;
+    @apply cursor-pointer;
+
+    @apply trans;
   }
 
-  a:hover {
-    @apply text-indigo-700;
-    @apply underline;
-  }
-
-  .dark a {
-    @apply text-yellow-500;
-  }
-
-  .dark a:hover {
-    @apply text-yellow-700;
-    @apply underline;
+  a.active {
+    @apply border-solid;
   }
 
   .text-title {
     @apply text-gray-800;
     @apply dark:text-gray-100;
+  }
+
+  .text-title-prim {
+    @apply text-neuda;
+    @apply dark:text-neuli;
   }
 
   .text-subtitle {
@@ -37,32 +45,43 @@
     @apply dark:text-gray-500;
   }
 
-  .text-highlight {
-    @apply text-yellow-600;
-    @apply dark:text-indigo-400;
-  }
-
   .markddown p {
     @apply pb-2;
   }
 }
 
 .wave {
-  animation-name: wave-animation; 
-  animation-duration: 7s;        
-  animation-delay: 3s;        
-  animation-iteration-count: infinite;  
-  transform-origin: 70% 70%;       
+  animation-name: wave-animation;
+  animation-duration: 7s;
+  animation-delay: 3s;
+  animation-iteration-count: infinite;
+  transform-origin: 70% 70%;
   display: inline-block;
 }
 
 @keyframes wave-animation {
-  0% { transform: rotate( 0.0deg) }
-  2% { transform: rotate(14.0deg) } 
-  4% { transform: rotate(-8.0deg) }
-  6% { transform: rotate(14.0deg) }
-  8% { transform: rotate(-4.0deg) }
-  10% { transform: rotate(10.0deg) }
-  12% { transform: rotate( 0.0deg) }  
-  20% { transform: rotate( 0.0deg) }
+  0% {
+    transform: rotate(0deg);
+  }
+  2% {
+    transform: rotate(14deg);
+  }
+  4% {
+    transform: rotate(-8deg);
+  }
+  6% {
+    transform: rotate(14deg);
+  }
+  8% {
+    transform: rotate(-4deg);
+  }
+  10% {
+    transform: rotate(10deg);
+  }
+  12% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(0deg);
+  }
 }

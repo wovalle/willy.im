@@ -1,13 +1,12 @@
+import Link from "next/link"
 import { ReactNode } from "react"
-import { FaExternalLinkAlt } from "react-icons/fa"
+import { IconExternalLink } from "@tabler/icons"
 
 export type AboutListElementProps = {
-  title: string
-  subtitle?: string
+  title: ReactNode
+  subtitle?: ReactNode
   url: string
-  leftPanel?: ReactNode | undefined
-  rightPanel?: ReactNode | undefined
-  titleSide?: ReactNode | undefined
+  leftPanel?: ReactNode
 }
 
 export const AboutListElement: React.FC<AboutListElementProps> = ({
@@ -15,24 +14,16 @@ export const AboutListElement: React.FC<AboutListElementProps> = ({
   subtitle,
   url,
   leftPanel,
-  rightPanel,
-  titleSide,
 }) => (
-  <li className="flex py-4 text-sm border-b border-gray-100 dark:border-gray-800 last:border-b-0">
-    {leftPanel && <div className="pr-2">{leftPanel}</div>}
-    <div className="flex flex-row justify-between w-full md:justify-start">
+  <li className="flex items-center gap-2 rounded-xl p-2 text-sm hover:bg-slate-200 dark:border-gray-800 dark:hover:bg-slate-800">
+    {leftPanel}
+    <div className="flex w-full flex-row justify-between md:justify-start">
       <div className="flex flex-col">
-        <div className="flex">
-          <a href={url} className="text-title" target="_blank">
-            <span className="flex">
-              {title} <FaExternalLinkAlt className="ml-1 self-center" size="0.7em" />
-            </span>
-          </a>
-          {titleSide}
-        </div>
-        <p className="text-subsubtitle">{subtitle}</p>
+        <Link href={url} className="text-title flex border-transparent" target="_blank">
+          {title} <IconExternalLink className="ml-1 self-center" size="1em" />
+        </Link>
+        <p className="text-subtitle">{subtitle}</p>
       </div>
-      {rightPanel && <div className="flex flex-row md:ml-2">{rightPanel}</div>}
     </div>
   </li>
 )

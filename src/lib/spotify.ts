@@ -8,6 +8,7 @@ export interface SimpleSpotifySong {
   songName: string
   artistName: string
   url: string
+  thumbnailUrl?: string
 }
 
 export type SimpleNowPlaying = Partial<SimpleSpotifySong> & { isPlaying: boolean }
@@ -32,7 +33,6 @@ const createSpotifyClient = async (): Promise<Client> => {
 
   return client
 }
-
 
 export const getNowPlaying = async (): Promise<SimpleNowPlaying> => {
   const client = await createSpotifyClient()
@@ -87,6 +87,7 @@ export const getTopTracks = async ({
       songName: t.name,
       artistName: t.artists.map((m) => m.name).join(", "),
       url: t.previewURL ?? "",
+      thumbnailUrl: t.album?.images.at(0)?.url,
     }))
   )
 

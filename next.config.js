@@ -26,7 +26,9 @@ const links = {
     linkedin: ["li"],
   },
 }
-
+/**
+ * @type {import('next').NextConfig}
+ */
 module.exports = {
   async redirects() {
     return Object.entries(links.redirects)
@@ -40,5 +42,11 @@ module.exports = {
         }))
       })
       .flat()
+  },
+  experimental: {
+    newNextLinkBehavior: true,
+  },
+  images: {
+    domains: ["i.scdn.co"],
   },
 }
