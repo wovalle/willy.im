@@ -16,7 +16,6 @@ const links = {
     github,
     resume,
     playlist,
-    "max-palomo": "/s/max",
   },
   aliases: {
     twitter: ["tw"],

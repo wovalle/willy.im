@@ -1,5 +1,4 @@
-import { RestEndpointMethodTypes, Octokit } from "@octokit/rest"
-import getColor from "github-lang-colors"
+import { Octokit, RestEndpointMethodTypes } from "@octokit/rest"
 
 export type GithubRepository =
   | RestEndpointMethodTypes["repos"]["get"]["response"]["data"]
@@ -11,23 +10,16 @@ export type SimpleRepository = {
   language: string
   stars: number
   forks: number
-  langColor: string | null
   url: string
 }
 
 const mapGithubRepoToSimpleRepository = (repo: GithubRepository): SimpleRepository => {
-  let color: string | null = ""
-
-  try {
-    color = getColor(repo.language ?? "") ?? null
-  } catch (error) {}
   return {
     name: repo.name,
     description: repo.description,
     language: repo.language ?? "unknown",
     stars: repo.stargazers_count ?? 0,
     forks: repo.forks ?? 0,
-    langColor: color,
     url: repo.html_url,
   }
 }
