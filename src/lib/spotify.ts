@@ -89,7 +89,7 @@ export const getTopTracks = async ({
       artistName: t.artists.map((m) => m.name).join(", "),
       previewUrl: t.previewURL ?? "",
       url: t.externalURL["spotify"],
-      thumbnailUrl: t.album?.images.at(1)?.url,
+      thumbnailUrl: t.album?.images[1]?.url,
     }))
   )
 
