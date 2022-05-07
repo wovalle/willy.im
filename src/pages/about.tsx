@@ -1,19 +1,17 @@
+import { IconBrandSpotify, IconStar } from "@tabler/icons"
 import type { GetStaticProps } from "next"
-
-import { MarkdownContent } from "../components/MarkdownContent"
-import { PageSection } from "../components/PageSection"
+import Link from "next/link"
+import { useState } from "react"
+import { PlayButtonOverlay } from "../components/about/PlayButtonOverlay"
 import { AboutListElement } from "../components/AboutListElement"
 import Layout from "../components/Layout"
-
+import { MarkdownContent } from "../components/MarkdownContent"
+import { PageSection } from "../components/PageSection"
+import { InlineSelect } from "../components/Select"
 import { getCurrentlyReading, getReviews } from "../lib/goodreads"
 import { toHtml } from "../lib/markdown"
 import { getTopTracks, ValidTimeframe } from "../lib/spotify"
 import { markdownBio } from "../lib/static"
-import { InlineSelect } from "../components/Select"
-import { useState } from "react"
-import Image from "next/image"
-import { IconBrandSpotify, IconStar } from "@tabler/icons"
-import Link from "next/link"
 
 export type AboutProps = {
   bio: string
@@ -26,7 +24,6 @@ export type AboutProps = {
 
 const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyReading }) => {
   const options = ["days", "months", "years"].map((t) => ({ value: t, label: t }))
-
   const [timeframe, setTimeframe] = useState(options[0].value as ValidTimeframe)
 
   const topTracksList = topTracks[timeframe].map((t) => (
@@ -37,13 +34,14 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
       url={t.url}
       leftPanel={
         t.thumbnailUrl ? (
-          <Image
-            width={60}
-            height={60}
-            src={t.thumbnailUrl}
-            alt={t.songName}
-            className="rounded-xl"
-          />
+          <PlayButtonOverlay audioUrl={t.previewUrl} diameter={60}>
+            <img
+              style={{ maxHeight: 60, maxWidth: 60 }}
+              src={t.thumbnailUrl}
+              alt={t.songName}
+              className="rounded-xl"
+            />
+          </PlayButtonOverlay>
         ) : null
       }
     />

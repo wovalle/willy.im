@@ -9,6 +9,7 @@ export interface SimpleSpotifySong {
   artistName: string
   url: string
   thumbnailUrl?: string
+  previewUrl?: string
 }
 
 export type SimpleNowPlaying = Partial<SimpleSpotifySong> & { isPlaying: boolean }
@@ -86,8 +87,9 @@ export const getTopTracks = async ({
     timeframe.map((t) => ({
       songName: t.name,
       artistName: t.artists.map((m) => m.name).join(", "),
-      url: t.previewURL ?? "",
-      thumbnailUrl: t.album?.images.at(0)?.url,
+      previewUrl: t.previewURL ?? "",
+      url: t.externalURL["spotify"],
+      thumbnailUrl: t.album?.images.at(1)?.url,
     }))
   )
 

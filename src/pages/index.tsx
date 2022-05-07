@@ -13,6 +13,7 @@ type HomePageProps = {
 
 const HomePage: React.FC<HomePageProps> = ({ repos }) => {
   const RepoCards = repos.map((r) => <RepositoryCard key={r.url} repo={r} />)
+
   return (
     <Layout title="Home | Willy Ovalle" withFooterDivider>
       <main className="flex flex-col gap-20 p-10">

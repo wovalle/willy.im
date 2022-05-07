@@ -1,12 +1,26 @@
+import { ThemeProvider } from "next-themes"
+import { AppProps } from "next/app"
+import { ReactNode, useRef, useState } from "react"
+import { AudioPlayerContext } from "../hooks/useAudioPlayer"
 import "../styles/global.css"
 
-import { AppProps } from "next/app"
-import { ThemeProvider } from "next-themes"
+export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
+  const [currentUrl, setCurrentUrl] = useState<string | undefined>()
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const intervalRef = useRef<NodeJS.Timer | null>(null)
+  return (
+    <AudioPlayerContext.Provider value={{ audioRef, intervalRef, currentUrl, setCurrentUrl }}>
+      {children}
+    </AudioPlayerContext.Provider>
+  )
+}
 
 const App = ({ Component, pageProps }: AppProps) => {
   return (
     <ThemeProvider attribute="class" defaultTheme="system">
-      <Component {...pageProps} />
+      <AudioPlayerProvider>
+        <Component {...pageProps} />
+      </AudioPlayerProvider>
     </ThemeProvider>
   )
 }
