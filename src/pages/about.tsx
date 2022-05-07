@@ -32,9 +32,9 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
       title={t.songName}
       subtitle={t.artistName}
       url={t.url}
-      leftPanel={
+      leftPanel={(isHovered) =>
         t.thumbnailUrl ? (
-          <PlayButtonOverlay audioUrl={t.previewUrl} diameter={60}>
+          <PlayButtonOverlay audioUrl={t.previewUrl} diameter={60} isHovered={isHovered}>
             <img
               style={{ maxHeight: 60, maxWidth: 60 }}
               src={t.thumbnailUrl}
@@ -53,11 +53,11 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
       title={r.title}
       subtitle={r.author}
       url={r.url}
-      leftPanel={
+      leftPanel={() => (
         <div className="text-subtitle flex items-center self-start text-xs font-bold leading-6">
           {r.rating} <IconStar size="1.2em" className="ml-1 text-yellow-500" />
         </div>
-      }
+      )}
     />
   ))
 

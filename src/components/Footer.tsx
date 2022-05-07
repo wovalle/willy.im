@@ -1,9 +1,8 @@
+import { IconBrandSpotify } from "@tabler/icons"
 import clsx from "clsx"
 import Link from "next/link"
 import React from "react"
-import { IconBrandSpotify } from "@tabler/icons"
-
-import { useNowPlaying } from "../hooks/useNowPlaying"
+import { useNowPlaying } from "../hooks"
 import { footerLinks, playlist, socialMedia } from "../lib/static"
 
 const NowPlaying: React.FC = () => {
