@@ -1,7 +1,7 @@
 import { IconPlayerPause, IconPlayerPlay } from "@tabler/icons"
 import clsx from "clsx"
-import { FC, ReactNode, useState } from "react"
-import { useAudioPlayer } from "../../hooks/useAudioPlayer"
+import { FC, ReactNode } from "react"
+import { useAudioPlayer } from "../../hooks"
 import { ClientOnly } from "../ClientOnly"
 
 type PlayButtonOverlayProps = {
@@ -9,6 +9,7 @@ type PlayButtonOverlayProps = {
   stroke?: number
   children: ReactNode
   audioUrl?: string
+  isHovered: boolean
 }
 
 export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
@@ -16,9 +17,9 @@ export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
   children,
   audioUrl,
   diameter,
+  isHovered,
 }) => {
   const audio = useAudioPlayer(audioUrl)
-  const [inside, setInside] = useState(false)
 
   const radius = diameter / 2
   const normalizedRadius = radius - stroke * 2
@@ -33,13 +34,11 @@ export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
         className="relative cursor-pointer"
         onClick={() => audio.toggle()}
         style={{ width: diameter, height: diameter }}
-        onMouseEnter={() => setInside(true)}
-        onMouseLeave={() => setInside(false)}
       >
         <div
           className={clsx("absolute left-0 top-0 rounded-xl", {
-            "opacity-50": !inside && !audio.playing,
-            "bg-black/50": inside || audio.playing,
+            "opacity-50": !isHovered && !audio.playing,
+            "bg-black/50": isHovered || audio.playing,
           })}
         >
           <div className="absolute" style={{ top: radius - 10, left: radius - 10 }}>
