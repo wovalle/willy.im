@@ -1,4 +1,5 @@
 import { IconExternalLink } from "@tabler/icons"
+import clsx from "clsx"
 import Link from "next/link"
 import { ReactNode } from "react"
 import { useHover } from "../hooks"
@@ -8,6 +9,7 @@ export type AboutListElementProps = {
   subtitle?: ReactNode
   url: string
   leftPanel?: (isHovered: boolean) => ReactNode | ReactNode
+  withHover?: boolean
 }
 
 export const AboutListElement: React.FC<AboutListElementProps> = ({
@@ -15,12 +17,15 @@ export const AboutListElement: React.FC<AboutListElementProps> = ({
   subtitle,
   url,
   leftPanel,
+  withHover = true,
 }) => {
   const { isHovered, hoverProps } = useHover()
 
   return (
     <li
-      className="flex items-center gap-2 rounded-xl p-2 text-sm hover:bg-slate-200 dark:border-gray-800 dark:hover:bg-slate-800"
+      className={clsx("flex items-center gap-2 rounded-xl p-2 text-sm  dark:border-gray-800 ", {
+        "hover:bg-slate-200 dark:hover:bg-slate-800": withHover,
+      })}
       {...hoverProps}
     >
       {typeof leftPanel === "function" ? leftPanel(isHovered) : leftPanel}

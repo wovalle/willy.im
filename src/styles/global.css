@@ -44,10 +44,6 @@
     @apply text-gray-400;
     @apply dark:text-gray-500;
   }
-
-  .markddown p {
-    @apply pb-2;
-  }
 }
 
 .wave {

@@ -1,7 +1,8 @@
 export type MarkdownContentProps = {
   content: string
+  className?: string
 }
 
-export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content }) => (
-  <div className="markddown" dangerouslySetInnerHTML={{ __html: content }} />
+export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, className }) => (
+  <div className={className} dangerouslySetInnerHTML={{ __html: content }} />
 )

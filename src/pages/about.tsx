@@ -53,6 +53,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
       title={r.title}
       subtitle={r.author}
       url={r.url}
+      withHover={false}
       leftPanel={() => (
         <div className="text-subtitle flex items-center self-start text-xs font-bold leading-6">
           {r.rating} <IconStar size="1.2em" className="ml-1 text-yellow-500" />
@@ -62,14 +63,20 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
   ))
 
   const currentlyReadingList = currentlyReading.map((r) => (
-    <AboutListElement key={r.url} title={r.title} subtitle={<>{r.author}</>} url={r.url} />
+    <AboutListElement
+      key={r.url}
+      title={r.title}
+      subtitle={<>{r.author}</>}
+      withHover={false}
+      url={r.url}
+    />
   ))
 
   return (
     <Layout title="About | Willy Ovalle">
       <main className="flex flex-grow flex-col p-8 md:p-10">
-        <PageSection id="bio" title="who i am" bodyClassName="leading-relaxed text-lg">
-          <MarkdownContent content={bio} />
+        <PageSection id="bio" title="who i am" bodyClassName="leading-relaxed text-lg gap-2">
+          <MarkdownContent content={bio} className="space-y-6" />
         </PageSection>
 
         <PageSection
@@ -104,12 +111,14 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
           subtitle="or listening, whatever, love audiobooks"
           bodyClassName="grid gap-4"
         >
-          <div className="grid gap-1 rounded-xl">
-            <span className="w-32 rounded bg-blue-100 px-2 py-1 text-center text-xs font-bold text-blue-800 dark:bg-blue-200 dark:text-blue-800">
-              currently reading
-            </span>
+          <fieldset className="relative grid rounded-xl border-2 border-dashed border-neuda bg-slate-50 p-4 dark:bg-slate-900/70">
+            <legend className="ml-4">
+              <strong className="w-32 rounded  bg-neuli px-2 py-1 text-center text-xs font-bold text-neuda dark:bg-neuda dark:text-neuli">
+                currently reading
+              </strong>
+            </legend>
             <ul className="grid grid-cols-1 md:grid-cols-2 md:gap-4">{currentlyReadingList}</ul>
-          </div>
+          </fieldset>
           <ul className="-mx-2 grid grid-cols-1 md:grid-cols-2 md:gap-4 ">{reviewList}</ul>
         </PageSection>
 

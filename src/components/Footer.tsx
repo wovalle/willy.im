@@ -40,7 +40,7 @@ const Footer = (
   { withFooterDivider }: { withFooterDivider?: boolean } = { withFooterDivider: true }
 ) => {
   const links = footerLinks.map(({ name, url }) => (
-    <Link key={name} href={url}>
+    <Link key={name} href={url} className="border-transparent">
       {name}
     </Link>
   ))
