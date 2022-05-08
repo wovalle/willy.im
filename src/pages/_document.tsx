@@ -1,4 +1,4 @@
-import Document, { Html, Head, Main, NextScript } from "next/document"
+import Document, { Head, Html, Main, NextScript } from "next/document"
 
 class NextDocument extends Document {
   render() {
@@ -20,6 +20,8 @@ class NextDocument extends Document {
           />
           <meta charSet="utf-8" />
           <meta name="description" content="Willy Ovalle's home on the internet" />
+          <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000" />
+          <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFFFFF" />
         </Head>
         <body className="bg-white dark:bg-black">
           <Main />
