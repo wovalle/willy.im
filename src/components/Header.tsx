@@ -52,8 +52,8 @@ const Header = () => {
   )
 
   return (
-    <header className="flex flex-row justify-between p-6 outline-red-500 ring-yellow-200 target:ring-pink-200 focus:ring-green-100">
-      <Link href="/" className="border-0 md:hidden">
+    <header className="flex flex-row justify-between p-6">
+      <Link href="/" className="border-transparent md:hidden">
         <Logo className="h-10 w-10" />
       </Link>
 
