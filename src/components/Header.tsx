@@ -1,13 +1,13 @@
-import { useTheme } from "next-themes"
-import { FC, useCallback } from "react"
-import Link from "next/link"
-import Logo from "./Logo"
-import { IconMoon, IconSun, IconMenu } from "@tabler/icons"
-import { useRouter } from "next/router"
-import clsx from "clsx"
 import { Menu } from "@headlessui/react"
+import { IconMenu, IconMoon, IconSun } from "@tabler/icons"
+import clsx from "clsx"
+import { useTheme } from "next-themes"
+import Link from "next/link"
+import { useRouter } from "next/router"
+import { FC, useCallback } from "react"
 import { footerLinks } from "../lib/static"
 import { ClientOnly } from "./ClientOnly"
+import Logo from "./Logo"
 
 type MenuLinkProps = { active: boolean; url: string; content: string }
 
@@ -52,8 +52,8 @@ const Header = () => {
   )
 
   return (
-    <header className="flex flex-row justify-between p-6">
-      <Link href="/" className="md:hidden">
+    <header className="flex flex-row justify-between p-6 outline-red-500 ring-yellow-200 target:ring-pink-200 focus:ring-green-100">
+      <Link href="/" className="border-0 md:hidden">
         <Logo className="h-10 w-10" />
       </Link>
 
