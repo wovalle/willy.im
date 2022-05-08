@@ -91,7 +91,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
             </>
           }
         >
-          <div className="absolute right-20 top-14">
+          <div className="absolute right-6 md:right-20 md:top-14">
             <IconBrandSpotify size="3em" color="#1ED760" />
           </div>
 
