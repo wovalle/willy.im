@@ -39,7 +39,7 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
             <p className="flex">
               <Link
                 href="/about"
-                className="flex items-center justify-center gap-1 rounded-xl border-0 bg-slate-100 px-4 py-3 font-bold hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800"
+                className="flex items-center justify-center gap-1 rounded-xl border-0 bg-prim-700  px-4 py-3 font-bold text-white hover:bg-prim-900 dark:bg-prim-900 dark:hover:bg-prim-700"
               >
                 about me <IconArrowUpRight size="1em" />
               </Link>
