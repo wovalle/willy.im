@@ -1,7 +1,7 @@
 import { IconArrowUpRight, IconBrandTwitter } from "@tabler/icons"
 import { GetStaticProps } from "next"
 import Link from "next/link"
-import Layout from "../components/Layout"
+import Layout from "../components/layouts/Default"
 import Logo from "../components/Logo"
 import { PageSection } from "../components/PageSection"
 import { RepositoryCard } from "../components/RepositoryCard"
@@ -26,7 +26,7 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
             <h1 className="text-title text-4xl">I'm Willy!</h1>
             <p className="text-xl">
               Dominican Software Developer who loves <Link href="/about#songs">music</Link>,
-              videogames and to spend too much time watching youtube videos. Say hello at
+              videogames and spends too much time watching youtube videos. Say hello at
               <Link
                 href="https://twitter.com/wovalle"
                 className="ml-2 inline-flex items-center gap-1"
