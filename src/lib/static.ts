@@ -44,7 +44,7 @@ export const socialMedia = [
   {
     name: "telegram",
     tooltip: "Willy's Telegram",
-    link: instagram,
+    link: telegram,
     icon: IconBrandTelegram,
   },
 ]
