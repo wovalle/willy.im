@@ -12,7 +12,7 @@ interface SelectProps {
   onChange: (value: string) => void
 }
 
-export const InlineSelect: React.FC<SelectProps> = ({ options, id, onChange, selected }) => {
+export const InlineSelect: React.FC<SelectProps> = ({ options, onChange, selected }) => {
   return (
     <span className="relative">
       <Listbox value={selected} onChange={onChange}>
