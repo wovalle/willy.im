@@ -31,7 +31,12 @@ export const AboutListElement: React.FC<AboutListElementProps> = ({
       {typeof leftPanel === "function" ? leftPanel(isHovered) : leftPanel}
       <div className="flex w-full flex-row justify-between md:justify-start">
         <div className="flex flex-col">
-          <Link href={url} className="text-title flex border-transparent" target="_blank">
+          <Link
+            href={url}
+            className="text-title flex border-transparent"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {title} <IconExternalLink className="ml-1 self-center" size="1em" />
           </Link>
           <p className="text-subtitle">{subtitle}</p>

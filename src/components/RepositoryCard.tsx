@@ -1,6 +1,6 @@
+import { IconStar } from "@tabler/icons"
 import Link from "next/link"
 import React from "react"
-import { IconStar } from "@tabler/icons"
 import { SimpleRepository } from "../lib/github"
 
 export type RepositoryCardProps = {
@@ -11,7 +11,7 @@ export const RepositoryCard: React.FC<RepositoryCardProps> = ({ repo }) => {
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between">
-        <Link href={repo.url} target="_blank" className="font-medium">
+        <Link href={repo.url} target="_blank" className="font-medium" rel="noopener noreferrer">
           {repo.name}
         </Link>
         <div className="text-subtitle flex items-center text-xs font-bold leading-6">
