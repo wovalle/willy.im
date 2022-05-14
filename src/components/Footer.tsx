@@ -8,8 +8,8 @@ import { footerLinks, playlist, socialMedia } from "../lib/static"
 const NowPlaying: React.FC = () => {
   const nowPlaying = useNowPlaying()
 
-  const title = nowPlaying.isPlaying ? nowPlaying.songName ?? "" : "not playing"
-  const subtitle = nowPlaying.isPlaying ? nowPlaying.artistName ?? "" : "anything"
+  const title = nowPlaying.isPlaying ? nowPlaying.songName ?? "" : "not playing anything"
+  const subtitle = nowPlaying.isPlaying ? nowPlaying.artistName ?? "" : "click for a cool playlist"
   const url = nowPlaying.isPlaying ? nowPlaying.url ?? "" : playlist
 
   const spotifyIconClass = clsx(
@@ -19,20 +19,21 @@ const NowPlaying: React.FC = () => {
   )
 
   return (
-    <>
-      <div className="flex flex-col">
-        <div className="flex">
-          <Link href={url} className="text-title">
-            {title}
-          </Link>
-        </div>
-        <p className="text-subsubtitle text-xs">{subtitle}</p>
+    <article
+      title="now-playing"
+      className="flex flex-row items-center justify-between md:flex-row-reverse md:justify-center md:px-0"
+    >
+      <div className="flex flex-col text-base">
+        <Link href={url} className="text-title">
+          {title}
+        </Link>
+        <p className="text-subsubtitle text-sm">{subtitle}</p>
       </div>
       <div className="relative h-8 md:mr-4">
         <span className={spotifyIconClass}></span>
         <IconBrandSpotify size="2em" />
       </div>
-    </>
+    </article>
   )
 }
 
@@ -54,16 +55,11 @@ const Footer = (
   ))
 
   return (
-    <footer className="grid gap-6 p-8">
+    <footer className="grid gap-6 p-6">
       {withFooterDivider && (
         <hr className="border-1 mx-auto w-4/5 border-gray-200 dark:border-gray-800" />
       )}
-      <article
-        title="now-playing"
-        className="flex flex-row items-center justify-between md:flex-row-reverse md:justify-center md:px-0"
-      >
-        <NowPlaying />
-      </article>
+      <NowPlaying />
 
       <ul className="flex flex-row justify-center gap-4">{links}</ul>
 

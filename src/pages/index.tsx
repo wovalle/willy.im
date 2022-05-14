@@ -5,11 +5,21 @@ import Layout from "../components/layouts/Default"
 import Logo from "../components/Logo"
 import { PageSection } from "../components/PageSection"
 import { RepositoryCard } from "../components/RepositoryCard"
-import { getRepositories, getRepository } from "../lib/github"
-import type { ExtractReturnedPromiseFn } from "../types"
+import { getRepositories, SimpleRepository } from "../lib/github"
 
 type HomePageProps = {
-  repos: ExtractReturnedPromiseFn<typeof getRepository>[]
+  repos: SimpleRepository[]
+}
+
+export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
+  const repos = await getRepositories({ username: "wovalle" })
+
+  return {
+    props: {
+      repos,
+    },
+    revalidate: 60 * 60 * 24, // Revalidate after 24 hours
+  }
 }
 
 const HomePage: React.FC<HomePageProps> = ({ repos }) => {
@@ -17,9 +27,9 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
 
   return (
     <Layout title="Home | Willy Ovalle">
-      <main className="flex flex-col gap-20 p-10">
+      <main className="flex flex-grow flex-col gap-32 py-16 px-6">
         <section id="hero" className="grid md:grid-cols-5">
-          <div className="text-subtitle col-span-4 space-y-6">
+          <div className="text-subtitle col-span-4 mr-4 flex flex-col gap-4">
             <p>
               Hi there <span className="wave">👋🏼</span>
             </p>
@@ -60,17 +70,6 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
       </main>
     </Layout>
   )
-}
-
-export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
-  const repos = await getRepositories({ username: "wovalle" })
-
-  return {
-    props: {
-      repos,
-    },
-    revalidate: 60 * 60 * 24, // Revalidate after 24 hours
-  }
 }
 
 export default HomePage

@@ -69,7 +69,8 @@ const Header = () => {
           {themeIcon}
         </button>
       </ClientOnly>
-      <Menu>
+
+      <Menu as="menu" className="md:hidden">
         {({ open }) => (
           <>
             <Menu.Button

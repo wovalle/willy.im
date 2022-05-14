@@ -1,6 +1,5 @@
 import { IconBrandSpotify, IconStar } from "@tabler/icons"
 import type { GetStaticProps } from "next"
-import Link from "next/link"
 import { useState } from "react"
 import { PlayButtonOverlay } from "../components/about/PlayButtonOverlay"
 import { AboutListElement } from "../components/AboutListElement"
@@ -91,10 +90,6 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
                 onChange={(v) => setTimeframe(v as ValidTimeframe)}
                 selected={timeframe}
               />
-              . want to know me better?
-              <Link href="/playlist" className="ml-1">
-                have fun
-              </Link>
             </>
           }
         >
