@@ -25,14 +25,14 @@
     @apply border-solid;
   }
 
-  .text-title {
-    @apply text-gray-800;
-    @apply dark:text-gray-100;
+  .text {
+    @apply text-gray-600;
+    @apply dark:text-gray-300;
   }
 
-  .text-title-prim {
-    @apply text-neuda;
-    @apply dark:text-neuli;
+  .text-title {
+    @apply text-gray-800;
+    @apply dark:text-gray-50;
   }
 
   .text-subtitle {
@@ -43,6 +43,21 @@
   .text-subsubtitle {
     @apply text-gray-400;
     @apply dark:text-gray-500;
+  }
+
+  .notion p,
+  details,
+  span,
+  summary {
+    @apply text;
+  }
+
+  .notion summary {
+    @apply font-semibold;
+  }
+
+  .notion blockquote {
+    @apply my-4;
   }
 }
 
