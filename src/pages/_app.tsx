@@ -8,6 +8,7 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
   const [currentUrl, setCurrentUrl] = useState<string | undefined>()
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const intervalRef = useRef<NodeJS.Timer | null>(null)
+
   return (
     <AudioPlayerContext.Provider value={{ audioRef, intervalRef, currentUrl, setCurrentUrl }}>
       {children}

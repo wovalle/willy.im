@@ -1,10 +1,15 @@
 import { BlockWithChildren } from "@jitl/notion-api"
+import { IconRss } from "@tabler/icons"
 import dayjs from "dayjs"
 import { GetStaticPaths, GetStaticProps, InferGetStaticPropsType } from "next"
+import Link from "next/link"
 import { FC } from "react"
+import useSWR from "swr/immutable"
 import Layout from "../../components/layouts/Default"
+import { fetcher } from "../../lib/fetcher"
 import { getFullPageBySlug, getPublicPosts, PageProperties } from "../../lib/notion"
 import { notionBlockToDOM } from "../../renderNotionValues"
+import { PostViewsApiSuccess } from "../api/luchy/post_views"
 
 type GetStaticPropsOpts = {
   blocks: BlockWithChildren[]
@@ -39,25 +44,32 @@ export const getStaticProps: GetStaticProps<GetStaticPropsOpts> = async ({ param
 
 type PostProps = InferGetStaticPropsType<typeof getStaticProps>
 
+const Divider = () => <span className="px-1">·</span>
+
 export const Post: FC<PostProps> = ({ blocks, pageProperties }) => {
   const tags = pageProperties.categories.join(", ")
   const BlockComponents = blocks.map((b) => notionBlockToDOM(b))
 
+  // TODO: typesafe swr?
+  const { data } = useSWR<PostViewsApiSuccess>(
+    `/api/luchy/post_views?slug=${pageProperties.slug}`,
+    fetcher
+  )
+
   const PublishedAt = pageProperties.publishedAt ? (
     <time dateTime={pageProperties.publishedAt} className="lowercase">
-      {dayjs(pageProperties.publishedAt).format("MMMM D, YYYY")} {" · "}
+      {dayjs(pageProperties.publishedAt).format("MMMM D, YYYY")}
     </time>
   ) : null
 
-  const LastEditedAt =
-    pageProperties.showEdited && pageProperties.editedAt ? (
-      <time dateTime={pageProperties.editedAt} className="lowercase">
-        {dayjs(pageProperties.editedAt).format("MMMM D, YYYY")}
-      </time>
-    ) : null
+  const LastEditedAt = pageProperties.editedAt ? (
+    <time dateTime={pageProperties.editedAt} className="lowercase">
+      {dayjs(pageProperties.editedAt).format("MMMM D, YYYY")}
+    </time>
+  ) : null
 
   return (
-    <Layout title="blog">
+    <Layout title={pageProperties.title}>
       <main>
         <article className="flex flex-col gap-10 p-6  text-xl leading-relaxed">
           <header className="flex flex-col gap-2">
@@ -66,17 +78,19 @@ export const Post: FC<PostProps> = ({ blocks, pageProperties }) => {
             </h1>
             <div className="gap-1">
               <p className="text-subtitle flex text-sm md:text-base">
-                {PublishedAt} {tags} · 8,775 views
+                {PublishedAt} <Divider />
+                {tags} <Divider /> {data?.views ?? "???"} views
+                <Link href="/rss.xml" className="self-center border-0 no-underline">
+                  <IconRss size="1em" className="ml-2 self-center" />
+                </Link>
               </p>
-              {pageProperties.showEdited ? (
-                <p className="text-subtitle flex text-sm md:text-base">
-                  <i className="font-extralight">(last updated {LastEditedAt})</i>
-                </p>
-              ) : null}
+              <p className="text-subtitle flex text-sm">
+                <i className="font-extralight">(last updated {LastEditedAt})</i>
+              </p>
             </div>
           </header>
 
-          <section className="notion flex flex-col gap-4">{BlockComponents}</section>
+          <section className="notion flex flex-col gap-3">{BlockComponents}</section>
         </article>
       </main>
     </Layout>

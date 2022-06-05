@@ -1,5 +1,6 @@
 import { BlockWithChildren, RichText } from "@jitl/notion-api/src/lib/notion-api"
 import clsx from "clsx"
+import Link from "next/link"
 
 type TextProps = {
   text: RichText
@@ -17,13 +18,15 @@ export const Text = ({ text }: TextProps) => {
     return hasAnnotations ? (
       <span key={index} className={clsx(value.annotations)}>
         {value.text.link ? (
-          <a href={value.text.link.url}>{value.text.content}</a>
+          <Link key={index} href={value.text.link.url}>
+            {value.text.content}
+          </Link>
         ) : (
           value.text.content
         )}
       </span>
     ) : (
-      <>{value.text.content}</>
+      <span key={index}>{value.text.content}</span>
     )
   })
 
@@ -34,53 +37,53 @@ export const notionBlockToDOM = (block: BlockWithChildren) => {
   switch (block.type) {
     case "paragraph": {
       return (
-        <p>
+        <p key={block.id}>
           <Text text={block.paragraph.rich_text} />
         </p>
       )
     }
     case "heading_1":
       return (
-        <h1>
+        <h1 key={block.id}>
           <Text text={block.heading_1.rich_text} />
         </h1>
       )
     case "heading_2":
       return (
-        <h2>
+        <h2 key={block.id}>
           <Text text={block.heading_2.rich_text} />
         </h2>
       )
     case "heading_3":
       return (
-        <h3>
+        <h3 key={block.id}>
           <Text text={block.heading_3.rich_text} />
         </h3>
       )
     case "bulleted_list_item":
       return (
-        <li>
+        <li key={block.id}>
           <Text text={block["bulleted_list_item"].rich_text} />
         </li>
       )
 
     case "numbered_list_item":
       return (
-        <li>
+        <li key={block.id}>
           <Text text={block["numbered_list_item"].rich_text} />
         </li>
       )
 
     case "quote":
       return (
-        <blockquote>
+        <blockquote key={block.id}>
           <Text text={block["quote"].rich_text} />
         </blockquote>
       )
 
     case "toggle":
       return (
-        <details>
+        <details key={block.id}>
           <summary>
             <Text text={block["toggle"].rich_text} />
           </summary>
@@ -90,7 +93,7 @@ export const notionBlockToDOM = (block: BlockWithChildren) => {
 
     case "callout":
       return (
-        <div className="callout">
+        <div className="callout" key={block.id}>
           <Text text={block["callout"].rich_text} />
         </div>
       )

@@ -72,8 +72,8 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
   ))
 
   return (
-    <Layout title="About | Willy Ovalle">
-      <main className="flex flex-grow flex-col p-8 md:p-10">
+    <Layout title="About">
+      <main className="flex flex-grow flex-col py-10 px-6">
         <PageSection id="bio" title="who i am" bodyClassName="leading-relaxed text-lg gap-2">
           <MarkdownContent content={bio} className="space-y-6" />
         </PageSection>

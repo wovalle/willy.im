@@ -22,6 +22,7 @@ class NextDocument extends Document {
           <meta name="description" content="Willy Ovalle's home on the internet" />
           <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000" />
           <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFFFFF" />
+          <link rel="alternate" type="application/rss+xml" title="RSS" href="/rss.xml" />
         </Head>
         <body className="bg-white dark:bg-black">
           <Main />
