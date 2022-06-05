@@ -13,7 +13,7 @@ const Layout: FunctionComponent<Props> = ({ children, title, withFooterDivider }
   <>
     {title && (
       <Head>
-        <title>{title}</title>
+        <title>{title} | Willy Ovalle</title>
       </Head>
     )}
     <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col overflow-hidden text-gray-700 dark:text-gray-200">

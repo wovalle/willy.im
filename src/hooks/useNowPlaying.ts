@@ -5,6 +5,7 @@ import { SimpleNowPlaying } from "../lib/spotify"
 export const useNowPlaying = () => {
   const { data } = useSWR<SimpleNowPlaying>("/api/now-playing", fetcher, {
     refreshInterval: 3 * 60 * 1000, // refresh each 3 mins
+    revalidateOnFocus: false,
   })
 
   return data ?? { isPlaying: false }

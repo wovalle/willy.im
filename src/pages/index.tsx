@@ -1,8 +1,8 @@
 import { IconArrowUpRight, IconBrandTwitter } from "@tabler/icons"
 import { GetStaticProps } from "next"
+import Image from "next/image"
 import Link from "next/link"
 import Layout from "../components/layouts/Default"
-import Logo from "../components/Logo"
 import { PageSection } from "../components/PageSection"
 import { RepositoryCard } from "../components/RepositoryCard"
 import { getRepositories, SimpleRepository } from "../lib/github"
@@ -26,7 +26,7 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
   const RepoCards = repos.map((r) => <RepositoryCard key={r.url} repo={r} />)
 
   return (
-    <Layout title="Home | Willy Ovalle">
+    <Layout title="Home">
       <main className="flex flex-grow flex-col gap-32 py-16 px-6">
         <section id="hero" className="grid md:grid-cols-5">
           <div className="text-subtitle col-span-4 mr-4 flex flex-col gap-4">
@@ -55,7 +55,12 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
               </Link>
             </p>
           </div>
-          <Logo width={200} height={200} className="hidden md:block " />
+          <Image
+            src="/profile.png"
+            width={296}
+            height={296}
+            className="opacity-85 hidden rounded-full object-cover dark:contrast-75"
+          />
         </section>
 
         <PageSection

@@ -20,24 +20,28 @@ export type NotionBlock = ListBlockResults[number]
 export type PageProperties = {
   slug: string
   title: string
+  summary: string
   publishedAt: string | null
   createdAt: string | null
   editedAt: string | null
   categories: string[]
-  showEdited: boolean
 }
 
 const notionClient = new Client({ auth: process.env.NOTION_TOKEN })
 const dbId = process.env.NOTION_DATABASE_ID ?? ""
 
+// TODO: Need to use next preview for this
+const isDev = process.env.NODE_ENV === "development"
+const cuttOffDate = isDev ? new Date("Nov 16, 2999") : new Date()
+
 const postSchema = inferDatabaseSchema({
   title: { type: "title", name: "Title" },
+  summary: { type: "rich_text", name: "Summary" },
   slug: { type: "rich_text", name: "Slug" },
   publishedAt: { type: "date", name: "Published At" },
   category: { type: "multi_select", name: "Category" },
   editedAt: { type: "last_edited_time", name: "Edited At" },
   createdAt: { type: "created_time", name: "Created At" },
-  showEdited: { type: "checkbox", name: "Show Edited" },
 })
 
 const transformPageProperties = (page: Page): PageProperties => {
@@ -46,9 +50,9 @@ const transformPageProperties = (page: Page): PageProperties => {
   return {
     slug: richTextAsPlainText(props.slug),
     title: richTextAsPlainText(props.title),
+    summary: richTextAsPlainText(props.summary),
     publishedAt: props.publishedAt ? props.publishedAt.start : null,
     categories: props.category ? props.category.map((c) => c.name) : [],
-    showEdited: props.showEdited ?? false,
     editedAt: props.editedAt ? props.editedAt : null,
     createdAt: props.createdAt ? props.createdAt : null,
   }
@@ -59,6 +63,7 @@ export const getNotionPageBySlug = async (slug: string) => {
     database_id: dbId,
     filter: databaseFilterBuilder(postSchema).and(
       propertyFilterBuilder(postSchema.publishedAt).is_not_empty(true),
+      propertyFilterBuilder(postSchema.publishedAt).on_or_before(cuttOffDate.toISOString()),
       propertyFilterBuilder(postSchema.slug).equals(slug)
     ),
   })
@@ -90,7 +95,8 @@ export const getPublicPosts = async () => {
   const response = await notionClient.databases.query({
     database_id: dbId,
     filter: databaseFilterBuilder(postSchema).and(
-      propertyFilterBuilder(postSchema.publishedAt).is_not_empty(true)
+      propertyFilterBuilder(postSchema.publishedAt).is_not_empty(true),
+      propertyFilterBuilder(postSchema.publishedAt).on_or_before(cuttOffDate.toISOString())
     ),
     sorts: [databaseSortBuilder(postSchema).publishedAt.descending],
   })

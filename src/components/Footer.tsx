@@ -20,7 +20,7 @@ const NowPlaying: React.FC = () => {
 
   return (
     <article
-      title="now-playing"
+      title={nowPlaying.isPlaying ? "Now Playing" : "Click for a cool spotify playlist"}
       className="flex flex-row items-center justify-between md:flex-row-reverse md:justify-center md:px-0"
     >
       <div className="flex flex-col text-base">
