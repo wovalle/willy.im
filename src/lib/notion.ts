@@ -91,7 +91,7 @@ export const getFullPageBySlug = async (slug: string | string[] | undefined) => 
   return respond({ blocks, properties: transformPageProperties(page as Page) })
 }
 
-export const getPublicPosts = async () => {
+export const getPublicPosts = async (pageSize = 10) => {
   const response = await notionClient.databases.query({
     database_id: dbId,
     filter: databaseFilterBuilder(postSchema).and(
@@ -99,6 +99,7 @@ export const getPublicPosts = async () => {
       propertyFilterBuilder(postSchema.publishedAt).on_or_before(cuttOffDate.toISOString())
     ),
     sorts: [databaseSortBuilder(postSchema).publishedAt.descending],
+    page_size: pageSize,
   })
 
   return response.results
