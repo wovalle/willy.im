@@ -42,11 +42,12 @@ export const getStaticProps: GetStaticProps<GetStaticPropsOpts> = async ({ param
   }
 }
 
-type PostProps = InferGetStaticPropsType<typeof getStaticProps>
-
 const Divider = () => <span className="px-1">·</span>
 
-export const Post: FC<PostProps> = ({ blocks, pageProperties }) => {
+export const Post: FC<InferGetStaticPropsType<typeof getStaticProps>> = ({
+  blocks,
+  pageProperties,
+}) => {
   const tags = pageProperties.categories.join(", ")
   const BlockComponents = blocks.map((b) => notionBlockToDOM(b))
 

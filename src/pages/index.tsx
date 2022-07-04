@@ -1,29 +1,49 @@
 import { IconArrowUpRight, IconBrandTwitter } from "@tabler/icons"
-import { GetStaticProps } from "next"
+import dayjs from "dayjs"
+import { InferGetStaticPropsType } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import Layout from "../components/layouts/Default"
 import { PageSection } from "../components/PageSection"
 import { RepositoryCard } from "../components/RepositoryCard"
-import { getRepositories, SimpleRepository } from "../lib/github"
+import { getRepositories } from "../lib/github"
+import { getPublicPosts } from "../lib/notion"
 
-type HomePageProps = {
-  repos: SimpleRepository[]
-}
-
-export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
+export const getStaticProps = async () => {
   const repos = await getRepositories({ username: "wovalle" })
+  const posts = await getPublicPosts(3)
 
   return {
     props: {
       repos,
+      posts,
     },
     revalidate: 60 * 60 * 24, // Revalidate after 24 hours
   }
 }
 
-const HomePage: React.FC<HomePageProps> = ({ repos }) => {
+const PostCard: React.FC<{ url: string; publishedAt: string | null; title: string }> = ({
+  url,
+  publishedAt,
+  title,
+}) => (
+  <article className="flex flex-col justify-between">
+    <span>
+      <Link href={url} className="border-transparent text-xl font-bold" rel="noopener noreferrer">
+        {title}
+      </Link>
+    </span>
+    <span className="text-subtitle text-sm font-thin leading-tight">
+      {dayjs(publishedAt).format("MMMM D, YYYY")}
+    </span>
+  </article>
+)
+
+const HomePage: React.FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ repos, posts }) => {
   const RepoCards = repos.map((r) => <RepositoryCard key={r.url} repo={r} />)
+  const PostCards = posts.map((p) => (
+    <PostCard key={p.slug} url={`/posts/${p.slug}`} publishedAt={p.publishedAt} title={p.title} />
+  ))
 
   return (
     <Layout title="Home">
@@ -55,21 +75,26 @@ const HomePage: React.FC<HomePageProps> = ({ repos }) => {
               </Link>
             </p>
           </div>
-          <Image
-            src="/profile.png"
-            width={296}
-            height={296}
-            className="opacity-85 hidden rounded-full object-cover dark:contrast-75"
-          />
+          <div className="image-container hidden md:block">
+            <Image
+              src="/profile.png"
+              width={296}
+              height={296}
+              className="opacity-85 rounded-full object-cover dark:contrast-75"
+            />
+          </div>
         </section>
 
         <PageSection
-          title="what i've been working on"
-          subtitle="open source projects"
-          id="code"
-          className="bg-neuli-500/60 dark:bg-neuda-700"
+          title="what i've been writing"
+          id="posts"
           bleed
+          className="bg-neuli-500/60 dark:bg-neuda-700"
         >
+          <div className="grid grid-cols-1 gap-4">{PostCards}</div>
+        </PageSection>
+
+        <PageSection title="what i've been working on" subtitle="open source projects" id="code">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{RepoCards}</div>
         </PageSection>
       </main>
