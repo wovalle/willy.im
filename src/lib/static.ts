@@ -61,3 +61,36 @@ I have been working professionally [since 2012](${linkedin}) (*damn has it been 
 
 I spend my free time [playing music](#top-tracks), [reading](#books) (*mostly listening tbh*) books, doing [open source work](https://github.com/wovalle), enjoying time with friends and family and watching *way too much* youtube. Catch me up on **[twitter](${twitter})**… or don’t, it's your call; I’m only a biography after all.
 `
+
+export const siteConfig = {
+  pathPrefix: "/",
+  keywords: [
+    "Willy Ovalle",
+    "wovalle",
+    "willy Ovalle",
+    "Software Developer",
+    "Software Engineer",
+    "react",
+    "Redux",
+    "Typescript",
+    "Jest",
+    "Docker",
+    "Frontend",
+    "Engineering",
+    "Blog",
+    "serverless",
+  ],
+  title: "Willy Ovalle's Blog",
+  titleAlt: "Willy Ovalle | Blog",
+  description: "Willy Ovalle's home on the internet",
+  url: "https://willy.im",
+  siteLanguage: "en",
+  logo: "public/logo.png",
+  imageUrl: "https://willy.im/public/og/og-twitter.png",
+  favicon: "public/favicon.png",
+  shortName: "WillyOvalle",
+  author: "Willy Ovalle",
+  twitter: "@wovalle",
+  twitterDesc:
+    "Willy Ovalle is a software engineer and bad jokes enthusiast currently based in Berlin.",
+}

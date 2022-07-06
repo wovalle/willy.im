@@ -1,10 +1,9 @@
-import { FetchEvent } from "next/dist/server/web/spec-compliant/fetch-event"
-import { NextRequest, NextResponse } from "next/server"
+import { NextFetchEvent, NextRequest, NextResponse } from "next/server"
 
 const baseUrl =
   process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://willy.im"
 
-export async function middleware(req: NextRequest, event: FetchEvent) {
+export async function middleware(req: NextRequest, event: NextFetchEvent) {
   const url = req.nextUrl.clone()
 
   // TODO: Ignore files, do we have to ignore head as well?

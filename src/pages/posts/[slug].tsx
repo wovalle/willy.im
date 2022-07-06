@@ -6,6 +6,7 @@ import Link from "next/link"
 import { FC } from "react"
 import useSWR from "swr/immutable"
 import Layout from "../../components/layouts/Default"
+import { PostSeo } from "../../components/PostSeo"
 import { fetcher } from "../../lib/fetcher"
 import { getFullPageBySlug, getPublicPosts, PageProperties } from "../../lib/notion"
 import { notionBlockToDOM } from "../../renderNotionValues"
@@ -71,6 +72,13 @@ export const Post: FC<InferGetStaticPropsType<typeof getStaticProps>> = ({
 
   return (
     <Layout title={pageProperties.title}>
+      <PostSeo
+        path={`/posts/${pageProperties.slug}`}
+        date={pageProperties.publishedAt ?? ""}
+        updated={pageProperties.editedAt ?? ""}
+        description={pageProperties.summary}
+        title={pageProperties.title}
+      />
       <main>
         <article className="flex flex-col gap-10 p-6  text-xl leading-relaxed">
           <header className="flex flex-col gap-2">
