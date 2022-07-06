@@ -8,6 +8,7 @@ export type AboutSectionProps = {
   className?: string
   bodyClassName?: string
   bleed?: boolean
+  children: ReactNode
 }
 
 export const PageSection: React.FC<AboutSectionProps> = ({
