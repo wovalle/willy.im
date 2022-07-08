@@ -1,4 +1,4 @@
-import useSWR from "swr"
+import useSWR from "swr/immutable"
 import { fetcher } from "../lib/fetcher"
 import { PostViewsApiSuccess } from "../pages/api/luchy/post_views"
 
