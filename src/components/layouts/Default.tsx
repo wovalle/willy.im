@@ -1,7 +1,7 @@
 import Head from "next/head"
 import { FunctionComponent, ReactNode } from "react"
 import Footer from "../Footer"
-import Header from "../Header"
+import { Header } from "../header"
 
 type Props = {
   children?: ReactNode
