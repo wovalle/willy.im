@@ -9,7 +9,7 @@ const NowPlaying: React.FC = () => {
   const nowPlaying = useNowPlaying()
 
   const title = nowPlaying.isPlaying ? nowPlaying.songName ?? "" : "not playing anything"
-  const subtitle = nowPlaying.isPlaying ? nowPlaying.artistName ?? "" : "click for a cool playlist"
+  const subtitle = nowPlaying.isPlaying ? nowPlaying.artistName ?? "" : "for cool playlist click ^"
   const url = nowPlaying.isPlaying ? nowPlaying.url ?? "" : playlist
 
   const spotifyIconClass = clsx(
@@ -20,7 +20,7 @@ const NowPlaying: React.FC = () => {
 
   return (
     <article
-      title={nowPlaying.isPlaying ? "Now Playing" : "Click for a cool spotify playlist"}
+      title={nowPlaying.isPlaying ? "Now Playing" : "Click link for a cool spotify playlist"}
       className="flex flex-row items-center justify-between md:flex-row-reverse md:justify-center md:px-0"
     >
       <div className="flex flex-col text-base">

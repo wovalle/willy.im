@@ -26,13 +26,15 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
           <Menu.Button
             className={clsx(
               open && "bg-slate-100",
-              "flex h-10 w-10 items-center justify-center space-y-8 rounded-lg outline-none dark:bg-gray-800 md:hidden"
+              "flex h-10 w-10 items-center justify-center space-y-8 rounded-lg bg-slate-50 outline-none md:hidden",
+              "hover:bg-slate-200 dark:hover:bg-slate-700",
+              "dark:bg-gray-800"
             )}
           >
             <IconMenu className="h-10" />
           </Menu.Button>
           <Menu.Items
-            className="focus:outline-none-black absolute right-0 z-10 mt-12 flex w-full flex-col items-center gap-8 rounded-lg bg-white p-8 font-semibold shadow-md outline-none dark:bg-black dark:shadow-neuda-700 md:hidden"
+            className="focus:outline-none-black absolute right-0 z-10 mt-12 flex w-full flex-col items-center gap-8 rounded-lg bg-white p-8 font-semibold shadow-md outline-none dark:bg-neuda-800/95 dark:shadow-neuda-700 md:hidden"
             as="ul"
           >
             {menuItems}

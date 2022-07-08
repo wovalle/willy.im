@@ -1,9 +1,9 @@
 import { IconArrowUpRight, IconBrandTwitter } from "@tabler/icons"
-import dayjs from "dayjs"
 import { InferGetStaticPropsType } from "next"
 import Image from "next/image"
 import Link from "next/link"
-import Layout from "../components/layouts/Default"
+import { Time } from "../components/Core/Time"
+import { DefaultLayout } from "../components/Layout"
 import { PageSection } from "../components/PageSection"
 import { RepositoryCard } from "../components/RepositoryCard"
 import { getRepositories } from "../lib/github"
@@ -16,38 +16,50 @@ export const getStaticProps = async () => {
   return {
     props: {
       repos,
-      posts,
+      posts: posts,
     },
     revalidate: 60 * 60 * 24, // Revalidate after 24 hours
   }
 }
 
-const PostCard: React.FC<{ url: string; publishedAt: string | null; title: string }> = ({
-  url,
-  publishedAt,
-  title,
-}) => (
-  <article className="flex flex-col justify-between">
-    <span>
+const PostCard: React.FC<{
+  url: string
+  publishedAt: string | null
+  title: string
+  summary: string
+}> = ({ url, publishedAt, title, summary }) => (
+  <article className="justify flex flex-col content-between  py-4">
+    {publishedAt ? (
+      <Time
+        className="text-subtitle text-xs font-thin leading-tight"
+        date={publishedAt}
+        format="MMMM D, YYYY"
+      />
+    ) : null}
+    <div>
       <Link href={url} className="border-transparent text-xl font-bold" rel="noopener noreferrer">
         {title}
       </Link>
-    </span>
-    <span className="text-subtitle text-sm font-thin leading-tight">
-      {dayjs(publishedAt).format("MMMM D, YYYY")}
-    </span>
+    </div>
+    <div className="text-subtitle text-neuda-100-300">{summary}</div>
   </article>
 )
 
 const HomePage: React.FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ repos, posts }) => {
   const RepoCards = repos.map((r) => <RepositoryCard key={r.url} repo={r} />)
   const PostCards = posts.map((p) => (
-    <PostCard key={p.slug} url={`/posts/${p.slug}`} publishedAt={p.publishedAt} title={p.title} />
+    <PostCard
+      key={p.slug}
+      url={`/posts/${p.slug}`}
+      publishedAt={p.publishedAt}
+      title={p.title}
+      summary={p.summary}
+    />
   ))
 
   return (
-    <Layout title="Home">
-      <main className="flex flex-grow flex-col gap-32 py-16 px-6">
+    <DefaultLayout title="Home">
+      <main className="flex flex-grow flex-col gap-24 py-16 px-6">
         <section id="hero" className="grid md:grid-cols-5">
           <div className="text-subtitle col-span-4 mr-4 flex flex-col gap-4">
             <p>
@@ -98,7 +110,7 @@ const HomePage: React.FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ re
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{RepoCards}</div>
         </PageSection>
       </main>
-    </Layout>
+    </DefaultLayout>
   )
 }
 
