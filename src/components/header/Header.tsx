@@ -11,6 +11,7 @@ export const Header = () => {
   const { setTheme, resolvedTheme } = useTheme()
 
   const toggleTheme = () => (resolvedTheme === "dark" ? setTheme("light") : setTheme("dark"))
+
   const themeIcon =
     resolvedTheme === "dark" ? (
       <IconSun size="1.5em" className="hover:text-amber-200" />

@@ -1,12 +1,10 @@
 import { IconBrandSpotify, IconStar } from "@tabler/icons"
 import type { GetStaticProps } from "next"
 import { useState } from "react"
-import { PlayButtonOverlay } from "../components/about/PlayButtonOverlay"
-import { AboutListElement } from "../components/AboutListElement"
-import Layout from "../components/layouts/Default"
-import { MarkdownContent } from "../components/MarkdownContent"
+import { AboutListElement, PlayButtonOverlay } from "../components/About"
+import { InlineSelect, MarkdownContent } from "../components/Core"
+import { DefaultLayout } from "../components/Layout"
 import { PageSection } from "../components/PageSection"
-import { InlineSelect } from "../components/Select"
 import { getCurrentlyReading, getReviews } from "../lib/goodreads"
 import { toHtml } from "../lib/markdown"
 import { getTopTracks, ValidTimeframe } from "../lib/spotify"
@@ -20,7 +18,6 @@ export type AboutProps = {
 }
 
 // TODO: create runtime union validator for Timeframe
-
 const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyReading }) => {
   const options = ["days", "months", "years"].map((t) => ({ value: t, label: t }))
   const [timeframe, setTimeframe] = useState(options[0].value as ValidTimeframe)
@@ -72,7 +69,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
   ))
 
   return (
-    <Layout title="About">
+    <DefaultLayout title="About">
       <main className="flex flex-grow flex-col py-10 px-6">
         <PageSection id="bio" title="who i am" bodyClassName="leading-relaxed text-lg gap-2">
           <MarkdownContent content={bio} className="space-y-6" />
@@ -130,7 +127,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
           <span>eventually i'll put a map with countries i've visited here</span>
         </AboutSection> */}
       </main>
-    </Layout>
+    </DefaultLayout>
   )
 }
 

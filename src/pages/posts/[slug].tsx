@@ -1,16 +1,14 @@
 import { BlockWithChildren } from "@jitl/notion-api"
 import { IconRss } from "@tabler/icons"
-import dayjs from "dayjs"
 import { GetStaticPaths, GetStaticProps, InferGetStaticPropsType } from "next"
 import Link from "next/link"
 import { FC } from "react"
-import useSWR from "swr/immutable"
-import Layout from "../../components/layouts/Default"
+import { Time } from "../../components/Core/Time"
+import { DefaultLayout } from "../../components/Layout"
 import { PostSeo } from "../../components/PostSeo"
-import { fetcher } from "../../lib/fetcher"
+import { usePageViews } from "../../hooks/usePageViews"
 import { getFullPageBySlug, getPublicPosts, PageProperties } from "../../lib/notion"
 import { notionBlockToDOM } from "../../renderNotionValues"
-import { PostViewsApiSuccess } from "../api/luchy/post_views"
 
 type GetStaticPropsOpts = {
   blocks: BlockWithChildren[]
@@ -51,27 +49,18 @@ export const Post: FC<InferGetStaticPropsType<typeof getStaticProps>> = ({
 }) => {
   const tags = pageProperties.categories.join(", ")
   const BlockComponents = blocks.map((b) => notionBlockToDOM(b))
-
-  // TODO: typesafe swr?
-  const { data } = useSWR<PostViewsApiSuccess>(
-    `/api/luchy/post_views?slug=${pageProperties.slug}`,
-    fetcher
-  )
+  const views = usePageViews(pageProperties.slug)
 
   const PublishedAt = pageProperties.publishedAt ? (
-    <time dateTime={pageProperties.publishedAt} className="lowercase">
-      {dayjs(pageProperties.publishedAt).format("MMMM D, YYYY")}
-    </time>
+    <Time date={pageProperties.publishedAt} className="lowercase" format="MMMM D, YYYY" />
   ) : null
 
   const LastEditedAt = pageProperties.editedAt ? (
-    <time dateTime={pageProperties.editedAt} className="lowercase">
-      {dayjs(pageProperties.editedAt).format("MMMM D, YYYY")}
-    </time>
+    <Time date={pageProperties.editedAt} className="lowercase" format="MMMM D, YYYY" />
   ) : null
 
   return (
-    <Layout title={pageProperties.title}>
+    <DefaultLayout title={pageProperties.title}>
       <PostSeo
         path={`/posts/${pageProperties.slug}`}
         date={pageProperties.publishedAt ?? ""}
@@ -88,7 +77,7 @@ export const Post: FC<InferGetStaticPropsType<typeof getStaticProps>> = ({
             <div className="gap-1">
               <p className="text-subtitle flex text-sm md:text-base">
                 {PublishedAt} <Divider />
-                {tags} <Divider /> {data?.views ?? "???"} views
+                {tags} <Divider /> {views} views
                 <Link href="/rss.xml" className="self-center border-0 no-underline">
                   <IconRss size="1em" className="ml-2 self-center" />
                 </Link>
@@ -102,7 +91,7 @@ export const Post: FC<InferGetStaticPropsType<typeof getStaticProps>> = ({
           <section className="notion flex flex-col gap-3">{BlockComponents}</section>
         </article>
       </main>
-    </Layout>
+    </DefaultLayout>
   )
 }
 

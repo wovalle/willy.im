@@ -24,7 +24,7 @@ class NextDocument extends Document {
           <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFFFFF" />
           <link rel="alternate" type="application/rss+xml" title="RSS" href="/rss.xml" />
         </Head>
-        <body className="bg-white dark:bg-black">
+        <body className="bg-white dark:bg-neuda-800">
           <Main />
           <NextScript />
         </body>

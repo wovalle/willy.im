@@ -1,15 +1,19 @@
 import Head from "next/head"
 import { FunctionComponent, ReactNode } from "react"
 import Footer from "../Footer"
-import { Header } from "../header"
+import { Header } from "../Header"
 
-type Props = {
+type LayoutProps = {
   children?: ReactNode
   title?: string
   withFooterDivider?: boolean
 }
 
-const Layout: FunctionComponent<Props> = ({ children, title = "", withFooterDivider }) => (
+export const DefaultLayout: FunctionComponent<LayoutProps> = ({
+  children,
+  title = "",
+  withFooterDivider,
+}) => (
   <>
     {title && (
       <Head>
@@ -26,5 +30,3 @@ const Layout: FunctionComponent<Props> = ({ children, title = "", withFooterDivi
     </div>
   </>
 )
-
-export default Layout

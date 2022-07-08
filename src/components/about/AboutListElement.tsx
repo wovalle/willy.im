@@ -2,7 +2,7 @@ import { IconExternalLink } from "@tabler/icons"
 import clsx from "clsx"
 import Link from "next/link"
 import { ReactNode } from "react"
-import { useHover } from "../hooks"
+import { useHover } from "../../hooks"
 
 export type AboutListElementProps = {
   title: ReactNode
