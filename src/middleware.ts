@@ -7,7 +7,7 @@ export async function middleware(req: NextRequest, event: NextFetchEvent) {
   const url = req.nextUrl.clone()
 
   // TODO: Ignore files, do we have to ignore head as well?
-  if (url.pathname.includes(".") || req.method === "HEAD") {
+  if (url.pathname.includes(".") || url.pathname.includes("_next") || req.method === "HEAD") {
     return NextResponse.next()
   }
 
