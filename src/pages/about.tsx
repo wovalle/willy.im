@@ -24,7 +24,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
 
   const topTracksList = topTracks[timeframe].map((t) => (
     <AboutListElement
-      key={t.songName}
+      key={t.url}
       title={t.songName}
       subtitle={t.artistName}
       url={t.url}
