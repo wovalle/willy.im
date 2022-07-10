@@ -77,7 +77,7 @@ export const notionBlockToDOM = (block: BlockWithChildren) => {
     case "quote":
       return (
         <blockquote key={block.id}>
-          <Text text={block["quote"].rich_text} />
+          <Text text={block.quote.rich_text} />
         </blockquote>
       )
 
