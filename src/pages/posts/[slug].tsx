@@ -47,7 +47,7 @@ export const Post: FC<InferGetStaticPropsType<typeof getStaticProps>> = ({
   blocks,
   pageProperties,
 }) => {
-  const tags = pageProperties.categories.join(", ")
+  const tags = pageProperties.categories.map((c) => `#${c} `)
   const BlockComponents = blocks.map((b) => notionBlockToDOM(b))
   const views = usePageViews(pageProperties.slug)
 
