@@ -3,8 +3,9 @@
     "name": "Willy Ovalle",
     "label": "Software Engineer",
     "image": "https://avatars0.githubusercontent.com/u/7854116?v=4",
-    "email": "willyovalle16@gmail.com",
-    "url": "https://willy.im",
+    "email": "hey@willy.im",
+    "url": "willy.im",
+    "website": "willy.im",
     "summary": "Willy has been around software development for the last 7 years. Team focused, proactive, I'm always looking for new things to learn and to share among my teammates. When I'm not coding for work, I'm scratching my head trying to make new shining leds to turn on with my Arduino based circuits or making jokes about why my Raspberry Pi doesn't want to turn on again. ",
     "location": {
       "address": "Berlin, Germany",
@@ -24,7 +25,7 @@
         "url": "https://twitter.com/wovalle"
       }
     ],
-    "phone": "+46 73 146 24 53"
+    "_phone": "+46 73 146 24 53"
   },
   "education": [
     {
@@ -41,19 +42,30 @@
       "studyType": "Telematics Engineer",
       "startDate": "2009-09-22",
       "endDate": "2013-12-20",
-      "location": "Santo Domingo, Dominican Republic"
+      "location": "Santo Domingo, Dominican Rep."
     }
   ],
   "work": [
     {
-      "name": "Klarna",
+      "name": "Smartly",
       "endDate": "",
+      "highlights": ["Technologies: Typescript, React, Docker, GitHub, NodeJS"],
+      "position": "Senior Software Engineer",
+      "startDate": "2021-07-19",
+      "summary": "",
+      "url": "https://smartly.io",
+      "company": "Smartly",
+      "location": "Berlin, Germany"
+    },
+    {
+      "name": "Klarna",
+      "endDate": "2021-07-02",
       "highlights": [
         "Maintaining our Payment Selector project that serves millions of monthly users in 9 core markets and more than 150+ countries.",
         "Working in design and implementation of dozens of A/B tests, driving conversion rate up by up to 15% in several markets.",
         "Contributing to the design and the overall internal paradigm shift in our company services involving 10+ teams.",
         "Balancing prioritization of new feature development and addressing technical debt in our product.",
-        "Technologies: React, Docker, Jenkins, NodeJS, Typescript"
+        "Technologies: Typescript, Java, React, Docker, Jenkins, NodeJS"
       ],
       "position": "Software Engineer",
       "startDate": "2018-11-12",
@@ -79,7 +91,7 @@
       "location": "Santo Domingo, Dominican Rep."
     },
     {
-      "name": "AIME - Artificial Intelligence in Medical Epidemiology",
+      "name": "AIME: Artificial Intelligence in Medical Epidemiology",
       "endDate": "2017-01-31",
       "highlights": [
         "Helped to develop the software responsible of analyzing and predicting Dengue outbreaks in developing countries.",
@@ -91,7 +103,7 @@
       "startDate": "2016-06-30",
       "summary": "- Full Stack engineer using cutting edge .NET backend technologies and Razor/jQuery in the front end. -\n- Helped to develop the software responsible of analyzing and predicting Dengue outbreaks in developing countries.\n- Developed integrations with Google Maps Geolocalization API, Google Maps JS API, Forecast.IO. \n- Designed and implemented the API used by our iOS/Android apps. \n- Tools used on daily basis: Visual Studio, NUnit, Github, slack, waffle.io, SQL Server, GeoSpatial Data Analysis, Bootstrap, jQuery.",
       "url": "http://aime.life",
-      "company": "AIME (Artificial Intelligence in Medical Epidemiology)",
+      "company": "AIME: Artificial Intelligence in Medical Epidemiology",
       "location": "Remote"
     },
     {
@@ -110,7 +122,7 @@
       "company": "Tenfold"
     },
     {
-      "name": "Superintendencia de Salud y Riesgos Laborales",
+      "name": "SISALRIL: Superintendencia de Salud y Riesgos Laborales",
       "endDate": "2016-01-31",
       "highlights": [
         "Implemented a project to help poor Dominican mothers to get government help if, for any reason, couldn’t complete the process for receiving maternity or breastfeeding benefits.",
@@ -121,7 +133,7 @@
       "startDate": "2014-10-31",
       "summary": "- Ensure compliance with safety measures, information systems, and access gained with regard to  systems under my responsibility. \n- Receive and evaluate system improvements requirements. \n- Quality assurance, monitoring, and maintenance of systems development and publishing to the production environment. \n- Implemented the \"Subsidies Extraordinary\" (Subsidios Extraordinarios) project that helps poor Dominican mothers to get government help if, for any reason, they couldn't complete the process for receiving maternity or breastfeeding benefits.\n- Created a new subsidies evaluation platform that increased productivity among the \nevaluators by 27% in a three months timeframe.\n- Technologies used on daily basis: SQL Server, ASP.Net MVC, C#, Bootstrap, jQuery, Microsoft Dynamics CRM, Microsoft Dynamics GP, Reporting Services, Integration Services.",
       "url": "http://www.sisalril.gov.do/",
-      "company": "SISALRIL (Superintendencia de Salud y Riesgos Laborales)",
+      "company": "SISALRIL: Superintendencia de Salud y Riesgos Laborales",
       "location": "Santo Domingo, Dominican Rep."
     },
     {
