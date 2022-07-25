@@ -1,3 +1,5 @@
+const { withAxiom } = require("next-axiom")
+
 const twitter = "https://twitter.com/wovalle"
 const instagram = "https://instagram.com/wovalle"
 const linkedin = "https://linkedin.com/in/willyovalle"
@@ -28,7 +30,7 @@ const links = {
 /**
  * @type {import('next').NextConfig}
  */
-module.exports = {
+module.exports = withAxiom({
   async redirects() {
     return Object.entries(links.redirects)
       .map(([key, link]) => {
@@ -48,4 +50,4 @@ module.exports = {
   images: {
     domains: ["i.scdn.co"],
   },
-}
+})

@@ -19,6 +19,7 @@ specifiers:
   jest: ^28.1.2
   jest-mock-extended: ^2.0.6
   next: ^12.2.2
+  next-axiom: ^0.11.0
   next-seo: ^5.4.0
   next-sitemap: ^3.1.10
   next-themes: ^0.2.0
@@ -48,6 +49,7 @@ dependencies:
   clsx: 1.2.1
   dayjs: 1.11.3
   next: 12.2.2_biqbaboplfbrettd7655fr4n2y
+  next-axiom: 0.11.0_next@12.2.2
   next-seo: 5.4.0_7gpduzaz4csxytrukenoyuq3te
   next-themes: 0.2.0_7gpduzaz4csxytrukenoyuq3te
   prisma: 4.0.0
@@ -2916,6 +2918,16 @@ packages:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
     dev: true
 
+  /next-axiom/0.11.0_next@12.2.2:
+    resolution: {integrity: sha512-E1WQ5v51m/3/ljTDVNGGTVtvd/Tx1QZOSkNwXe/Rs8xDLLDZ3sG72MofxnSpuVSQyZnjEUUt3/aDfHMVwikkvw==}
+    engines: {node: '>=15'}
+    peerDependencies:
+      next: ^12.1.4
+    dependencies:
+      next: 12.2.2_biqbaboplfbrettd7655fr4n2y
+      whatwg-fetch: 3.6.2
+    dev: false
+
   /next-seo/5.4.0_7gpduzaz4csxytrukenoyuq3te:
     resolution: {integrity: sha512-R9DhajPwJnR/lsF2hZ8cN8uqr5CVITsRrCG1AF5+ufcaybKYOvnH8sH9MaH4/hpkps3PQ9H71S7J7SPYixAYzQ==}
     peerDependencies:
@@ -3841,7 +3853,6 @@ packages:
 
   /whatwg-fetch/3.6.2:
     resolution: {integrity: sha512-bJlen0FcuU/0EMLrdbJ7zOnW6ITZLrZMIarMUVmdKtsGvZna8vxKYaexICWPfZ8qwf9fzNq+UEIZrnSaApt6RA==}
-    dev: true
 
   /whatwg-url/5.0.0:
     resolution: {integrity: sha512-saE57nupxk6v3HY35+jzBwYa0rKSy0XR8JSxZPwgLr7ys0IBzhGviA1/TUGJLmSVqs8pb9AnvICXEuOHLprYTw==}

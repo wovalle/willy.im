@@ -4,6 +4,8 @@ import { ReactNode, useRef, useState } from "react"
 import { AudioPlayerContext } from "../hooks/useAudioPlayer"
 import "../styles/global.css"
 
+export { reportWebVitals } from "next-axiom"
+
 export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
   const [currentUrl, setCurrentUrl] = useState<string | undefined>()
   const audioRef = useRef<HTMLAudioElement | null>(null)
