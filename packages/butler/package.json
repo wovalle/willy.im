@@ -1,0 +1,17 @@
+{
+  "name": "@willyim/butler",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "tw": "jest --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MPL-2.0",
+  "dependencies": {
+    "chrono-node": "^2.4.1",
+    "dayjs": "^1.11.5"
+  }
+}
