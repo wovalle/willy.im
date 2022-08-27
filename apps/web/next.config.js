@@ -44,10 +44,18 @@ module.exports = withAxiom({
       })
       .flat()
   },
+  webpack: (config, options) => {
+    config.module.rules.push({
+      test: /\.tsx?/,
+      use: [options.defaultLoaders.babel],
+    })
+
+    return config
+  },
   experimental: {
     newNextLinkBehavior: true,
   },
   images: {
-    domains: ["i.scdn.co"],
+    domains: ["i.scdn.co"], // Spotify
   },
 })
