@@ -25,6 +25,7 @@ importers:
       '@headlessui/react': ^1.6.6
       '@jitl/notion-api': ^0.2.2
       '@luchyio/core': ^0.1.1
+      '@luchyio/tracker': ^0.1.0
       '@next/env': ^12.2.5
       '@notionhq/client': ^1.0.4
       '@octokit/rest': ^19.0.4
@@ -65,6 +66,7 @@ importers:
       '@headlessui/react': 1.6.6_biqbaboplfbrettd7655fr4n2y
       '@jitl/notion-api': 0.2.2_@notionhq+client@1.0.4
       '@luchyio/core': 0.1.1
+      '@luchyio/tracker': 0.1.0
       '@next/env': 12.2.5
       '@notionhq/client': 1.0.4
       '@octokit/rest': 19.0.4
@@ -785,6 +787,10 @@ packages:
       ua-parser-js: 1.0.2
       uuid-by-string: 3.0.7
       zod: 3.18.0
+    dev: false
+
+  /@luchyio/tracker/0.1.0:
+    resolution: {integrity: sha512-kaP+dQRe+zdSEHp/x2qu1sH6whIHUhHImziZU0M2fasPYvuqavxNTXoBzM9UfI1sC3SdZh6Wj6jRLXMiiVbD9A==, tarball: download/@luchyio/tracker/0.1.0/e264a2ab926d4b1d226ad47b27db94e0de40ebc0}
     dev: false
 
   /@next/env/12.2.4:

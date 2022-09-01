@@ -14,6 +14,7 @@
     "@headlessui/react": "^1.6.6",
     "@jitl/notion-api": "^0.2.2",
     "@luchyio/core": "^0.1.1",
+    "@luchyio/tracker": "^0.1.0",
     "@next/env": "^12.2.5",
     "@notionhq/client": "^1.0.4",
     "@octokit/rest": "^19.0.4",
