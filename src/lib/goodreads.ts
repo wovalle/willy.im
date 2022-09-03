@@ -1,7 +1,7 @@
 import { default as Parser } from "rss-parser"
 
-const baseRss =
-  "https://www.goodreads.com/review/list_rss/70187794?key=nMuMcqozBM267q8gVxE1lcD5d1nBarjTob0CTAfF3RQrFaly&v=2"
+const baseRss = "https://www.goodreads.com/review/list_rss/70187794"
+const rssKey = process.env.GOODREADS_KEY ?? ''
 
 const getHtmlContentField = (html: string | undefined, field: string) => {
   if (!html) {
@@ -32,9 +32,11 @@ const parseFeed = async (
   options: ParseFeedOptions = { limit: 10, trimTitle: false }
 ): Promise<GoodReadsReview[]> => {
   const parser = new Parser()
-  const feed = await parser.parseURL(`${baseRss}&shelf=${shelf}&per_page=${options.limit}`)
+  const feed = await parser.parseURL(
+    `${baseRss}?key=${rssKey}&shelf=${shelf}&per_page=${options.limit}`
+  )
 
-  const items = feed.items.length ? feed.items : [feed.item]
+  const items = feed.items.length ? feed.items : feed.item ? [feed.item] : []
 
   return items.map((i) => {
     const title = (i.title ?? "").trim()
