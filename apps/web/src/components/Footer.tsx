@@ -9,7 +9,9 @@ const NowPlaying: React.FC = () => {
   const nowPlaying = useNowPlaying()
 
   const title = nowPlaying.isPlaying ? nowPlaying.songName ?? "" : "not playing anything"
-  const subtitle = nowPlaying.isPlaying ? nowPlaying.artistName ?? "" : "for cool playlist click ^"
+  const subtitle = nowPlaying.isPlaying
+    ? nowPlaying.artistName ?? ""
+    : "for a cool playlist click ^"
   const url = nowPlaying.isPlaying ? nowPlaying.url ?? "" : playlist
 
   const spotifyIconClass = clsx(
