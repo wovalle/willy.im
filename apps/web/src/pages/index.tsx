@@ -82,6 +82,7 @@ const HomePage: React.FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ re
               <Link
                 href="/about"
                 className="flex items-center justify-center gap-1 rounded-xl border-0 bg-prim-700  px-4 py-3 font-bold text-white hover:bg-prim-900 dark:bg-prim-900 dark:hover:bg-prim-700"
+                data-luchy-event="cta-click"
               >
                 about me <IconArrowUpRight size="1em" />
               </Link>

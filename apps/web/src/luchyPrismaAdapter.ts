@@ -3,9 +3,9 @@ import {
   SaveCustomEventDataInput,
   SaveCustomEventInput,
   SavePageViewInput,
-  Session,
-} from "@luchyio/core"
-import { prisma, Prisma } from "@willyim/db"
+  Session
+} from "@luchyio/next"
+import { prisma, Prisma } from "./lib/prisma"
 
 // TODO: API to execute multiple operations in one transaction
 export const PrismaAdapter: BackendAdapter = {
