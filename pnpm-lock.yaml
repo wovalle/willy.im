@@ -24,7 +24,7 @@ importers:
     specifiers:
       '@headlessui/react': ^1.7.3
       '@jitl/notion-api': ^0.2.2
-      '@luchyio/next': ^1.3.1
+      '@luchyio/next': ^1.3.2
       '@next/env': ^12.3.1
       '@notionhq/client': ^2.2.1
       '@octokit/rest': ^19.0.4
@@ -60,7 +60,7 @@ importers:
     dependencies:
       '@headlessui/react': 1.7.3_biqbaboplfbrettd7655fr4n2y
       '@jitl/notion-api': 0.2.2_@notionhq+client@2.2.1
-      '@luchyio/next': 1.3.1_azq6kxkn3od7qdylwkyksrwopy
+      '@luchyio/next': 1.3.2_azq6kxkn3od7qdylwkyksrwopy
       '@next/env': 12.3.1
       '@notionhq/client': 2.2.1
       '@octokit/rest': 19.0.4
@@ -2300,8 +2300,8 @@ packages:
       zod: 3.19.1
     dev: false
 
-  /@luchyio/next/1.3.1_azq6kxkn3od7qdylwkyksrwopy:
-    resolution: {integrity: sha512-A6GZrtPvsJS1dFwAbH9oogI3j2lmuGCuCLqKdVLa7lEEzFYlmQyol2+E5z4e3XkqE17BYdyqdcHTrqvD3ZGCeA==, tarball: download/@luchyio/next/1.3.1/8d580b3cda4b9727baab42545ef4b7dce37375a0}
+  /@luchyio/next/1.3.2_azq6kxkn3od7qdylwkyksrwopy:
+    resolution: {integrity: sha512-PzOngw0XMLVV1hD3QVxhmQkvOVHyyqy4NIy1QMEYI+wfBRe+4RdDG9S4ca3VRigK4lO1QEHacGPOsZ9wjaAwWg==, tarball: download/@luchyio/next/1.3.2/a5c6fadf172f02c9f989115c502c4936862483ad}
     peerDependencies:
       next: ^12.2.5
       react: ^18.2.0
