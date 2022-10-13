@@ -18,6 +18,7 @@
     "@next/env": "^12.3.1",
     "@notionhq/client": "^2.2.1",
     "@octokit/rest": "^19.0.4",
+    "@prisma/client": "^4.4.0",
     "@tabler/icons": "^1.101.0",
     "@willyim/butler": "workspace:*",
     "clsx": "^1.2.1",
