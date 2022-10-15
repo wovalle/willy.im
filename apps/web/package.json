@@ -50,5 +50,12 @@
     "rss": "^1.2.2",
     "tailwindcss": "^3.1.8"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "prettier": {
+    "semi": false,
+    "printWidth": 100,
+    "plugins": [
+      "prettier-plugin-tailwindcss"
+    ]
+  }
 }
