@@ -1,0 +1,60 @@
+{
+  "name": "@willyim/web",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next",
+    "inspect": "NODE_OPTIONS='--inspect' next dev",
+    "build": "next build",
+    "postbuild": "next-sitemap",
+    "start": "next start",
+    "type-check": "tsc",
+    "test": "jest",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@headlessui/react": "^1.7.3",
+    "@jitl/notion-api": "^0.2.2",
+    "@luchyio/next": "^1.3.4",
+    "@next/env": "^12.3.1",
+    "@notionhq/client": "^2.2.1",
+    "@octokit/rest": "^19.0.4",
+    "@prisma/client": "^4.4.0",
+    "@tabler/icons": "^1.101.0",
+    "clsx": "^1.2.1",
+    "dayjs": "^1.11.5",
+    "next": "12.3.1",
+    "next-seo": "^5.5.0",
+    "next-themes": "^0.2.1",
+    "prisma": "^4.4.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remark": "^14.0.2",
+    "remark-html": "^15.0.1",
+    "rss-parser": "^3.12.0",
+    "spotify-api.js": "^9.2.3",
+    "swr": "^1.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.21",
+    "@types/react-dom": "^18.0.6",
+    "@types/rss": "^0.0.29",
+    "autoprefixer": "^10.4.12",
+    "isomorphic-fetch": "^3.0.0",
+    "jest-environment-jsdom": "^29.1.2",
+    "next-axiom": "^0.14.0",
+    "next-sitemap": "^3.1.23",
+    "postcss": "^8.4.17",
+    "prettier": "^2.7.1",
+    "prettier-plugin-tailwindcss": "^0.1.13",
+    "rss": "^1.2.2",
+    "tailwindcss": "^3.1.8"
+  },
+  "license": "MIT",
+  "prettier": {
+    "semi": false,
+    "printWidth": 100,
+    "plugins": [
+      "prettier-plugin-tailwindcss"
+    ]
+  }
+}

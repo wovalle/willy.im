@@ -105,7 +105,7 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
         >
           <fieldset className="relative grid rounded-xl border-2 border-dashed border-neuda bg-slate-50 p-4 dark:bg-slate-900/70">
             <legend className="ml-4">
-              <strong className="w-32 rounded  bg-neuli px-2 py-1 text-center text-xs font-bold text-neuda dark:bg-neuda dark:text-neuli">
+              <strong className="w-32 rounded bg-neuli px-2 py-1 text-center text-xs font-bold text-neuda dark:bg-neuda dark:text-neuli">
                 currently reading
               </strong>
             </legend>
