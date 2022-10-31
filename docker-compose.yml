@@ -1,0 +1,13 @@
+version: "3.1"
+
+services:
+  db:
+    container_name: willyim_db
+    image: postgres:alpine
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: willyim

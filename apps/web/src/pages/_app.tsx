@@ -1,7 +1,10 @@
+import { LuchyNextProvider } from "@luchyio/next"
 import { ThemeProvider } from "next-themes"
 import { AppProps } from "next/app"
 import { ReactNode, useRef, useState } from "react"
 import { AudioPlayerContext } from "../hooks/useAudioPlayer"
+import { baseUrl } from "../lib/luchy"
+
 import "../styles/global.css"
 
 export { reportWebVitals } from "next-axiom"
@@ -21,9 +24,11 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
 const App = ({ Component, pageProps }: AppProps) => {
   return (
     <ThemeProvider attribute="class" defaultTheme="system">
-      <AudioPlayerProvider>
-        <Component {...pageProps} />
-      </AudioPlayerProvider>
+      <LuchyNextProvider baseUrl={baseUrl}>
+        <AudioPlayerProvider>
+          <Component {...pageProps} />
+        </AudioPlayerProvider>
+      </LuchyNextProvider>
     </ThemeProvider>
   )
 }
