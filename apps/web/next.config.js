@@ -1,4 +1,5 @@
 const { withAxiom } = require("next-axiom")
+const { withContentlayer } = require("next-contentlayer")
 
 const twitter = "https://twitter.com/wovalle"
 const instagram = "https://instagram.com/wovalle"
@@ -30,32 +31,34 @@ const links = {
 /**
  * @type {import('next').NextConfig}
  */
-module.exports = withAxiom({
-  async redirects() {
-    return Object.entries(links.redirects)
-      .map(([key, link]) => {
-        const sources = [key].concat(links.aliases[key])
+module.exports = withAxiom(
+  withContentlayer({
+    async redirects() {
+      return Object.entries(links.redirects)
+        .map(([key, link]) => {
+          const sources = [key].concat(links.aliases[key])
 
-        return sources.map((s) => ({
-          source: `/${s}`,
-          destination: link,
-          permanent: true,
-        }))
+          return sources.map((s) => ({
+            source: `/${s}`,
+            destination: link,
+            permanent: true,
+          }))
+        })
+        .flat()
+    },
+    webpack: (config, options) => {
+      config.module.rules.push({
+        test: /\.tsx?/,
+        use: [options.defaultLoaders.babel],
       })
-      .flat()
-  },
-  webpack: (config, options) => {
-    config.module.rules.push({
-      test: /\.tsx?/,
-      use: [options.defaultLoaders.babel],
-    })
 
-    return config
-  },
-  experimental: {
-    newNextLinkBehavior: true,
-  },
-  images: {
-    domains: ["i.scdn.co"], // Spotify
-  },
-})
+      return config
+    },
+    experimental: {
+      newNextLinkBehavior: true,
+    },
+    images: {
+      domains: ["i.scdn.co"], // Spotify
+    },
+  })
+)
