@@ -4,7 +4,6 @@
   "scripts": {
     "dev": "pnpm --stream -r dev",
     "compose": "docker compose up",
-    "dev2": "pnpm compose && pnpm dev",
     "build": "pnpm --stream -r build",
     "postbuild": "pnpm --stream -r postbuild",
     "start": "pnpm --stream -r start",
@@ -20,5 +19,13 @@
     "jest-mock-extended": "^3.0.1",
     "typescript": "^4.8.4"
   },
-  "license": "MPL-2.0"
+  "license": "MPL-2.0",
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "next": "^13.0.0",
+        "esbuild": "^0.15.0"
+      }
+    }
+  }
 }

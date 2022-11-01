@@ -11,40 +11,34 @@ import { usePageViews } from "../../hooks/usePageViews"
 
 export const getStaticPaths: GetStaticPaths = async () => {
   return {
-    paths: allPosts.map((p) => ({ params: { slug: p._raw.sourceFileName.slice(0, -4) } })),
+    paths: allPosts.map((p) => ({ params: { slug: p.slug } })),
     fallback: "blocking",
   }
 }
 
 export const getStaticProps = async ({ params }: GetStaticPropsContext) => {
-  const slug = params?.slug
-  const post = allPosts.find((post) => post.path === `posts/${slug}`)
+  const post = allPosts.find((post) => post.slug === params?.slug)
 
-  // if (!post) {
-  //   return {
-  //     notFound: true,
-  //   }
-  // }
+  if (!post) {
+    return {
+      notFound: true,
+    }
+  }
 
   return {
     props: {
       post,
-      slug,
     },
   }
 }
 
 const Divider = () => <span className="px-1">·</span>
 
-export const Post: FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ post, slug }) => {
-  if (!post || !slug) {
-    return <>what</>
-  }
-
+export const Post: FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ post }) => {
   const Component = useMDXComponent(post.body.code)
 
   const tags = post.tags?.map((c) => `#${c} `)
-  const views = usePageViews(post._raw.flattenedPath)
+  const views = usePageViews(post.slug)
 
   const PublishedAt = post.published ? (
     <Time date={post.published} className="lowercase" format="MMMM D, YYYY" />

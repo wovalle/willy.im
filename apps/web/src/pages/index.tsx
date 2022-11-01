@@ -89,6 +89,7 @@ const HomePage: React.FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ re
           </div>
           <div className="image-container hidden md:block">
             <Image
+              alt="Willy Ovalle's profile picture"
               src="/profile.png"
               width={296}
               height={296}
