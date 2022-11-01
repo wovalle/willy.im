@@ -1,4 +1,4 @@
-import { allPosts } from ".contentlayer/generated/index.mjs"
+import { allPosts } from "contentlayer/generated"
 import { GetServerSideProps } from "next"
 import RSS from "rss"
 
