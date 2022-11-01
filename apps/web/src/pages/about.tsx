@@ -1,17 +1,17 @@
 import { IconBrandSpotify, IconStar } from "@tabler/icons"
+import { allGlobals, MDX } from "contentlayer/generated"
 import type { GetStaticProps } from "next"
+import { useMDXComponent } from "next-contentlayer/hooks"
 import { useState } from "react"
 import { AboutListElement, PlayButtonOverlay } from "../components/About"
-import { InlineSelect, MarkdownContent } from "../components/Core"
+import { InlineSelect } from "../components/Core"
 import { DefaultLayout } from "../components/Layout"
 import { PageSection } from "../components/PageSection"
 import { getCurrentlyReading, getReviews } from "../lib/goodreads"
-import { toHtml } from "../lib/markdown"
 import { getTopTracks, ValidTimeframe } from "../lib/spotify"
-import { markdownBio } from "../lib/static"
 
 export type AboutProps = {
-  bio: string
+  bio: MDX
   topTracks: Awaited<ReturnType<typeof getTopTracks>>
   reviews: Awaited<ReturnType<typeof getReviews>>
   currentlyReading: Awaited<ReturnType<typeof getReviews>>
@@ -68,11 +68,17 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
     />
   ))
 
+  const Bio = useMDXComponent(bio.code)
+
   return (
     <DefaultLayout title="About">
       <main className="flex flex-grow flex-col py-10 px-6">
-        <PageSection id="bio" title="who i am" bodyClassName="leading-relaxed text-lg gap-2">
-          <MarkdownContent content={bio} className="space-y-6" />
+        <PageSection
+          id="bio"
+          title="who i am"
+          bodyClassName="leading-relaxed text-lg gap-4 flex flex-col markdown"
+        >
+          <Bio />
         </PageSection>
 
         <PageSection
@@ -132,8 +138,11 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
 }
 
 export const getStaticProps: GetStaticProps<AboutProps> = async () => {
-  const [bio, topTracks, reviews, currentlyReading] = await Promise.all([
-    toHtml(markdownBio),
+  const bio = allGlobals.find((g) => g.path == "global/bio")
+  if (!bio) {
+    throw new Error()
+  }
+  const [topTracks, reviews, currentlyReading] = await Promise.all([
     getTopTracks({ limit: 10 }),
     getReviews({ limit: 10, trimTitle: true }),
     getCurrentlyReading({ limit: 2, trimTitle: true }),
@@ -141,7 +150,7 @@ export const getStaticProps: GetStaticProps<AboutProps> = async () => {
 
   return {
     props: {
-      bio,
+      bio: bio.body,
       topTracks,
       reviews,
       currentlyReading,
