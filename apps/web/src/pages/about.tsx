@@ -1,6 +1,6 @@
 import { IconBrandSpotify, IconStar } from "@tabler/icons"
-import { allGlobals, MDX } from "contentlayer/generated"
-import type { GetStaticProps } from "next"
+import { allGlobals } from "contentlayer/generated"
+import type { InferGetStaticPropsType, NextPage } from "next"
 import { useMDXComponent } from "next-contentlayer/hooks"
 import { useState } from "react"
 import { AboutListElement, PlayButtonOverlay } from "../components/About"
@@ -10,15 +10,13 @@ import { PageSection } from "../components/PageSection"
 import { getCurrentlyReading, getReviews } from "../lib/goodreads"
 import { getTopTracks, ValidTimeframe } from "../lib/spotify"
 
-export type AboutProps = {
-  bio: MDX
-  topTracks: Awaited<ReturnType<typeof getTopTracks>>
-  reviews: Awaited<ReturnType<typeof getReviews>>
-  currentlyReading: Awaited<ReturnType<typeof getReviews>>
-}
-
 // TODO: create runtime union validator for Timeframe
-const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyReading }) => {
+const AboutPage: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
+  bio,
+  topTracks,
+  reviews,
+  currentlyReading,
+}) => {
   const options = ["days", "months", "years"].map((t) => ({ value: t, label: t }))
   const [timeframe, setTimeframe] = useState(options[0].value as ValidTimeframe)
 
@@ -137,11 +135,13 @@ const AboutPage: React.FC<AboutProps> = ({ bio, topTracks, reviews, currentlyRea
   )
 }
 
-export const getStaticProps: GetStaticProps<AboutProps> = async () => {
+export const getStaticProps = async () => {
   const bio = allGlobals.find((g) => g.path == "global/bio")
+
   if (!bio) {
-    throw new Error()
+    throw new Error("No bio found, check global content")
   }
+
   const [topTracks, reviews, currentlyReading] = await Promise.all([
     getTopTracks({ limit: 10 }),
     getReviews({ limit: 10, trimTitle: true }),
