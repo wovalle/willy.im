@@ -1,6 +1,6 @@
+import { allPosts } from "contentlayer/generated"
 import { GetServerSideProps } from "next"
 import RSS from "rss"
-import { getPublicPosts } from "../lib/notion"
 
 // TODO: static site_url
 export const getServerSideProps: GetServerSideProps = async (context) => {
@@ -15,15 +15,13 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     feed_url: "https://willy.im/feed.xml",
   })
 
-  const posts = await getPublicPosts()
-
-  posts.map((post) => {
+  allPosts.map((post) => {
     feed.item({
       title: post.title,
       url: `https://willy.im/posts/${post.slug}`,
-      date: post.publishedAt ?? "",
+      date: post.published ?? "",
       description: post.summary,
-      categories: post.categories,
+      categories: post.tags,
     })
   })
 

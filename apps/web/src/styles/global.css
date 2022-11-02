@@ -45,18 +45,18 @@
     @apply dark:text-gray-500;
   }
 
-  .notion p,
+  .markdown p,
   details,
   span,
   summary {
     @apply text;
   }
 
-  .notion summary {
+  .markdown summary {
     @apply font-semibold;
   }
 
-  .notion blockquote {
+  .markdown blockquote {
     @apply my-4;
     @apply p-10;
     @apply border-l-4;
