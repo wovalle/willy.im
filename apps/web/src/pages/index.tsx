@@ -1,4 +1,5 @@
 import { IconArrowUpRight, IconBrandTwitter } from "@tabler/icons"
+import { allPosts } from "contentlayer/generated"
 import { InferGetStaticPropsType } from "next"
 import Image from "next/image"
 import Link from "next/link"
@@ -7,16 +8,14 @@ import { DefaultLayout } from "../components/Layout"
 import { PageSection } from "../components/PageSection"
 import { RepositoryCard } from "../components/RepositoryCard"
 import { getRepositories } from "../lib/github"
-import { getPublicPosts } from "../lib/notion"
 
 export const getStaticProps = async () => {
   const repos = await getRepositories({ username: "wovalle" })
-  const posts = await getPublicPosts(3)
 
   return {
     props: {
       repos,
-      posts: posts,
+      posts: allPosts,
     },
     revalidate: 60 * 60 * 24, // Revalidate after 24 hours
   }
@@ -49,9 +48,9 @@ const HomePage: React.FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ re
   const RepoCards = repos.map((r) => <RepositoryCard key={r.url} repo={r} />)
   const PostCards = posts.map((p) => (
     <PostCard
-      key={p.slug}
-      url={`/posts/${p.slug}`}
-      publishedAt={p.publishedAt}
+      key={p._id}
+      url={p.path}
+      publishedAt={p.published}
       title={p.title}
       summary={p.summary}
     />
@@ -90,6 +89,7 @@ const HomePage: React.FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ re
           </div>
           <div className="image-container hidden md:block">
             <Image
+              alt="Willy Ovalle's profile picture"
               src="/profile.png"
               width={296}
               height={296}
