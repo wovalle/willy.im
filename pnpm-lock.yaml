@@ -23,7 +23,7 @@ importers:
   apps/web:
     specifiers:
       '@headlessui/react': ^1.7.3
-      '@luchyio/next': ^1.3.6
+      '@luchyio/next': ^1.4.1
       '@next/env': ^13.0.1
       '@octokit/rest': ^19.0.5
       '@prisma/client': ^4.5.0
@@ -56,7 +56,7 @@ importers:
       tailwindcss: ^3.2.1
     dependencies:
       '@headlessui/react': 1.7.3_biqbaboplfbrettd7655fr4n2y
-      '@luchyio/next': 1.3.6_cuttyyug54cjzme6dhlgj6veu4
+      '@luchyio/next': 1.4.1_cuttyyug54cjzme6dhlgj6veu4
       '@octokit/rest': 19.0.5
       '@prisma/client': 4.5.0_prisma@4.5.0
       '@tabler/icons': 1.109.0_biqbaboplfbrettd7655fr4n2y
@@ -974,8 +974,8 @@ packages:
       tslib: 2.4.1
     dev: false
 
-  /@luchyio/core/1.3.0:
-    resolution: {integrity: sha512-J+P3xCN5JprOBih1OGjRGCm9XcHsm6l0KlkHb6K/iO6kE4+tI7FTpFAiKLVw4SxZNjZ+IoUXDfmzGs1BZzhhKQ==, tarball: download/@luchyio/core/1.3.0/f7978ee94408daa5dd07f0a28ebc9bef561b332b}
+  /@luchyio/core/1.4.0:
+    resolution: {integrity: sha512-/W8Dcze7Gdz9aHEhvUfURFl5i/2r0DXMcsETirBf76O9h9umDkw+SglPm1K7+ekemxOTZSHnU+E7rpVqGreiSw==, tarball: download/@luchyio/core/1.4.0/6c98573bcd41b13c9e3ee4397813846952d9a55c}
     dependencies:
       intl-parse-accept-language: 1.0.0
       ua-parser-js: 1.0.32
@@ -983,29 +983,29 @@ packages:
       zod: 3.19.1
     dev: false
 
-  /@luchyio/next/1.3.6_cuttyyug54cjzme6dhlgj6veu4:
-    resolution: {integrity: sha512-z27sEhE8nlkAKtTYIjzeQIuJdNcC+FtMOU7ch1tGnorjtpPV4zKd0nwUqGgJLY43UrIc/YfJxBpL/wLqeU4rpQ==, tarball: download/@luchyio/next/1.3.6/24fce6cfe7b97448dac92b9a384593ce318b4efb}
+  /@luchyio/next/1.4.1_cuttyyug54cjzme6dhlgj6veu4:
+    resolution: {integrity: sha512-83mV6wKJACoe0HC/a/eqFTUe6GS/6Q1UnvQQnAy7SKjV+pwi5ZyOirpQgV0Q9pvbJe09Vv2KN94wHzK4d0ucqw==, tarball: download/@luchyio/next/1.4.1/315c269948f1d43571d70f4584b930697b872ff8}
     peerDependencies:
       next: ^12.2.5 || ^13.0.1 || ^13.0.0
       react: ^18.2.0
       react-dom: ^18.2.0
     dependencies:
-      '@luchyio/core': 1.3.0
-      '@luchyio/react': 1.1.2
+      '@luchyio/core': 1.4.0
+      '@luchyio/react': 1.2.0
       next: 13.0.1_biqbaboplfbrettd7655fr4n2y
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       zod: 3.19.1
     dev: false
 
-  /@luchyio/react/1.1.2:
-    resolution: {integrity: sha512-5INpVMsm8Q1Uxdr6OycG2pqS/jBSC8bAFuJYQs8eGNXEH7R7yK1Z1Fe6y9vySBY5wfeSP/CtDY6g0D+CDFz2tg==, tarball: download/@luchyio/react/1.1.2/f91b140a66d42230292f9cc434a5dd82bd2844bd}
+  /@luchyio/react/1.2.0:
+    resolution: {integrity: sha512-i6D92I+7p7C1lXC6SVOrwUFncOW35hMFySRmnwHaHtLdWSUJeaZYg1cVJyJY/TeM5X8AyXw99P/bEiGApd0EWg==, tarball: download/@luchyio/react/1.2.0/33153cbcfa7745c7d6f89ff7871fd6a5182544d5}
     dependencies:
-      '@luchyio/tracker': 1.3.0
+      '@luchyio/tracker': 1.4.0
     dev: false
 
-  /@luchyio/tracker/1.3.0:
-    resolution: {integrity: sha512-Rw7E/EQRI0NNN2AfP9X04bgx+vCxcLQKvqmq6dsLKPlmp5i3M0IeVkFDH3thLS/xtNaJGGSpWQlvTRhk/uJkJA==, tarball: download/@luchyio/tracker/1.3.0/8723995c8594fdfcca1c0f82dcf87d4f7f5103b0}
+  /@luchyio/tracker/1.4.0:
+    resolution: {integrity: sha512-OhXIOTfM+hwfREJWraiH1956m7ng5u6citkm5rMgyMc3GUsix6DeTMOf+hJc2qVobGgHUfzyhvaKaz9NmnX1vQ==, tarball: download/@luchyio/tracker/1.4.0/6449d3f21fb9544cb0e5ed6644b54c5100cd8787}
     dev: false
 
   /@mdx-js/esbuild/2.1.5_esbuild@0.15.12:

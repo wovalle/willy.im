@@ -33,6 +33,8 @@ model PageView {
   session_id String
   created_at DateTime @default(now()) @db.Timestamptz(6)
   url        String   @db.VarChar(500)
+  origin     String?   @db.VarChar(30)
+  raw        Json?   
   session    Session  @relation(fields: [session_id], references: [id], onDelete: Cascade)
 
   @@index([created_at])
@@ -45,7 +47,9 @@ model Event {
   created_at DateTime?  @default(now()) @db.Timestamptz(6)
   url        String     @db.VarChar(500)
   type       String     @db.VarChar(50)
-
+  origin     String?   @db.VarChar(30)
+  raw        Json?   
+  
   session    Session  @relation(fields: [session_id], references: [id], onDelete: Cascade)
   event_data EventData?
 
