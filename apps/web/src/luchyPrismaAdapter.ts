@@ -3,7 +3,7 @@ import {
   SaveCustomEventDataInput,
   SaveCustomEventInput,
   SavePageViewInput,
-  Session
+  Session,
 } from "@luchyio/next"
 import { prisma, Prisma } from "./lib/prisma"
 
@@ -36,6 +36,8 @@ export const PrismaAdapter: BackendAdapter = {
       data: {
         url: pageViewInputParams.url,
         session_id: pageViewInputParams.sessionId,
+        origin: pageViewInputParams.origin,
+        raw: pageViewInputParams.raw as Prisma.JsonObject,
       },
       select: {
         id: true,
@@ -50,6 +52,8 @@ export const PrismaAdapter: BackendAdapter = {
         type: eventInput.type,
         url: eventInput.url,
         session_id: eventInput.sessionId,
+        origin: eventInput.origin,
+        raw: eventInput.raw as Prisma.JsonObject,
       },
     })
 
