@@ -1,0 +1,1 @@
+export { nextApiHandler } from './apiRoute';

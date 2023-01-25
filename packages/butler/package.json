@@ -1,0 +1,21 @@
+{
+  "name": "@willyim/butler",
+  "version": "0.1.0",
+  "description": "",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "jest",
+    "tw": "jest --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MPL-2.0",
+  "dependencies": {
+    "chrono-node": "^2.4.1",
+    "dayjs": "^1.11.5"
+  },
+  "devDependencies": {
+    "next": "12.2.4",
+    "typegram": "^4.0.0"
+  }
+}
