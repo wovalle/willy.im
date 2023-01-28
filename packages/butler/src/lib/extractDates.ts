@@ -1,6 +1,7 @@
 import * as chrono from "chrono-node"
 import { Days, Months, RelativeDateLabels, StartOfDayHour } from "../constants"
 import { ICustomExtractor as ICustomDataExtractor } from "../types"
+import { required } from "./common"
 
 const customChrono = chrono.casual.clone()
 
@@ -76,10 +77,10 @@ export const extractDate = (
   }
 
   return {
-    trigger: result?.text!, // TODO: required()
+    trigger: required(result?.text, "Text in result is undefined"),
     from: result?.index ?? 0,
     to: (result?.text.length ?? 0) + (result?.index ?? 0),
-    date: result?.start.date()!, // TODO: required()
+    date: required(result?.start.date(), "Date in result is undefined"),
     rawResult: result,
   }
 }
