@@ -24,7 +24,7 @@ export const intentParser = (rawMessageText: string, opts: DateParserOpts): Inte
   } else if (parsedDate.trigger && parsedDate.date < opts.currentDate) {
     return {
       type: "Message.Reply",
-      text: "{{error.reminder.pastDate}}",
+      text: "{{errors.reminders.past_date}}",
     }
   }
 

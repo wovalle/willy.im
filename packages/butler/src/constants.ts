@@ -19,4 +19,12 @@ export const Months = [
 
 export const RelativeDateLabels = ["this", "last", "past", "next", "after", "tomorrow", "today"]
 
-export const ReminderActivators = ["remind me to", "remind me", "rm me", "remind me", "rmd me"]
+export const ReminderActivators = [
+  "remind me to",
+  "remind me",
+  "rm me",
+  "remind me",
+  "rmd me",
+  "rm to",
+  "rm",
+]

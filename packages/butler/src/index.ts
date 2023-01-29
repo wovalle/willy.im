@@ -1,1 +1,1 @@
-export { nextApiHandler } from './apiRoute';
+export { handleTelegramMessage } from "./apiRoute"
