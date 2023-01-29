@@ -30,7 +30,7 @@ describe("intentParser", () => {
 
       expect(intentParser(message, dateParserOpts)).toEqual({
         type: "Message.Reply",
-        text: "{{error.reminder.pastDate}}",
+        text: "{{errors.reminders.past_date}}",
       })
     })
   })
