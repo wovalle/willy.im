@@ -11,6 +11,7 @@
   "author": "",
   "license": "MPL-2.0",
   "dependencies": {
+    "@directus/sdk": "^10.3.1",
     "chrono-node": "^2.4.1",
     "dayjs": "^1.11.5",
     "next-better-api": "^0.1.5",
