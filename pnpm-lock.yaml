@@ -97,6 +97,7 @@ importers:
 
   packages/butler:
     specifiers:
+      '@directus/sdk': ^10.3.1
       chrono-node: ^2.4.1
       dayjs: ^1.11.5
       next: 13.1.6
@@ -105,6 +106,7 @@ importers:
       wretch: ^2.4.1
       zod: ^3.20.2
     dependencies:
+      '@directus/sdk': 10.3.1
       chrono-node: 2.5.0
       dayjs: 1.11.6
       next-better-api: 0.1.5_next@13.1.6+zod@3.20.2
@@ -568,6 +570,14 @@ packages:
   /@corex/deepmerge/4.0.29:
     resolution: {integrity: sha512-q/yVUnqckA8Do+EvAfpy7RLdumnBy9ZsducMUtZTvpdbJC7azEf1hGtnYYxm0QfphYxjwggv6XtH64prvS1W+A==}
     dev: true
+
+  /@directus/sdk/10.3.1:
+    resolution: {integrity: sha512-+FUs1kQ27dmrHbAxO+FmCmmAHZrzyyZn+cXZMCtixkeBD8KYBFM7sUKtesQskSmsp5wUksrq2L9Cm+Z93G/ONg==}
+    dependencies:
+      axios: 0.27.2
+    transitivePeerDependencies:
+      - debug
+    dev: false
 
   /@effect-ts/core/0.60.4:
     resolution: {integrity: sha512-kplDLAsiuidDAOipNcZJPbo3YF7eJHdIWe9sK+6l83HjnTwAp8+56s3hgVhTti0mMO7/Wzo9ZnuQlbjo9IykZA==}
