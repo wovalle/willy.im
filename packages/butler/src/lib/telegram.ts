@@ -4,8 +4,8 @@ import wretch from "wretch"
 
 type TgMessage = {
   text: string
-  chatId: number
-  replyTo?: number
+  chatId: number | string
+  replyTo?: number | string | undefined
 }
 
 type TgApiResponse =

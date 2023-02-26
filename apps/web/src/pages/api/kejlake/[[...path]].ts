@@ -1,4 +1,4 @@
-import { handler } from "@willyim/butler"
+import { handler } from "@willyim/kejlake"
 
 export default handler
 

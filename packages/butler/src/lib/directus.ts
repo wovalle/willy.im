@@ -2,9 +2,22 @@ import { Directus } from "@directus/sdk"
 import { z } from "zod"
 
 // TODO: generate full schema from opeapi spec
-const PlatformUserSchema = z.object({
+const ChatSchema = z.object({
   id: z.string(),
-  platform: z.string(),
+  platform: z.literal("telegram"),
+  type: z.union([z.literal("individual"), z.literal("group")]),
+})
+
+const ReminderSchema = z.object({
+  id: z.number(),
+  date: z.string().refine((d) => !isNaN(new Date(d).getTime()), "valid date"), // TODO: use zod date
+  message_id: z.string().optional(),
+  chat_id: z.string(),
+})
+
+const KVSchema = z.object({
+  key: z.string(),
+  value: z.string(),
 })
 
 const env = z.object({
@@ -56,7 +69,19 @@ export const directus = {
         throw error
       })
   },
-  saveChat: async (data: { id: string; platform: "telegram"; type: "individual" | "group" }) => {
+  getReminder: async (reminderId: string) => {
+    return directusSDK
+      .items("reminders")
+      .readOne(reminderId)
+      .then((r) => ReminderSchema.parse(r))
+      .catch((error) => {
+        // The API could return an empty object - in which case the status text is logged instead.
+        const message = error?.response?.data?.error?.message || error?.response?.statusText
+        console.error("directus_error", "Error getting reminder", message)
+        throw error
+      })
+  },
+  saveChat: async (data: z.infer<typeof ChatSchema>) => {
     return directusSDK
       .items("chats")
       .createOne(data)
@@ -72,7 +97,7 @@ export const directus = {
     return directusSDK
       .items("chats")
       .readOne(userId)
-      .then((r) => z.object(PlatformUserSchema.shape).parse(r))
+      .then((r) => z.object(ChatSchema.shape).parse(r))
       .catch((error) => {
         // The API could return an empty object - in which case the status text is logged instead.
         const message = error?.response?.data?.error?.message || error?.response?.statusText
@@ -91,5 +116,10 @@ export const directus = {
         console.error("directus_error", "Error saving reminder", message)
         return { ok: false, message }
       })
+  },
+  getKVItem: async (key: string) => {
+    const result = await directusSDK.items("kv").readOne(key).then(KVSchema.parse)
+
+    return result.value
   },
 }

@@ -1,7 +1,7 @@
+import { required } from "@willyim/common"
 import * as chrono from "chrono-node"
 import { Days, Months, RelativeDateLabels, StartOfDayHour } from "../constants"
 import { ICustomExtractor as ICustomDataExtractor } from "../types"
-import { required } from "./common"
 
 const customChrono = chrono.casual.clone()
 
