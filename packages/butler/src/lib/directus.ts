@@ -32,11 +32,17 @@ const directusSDK = new Directus(ZOIDBERG_URL, {
 
 export const directus = {
   getClient: () => directusSDK,
-  saveReminder: async (reminderText: string, reminderDate: Date, userId: string) => {
+  saveReminder: async (opts: {
+    text: string
+    date: Date
+    chatId: string | undefined
+    messageId: string
+  }) => {
     const data = {
-      text: reminderText,
-      date: reminderDate.toISOString(),
-      platform_user: userId,
+      text: opts.text,
+      date: opts.date.toISOString(),
+      chat_id: opts.chatId,
+      message_id: opts.messageId,
     }
 
     return directusSDK
@@ -47,23 +53,33 @@ export const directus = {
         // The API could return an empty object - in which case the status text is logged instead.
         const message = error?.response?.data?.error?.message || error?.response?.statusText
         console.error("directus_error", "Error saving reminder", message)
-        return { ok: false, message }
+        throw error
       })
   },
-
-  getUser: async (userId: string) => {
+  saveChat: async (data: { id: string; platform: "telegram"; type: "individual" | "group" }) => {
     return directusSDK
-      .items("platform_users")
+      .items("chats")
+      .createOne(data)
+      .then(() => ({ ok: true } as const))
+      .catch((error) => {
+        // The API could return an empty object - in which case the status text is logged instead.
+        const message = error?.response?.data?.error?.message || error?.response?.statusText
+        console.error("directus_error", "Error saving chat", message)
+        throw error
+      })
+  },
+  getChat: async (userId: string) => {
+    return directusSDK
+      .items("chats")
       .readOne(userId)
       .then((r) => z.object(PlatformUserSchema.shape).parse(r))
       .catch((error) => {
         // The API could return an empty object - in which case the status text is logged instead.
         const message = error?.response?.data?.error?.message || error?.response?.statusText
-        console.error("directus_error", "Error getting user", message)
+        console.error("directus_error", "Error getting chat", message)
         return undefined
       })
   },
-
   saveMessage: async (data: { from: string; text: string; body: string; response: string }) => {
     return directusSDK
       .items("messages")
