@@ -7,7 +7,7 @@ import { directus } from "./lib/directus"
 import { sendMessage } from "./lib/telegram"
 import { TelegramUpdateSchema } from "./zodSchemas"
 
-export const handleTelegramMessage = endpoint(
+export const handler = endpoint(
   {
     method: "post",
     bodySchema: z.object(TelegramUpdateSchema.shape),

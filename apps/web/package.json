@@ -18,6 +18,8 @@
     "@prisma/client": "^4.5.0",
     "@tabler/icons": "^1.109.0",
     "@willyim/butler": "workspace:*",
+    "@willyim/common": "workspace:*",
+    "@willyim/kejlake": "workspace:*",
     "clsx": "^1.2.1",
     "contentlayer": "^0.2.8",
     "dayjs": "^1.11.6",
