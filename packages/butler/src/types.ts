@@ -27,10 +27,15 @@ export type SendMessageIntent = {
   text: string
 }
 
+export type InitialMessageIntent = {
+  type: "InitialMessage"
+}
+
 export type Intent =
   | ScheduleReminderIntent
   | ReminderGetAllIntent
   | SendMessageIntent
+  | InitialMessageIntent
   | UnknownIntent
 
 // Data Extractors

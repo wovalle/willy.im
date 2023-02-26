@@ -5,7 +5,6 @@ import { intentParser } from "./intentParser"
 import { toUtc } from "./lib/dateUtils"
 import { directus } from "./lib/directus"
 import { sendMessage } from "./lib/telegram"
-import { Intent } from "./types"
 import { TelegramUpdateSchema } from "./zodSchemas"
 
 export const handleTelegramMessage = endpoint(
@@ -18,55 +17,23 @@ export const handleTelegramMessage = endpoint(
   },
   async ({ body }) => {
     const message = body.message
+    const telegramChat = message?.chat
 
-    if (!message || !message.text) {
+    if (!message || !message.text || !message.text.trim() || !telegramChat) {
       return { body: { ok: false } }
     }
 
-    // If user is not registered, ask them to do so
-    const user = await directus.getUser(message.from.id.toString())
+    const chatId = telegramChat.id.toString()
+    let chat = await directus.getChat(chatId)
 
-    if (!user) {
-      await sendMessage({
-        text: "{{butler.replies.user_not_found}}",
-        chatId: message.from.id,
-        replyTo: message.message_id,
+    if (!chat) {
+      await directus.saveChat({
+        id: chatId,
+        platform: "telegram",
+        type: message.chat?.type === "private" ? "individual" : "group",
       })
 
-      return {
-        body: {
-          ok: true,
-          intent: { type: "Unknown" },
-        },
-      }
-    }
-
-    // If this is the user first message, just tell the instructions
-    if (message.text === "/start") {
-      await sendMessage({
-        text: "{{butler.replies.greetings}}",
-        chatId: message.from.id,
-        replyTo: message.message_id,
-      })
-
-      const intent: Intent = {
-        type: "Unknown",
-        rawText: message.text,
-      }
-
-      await directus.saveMessage({
-        from: message.from.id.toString(),
-        text: message.text,
-        body: JSON.stringify(body, null, 2),
-        response: JSON.stringify(intent, null, 2),
-      })
-
-      return {
-        body: {
-          ok: true,
-          intent,
-        },
-      }
+      chat = await directus.getChat(chatId)
     }
 
     const intent = intentParser(message.text, {
@@ -75,6 +42,14 @@ export const handleTelegramMessage = endpoint(
     })
 
     switch (intent.type) {
+      case "InitialMessage": {
+        await sendMessage({
+          text: "{{butler.replies.greetings}}",
+          chatId: message.from.id,
+          replyTo: message.message_id,
+        })
+        break
+      }
       case "Reminder.GetAll": {
         await sendMessage({
           text: "{{butler.replies.reminders.get_all}}",
@@ -87,7 +62,12 @@ export const handleTelegramMessage = endpoint(
       case "Reminder.Schedule": {
         const { text, date } = intent.reminder
 
-        await directus.saveReminder(text, date, user.id)
+        await directus.saveReminder({
+          text,
+          date,
+          chatId: message.chat?.id.toString(),
+          messageId: message.message_id.toString(),
+        })
 
         await sendMessage({
           text: "{{butler.replies.ack}}",
@@ -107,7 +87,6 @@ export const handleTelegramMessage = endpoint(
       }
 
       default: {
-        // TODO: reply fallback, see willy.im/butler for instructions
         await sendMessage({
           text: "{{butler.replies.fallback}}",
           chatId: message.from.id,

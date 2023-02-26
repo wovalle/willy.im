@@ -11,7 +11,11 @@ export const intentParser = (rawMessageText: string, opts: DateParserOpts): Inte
     .replace(parsedActivator.trigger ?? "", "")
     .trim()
 
-  if (parsedDate.trigger && parsedDate.date > opts.currentDate) {
+  if (rawMessageText === "/start") {
+    return {
+      type: "InitialMessage",
+    }
+  } else if (parsedDate.trigger && parsedDate.date > opts.currentDate) {
     return {
       type: "Reminder.Schedule",
       reminder: {
