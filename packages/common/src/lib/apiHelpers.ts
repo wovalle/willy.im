@@ -21,7 +21,7 @@ export const filterRoutesDecorator =
   }
 
 export const mergeRouteHandlers =
-  (maybeRoutes: Record<string, Endpoint>): NextApiHandler =>
+  (maybeRoutes: Record<string, Endpoint>, decorators: Decorator<unknown>[] = []): NextApiHandler =>
   (req, res) => {
     const flatPath = Array.isArray(req.query.path)
       ? `/${req.query.path.join("/")}`
@@ -34,5 +34,7 @@ export const mergeRouteHandlers =
       return
     }
 
-    return asHandler([handler])(req, res)
+    return asHandler([handler], {
+      decorators,
+    })(req, res)
   }

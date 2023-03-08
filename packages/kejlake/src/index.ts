@@ -1,4 +1,9 @@
 import { mergeRouteHandlers } from "@willyim/common"
-import { handleListin } from "./listin"
+import { handleRSS } from "./rss"
 
-export const handler = mergeRouteHandlers({ "/listin": handleListin })
+export const handler = mergeRouteHandlers(
+  {
+    "/rss": handleRSS,
+  },
+  []
+)
