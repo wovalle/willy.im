@@ -1,7 +1,6 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@tailwind screens;
 
 @layer base {
   .trans {
@@ -11,18 +10,25 @@
   }
 
   a {
-    @apply border-b-2;
-    @apply border-dotted;
-    @apply border-neuda;
-    @apply hover:border-solid;
-    @apply hover:border-prim-200;
-    @apply cursor-pointer;
-
     @apply trans;
+    @apply underline;
+
+    /* default text */
+    @apply decoration-neuda-50;
+    @apply hover:decoration-neuda-500;
+
+    @apply dark:decoration-neuda-300;
+    @apply hover:decoration-neuda-50;
   }
 
   a.active {
-    @apply border-solid;
+    @apply decoration-prim-500;
+  }
+
+  nav a:not(.active) {
+    @apply text-gray-400;
+    @apply hover:text-gray-700;
+    @apply dark:hover:text-gray-100;
   }
 
   .text {
@@ -45,24 +51,23 @@
     @apply dark:text-gray-500;
   }
 
-  .markdown p,
-  details,
-  span,
-  summary {
+  .prose blockquote {
+    @apply p-2;
+    @apply italic;
     @apply text;
   }
 
-  .markdown summary {
-    @apply font-semibold;
+  .prose blockquote p {
+    @apply my-1;
   }
 
-  .markdown blockquote {
-    @apply my-4;
-    @apply p-10;
-    @apply border-l-4;
-    @apply bg-gray-50;
-    @apply italic;
-    @apply dark:bg-gray-800;
+  .prose a {
+    @apply decoration-gray-300;
+    @apply trans;
+  }
+
+  .prose a:hover {
+    @apply decoration-gray-600;
   }
 }
 

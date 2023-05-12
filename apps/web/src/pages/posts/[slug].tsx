@@ -71,13 +71,15 @@ export const Post: FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ post 
                   <IconRss size="1em" className="ml-2 self-center" />
                 </Link>
               </p>
-              <p className="text-subtitle flex text-sm">
-                <i className="font-extralight">(last updated {LastEditedAt})</i>
-              </p>
+              {LastEditedAt ? (
+                <p className="text-subtitle flex text-sm">
+                  <i className="font-extralight">(last updated {LastEditedAt})</i>
+                </p>
+              ) : null}
             </div>
           </header>
 
-          <section className="markdown flex flex-col gap-4">
+          <section className="prose prose-lg dark:prose-invert">
             <Component />
           </section>
         </article>

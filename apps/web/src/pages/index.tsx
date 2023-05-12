@@ -80,7 +80,7 @@ const HomePage: React.FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ re
             <p className="flex">
               <Link
                 href="/about"
-                className="flex items-center justify-center gap-1 rounded-xl border-0 bg-prim-700  px-4 py-3 font-bold text-white hover:bg-prim-900 dark:bg-prim-900 dark:hover:bg-prim-700"
+                className="flex items-center justify-center gap-1 rounded-xl border-0 bg-prim-700 px-4 py-3 font-bold text-white decoration-transparent hover:bg-prim-900 hover:text-gray-50 hover:decoration-transparent dark:bg-prim-900 dark:hover:bg-prim-700"
                 data-luchy-event="cta-click"
               >
                 about me <IconArrowUpRight size="1em" />
@@ -104,7 +104,7 @@ const HomePage: React.FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ re
           bleed
           className="bg-neuli-500/60 dark:bg-neuda-700"
         >
-          <div className="grid grid-cols-1 gap-4">{PostCards}</div>
+          <div className="grid grid-cols-1 gap-2">{PostCards}</div>
         </PageSection>
 
         <PageSection title="what i've been working on" subtitle="open source projects" id="code">

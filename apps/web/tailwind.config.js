@@ -1,6 +1,7 @@
 const { fontFamily } = require("tailwindcss/defaultTheme")
 
 module.exports = {
+  plugins: [require("@tailwindcss/typography")],
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx}",
     "./src/components/**/*.{js,ts,jsx,tsx}",
