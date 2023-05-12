@@ -1,4 +1,7 @@
 import { defineDocumentType, makeSource } from "contentlayer/source-files"
+import rehypeAutolinkHeadings from "rehype-autolink-headings"
+import rehypeSlug from "rehype-slug"
+import remarkGfm from "remark-gfm"
 
 export const Post = defineDocumentType(() => ({
   name: "Post",
@@ -63,6 +66,10 @@ export const Global = defineDocumentType(() => ({
 }))
 
 export default makeSource({
-  contentDirPath: "content", // Source directory where the content is located
+  contentDirPath: "content",
   documentTypes: [Post, Global],
+  mdx: {
+    remarkPlugins: [remarkGfm],
+    rehypePlugins: [rehypeSlug, [rehypeAutolinkHeadings]],
+  },
 })
