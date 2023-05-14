@@ -27,7 +27,7 @@ export const KyselyAdapter: BackendAdapter = {
     return session.id
   },
   // TODO: will be replaced with generic method
-  getPageViews: async (url: string): Promise<number> => {
+  getPageViews: async (): Promise<number> => {
     throw new Error("Not implemented")
   },
   savePageView: async (pageViewInputParams: SavePageViewInput): Promise<string> => {
