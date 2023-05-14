@@ -1,9 +1,9 @@
 import { nextApiHandler } from "@luchyio/next"
 import { logger } from "../../../lib/luchy"
-import { PrismaAdapter } from "../../../luchyPrismaAdapter"
+import { KyselyAdapter } from "../../../luchyKyselyAdapter"
 
 export default nextApiHandler({
-  adapter: PrismaAdapter,
+  adapter: KyselyAdapter,
   timePartition: "HOURLY",
   logger,
 })
