@@ -19,6 +19,8 @@ const links = {
     github,
     resume,
     playlist,
+    "posts/how-to-check-if-youre-being-rickrolled-in-telegram":
+      "https://www.youtube.com/watch?v=UNuogmk7oEA",
   },
   aliases: {
     twitter: ["tw"],
