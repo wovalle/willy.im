@@ -1,4 +1,4 @@
-import { IconPlayerPause, IconPlayerPlay } from "@tabler/icons"
+import { IconPlayerPause, IconPlayerPlay } from "@tabler/icons-react"
 import clsx from "clsx"
 import { FC, ReactNode } from "react"
 import { useAudioPlayer } from "../../hooks"

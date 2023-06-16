@@ -1,4 +1,4 @@
-import { IconRss } from "@tabler/icons"
+import { IconRss } from "@tabler/icons-react"
 import { allPosts } from "contentlayer/generated"
 import { GetStaticPaths, GetStaticPropsContext, InferGetStaticPropsType } from "next"
 import { useMDXComponent } from "next-contentlayer/hooks"

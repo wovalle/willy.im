@@ -1,6 +1,13 @@
 import { withLuchyMiddleware } from "@luchyio/next"
 import type { NextMiddleware } from "next/server"
-import { basePath, baseUrl, logger } from "./lib/luchy"
+import { logger } from "./lib/logger"
+
+const deploymentUrl = process.env.NEXT_PUBLIC_DEPLOYMENT_URL ?? process.env.NEXT_PUBLIC_VERCEL_URL
+
+const baseUrl =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:3000"
+    : `https://${deploymentUrl ?? "willy.im"}`
 
 export function withMiddleware(...middlewares: NextMiddleware[]): NextMiddleware {
   return async (req, ev) => {
@@ -12,4 +19,8 @@ export function withMiddleware(...middlewares: NextMiddleware[]): NextMiddleware
   }
 }
 
-export const middleware = withMiddleware(withLuchyMiddleware({ baseUrl, basePath, logger }))
+export const middleware = withLuchyMiddleware({
+  apiHandlerPath: "/api/luchy",
+  origin: baseUrl,
+  logger,
+})

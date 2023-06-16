@@ -8,7 +8,7 @@ import {
 import { db } from "../db/kysely"
 
 // TODO: API to execute multiple operations in one transaction
-export const KyselyAdapter: BackendAdapter = {
+export const backendAdapter: BackendAdapter = {
   upsertSession: async (session: Omit<Session, "createdAt">): Promise<string> => {
     await db
       .insertInto("sessions")
@@ -25,10 +25,6 @@ export const KyselyAdapter: BackendAdapter = {
       .executeTakeFirst()
 
     return session.id
-  },
-  // TODO: will be replaced with generic method
-  getPageViews: async (): Promise<number> => {
-    throw new Error("Not implemented")
   },
   savePageView: async (pageViewInputParams: SavePageViewInput): Promise<string> => {
     const view = await db
@@ -65,7 +61,6 @@ export const KyselyAdapter: BackendAdapter = {
   },
   saveEventData: async (eventDataInput: SaveCustomEventDataInput): Promise<string> => {
     const eventData = await db
-
       .insertInto("event_data")
       .values({
         event_id: parseInt(eventDataInput.eventId),
@@ -75,5 +70,8 @@ export const KyselyAdapter: BackendAdapter = {
       .executeTakeFirstOrThrow()
 
     return eventData.id.toString()
+  },
+  customQuery: () => {
+    throw new Error("Not implemented")
   },
 }

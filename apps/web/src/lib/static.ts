@@ -4,7 +4,7 @@ import {
   IconBrandLinkedin,
   IconBrandTelegram,
   IconBrandTwitter,
-} from "@tabler/icons"
+} from "@tabler/icons-react"
 
 export const twitter = "https://twitter.com/wovalle"
 export const instagram = "https://instagram.com/wovalle"

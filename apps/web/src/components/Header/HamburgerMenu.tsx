@@ -1,5 +1,5 @@
 import { Menu } from "@headlessui/react"
-import { IconMenu } from "@tabler/icons"
+import { IconMenu } from "@tabler/icons-react"
 import clsx from "clsx"
 import { useMenuItems } from "../../hooks"
 import { MenuLink } from "./MenuLink"

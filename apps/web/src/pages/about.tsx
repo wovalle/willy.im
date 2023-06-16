@@ -1,4 +1,4 @@
-import { IconBrandSpotify, IconStar } from "@tabler/icons"
+import { IconBrandSpotify, IconStar } from "@tabler/icons-react"
 import { allGlobals } from "contentlayer/generated"
 import type { InferGetStaticPropsType, NextPage } from "next"
 import { useMDXComponent } from "next-contentlayer/hooks"
@@ -8,7 +8,7 @@ import { InlineSelect } from "../components/Core"
 import { DefaultLayout } from "../components/Layout"
 import { PageSection } from "../components/PageSection"
 import { getCurrentlyReading, getReviews } from "../lib/goodreads"
-import { getTopTracks, ValidTimeframe } from "../lib/spotify"
+import { ValidTimeframe, getTopTracks } from "../lib/spotify"
 
 // TODO: create runtime union validator for Timeframe
 const AboutPage: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
@@ -70,7 +70,7 @@ const AboutPage: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
 
   return (
     <DefaultLayout title="About">
-      <main className="flex flex-grow flex-col py-10 px-6">
+      <main className="flex flex-grow flex-col px-6 py-10">
         <PageSection
           id="bio"
           title="who i am"

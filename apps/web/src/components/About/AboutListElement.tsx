@@ -1,4 +1,4 @@
-import { IconExternalLink } from "@tabler/icons"
+import { IconExternalLink } from "@tabler/icons-react"
 import clsx from "clsx"
 import Link from "next/link"
 import { ReactNode } from "react"

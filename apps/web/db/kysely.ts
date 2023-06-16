@@ -1,5 +1,5 @@
-import { LibsqlDialect } from "@libsql/kysely-libsql"
-import { Generated, Kysely } from "kysely"
+import { Pool } from "@neondatabase/serverless"
+import { Generated, Kysely, PostgresDialect } from "kysely"
 
 // TODO: maybe zod interfaces + { generated }?
 interface Session {
@@ -45,14 +45,10 @@ interface Db {
   event_data: EventData
 }
 
-const dbUrl = process.env.TURSO_DATABASE_URL
-const authToken = process.env.TURSO_DATABASE_TOKEN
-
-const db = new Kysely<Db>({
-  dialect: new LibsqlDialect({
-    url: dbUrl,
-    authToken: authToken,
+export const db = new Kysely<Db>({
+  dialect: new PostgresDialect({
+    pool: new Pool({
+      connectionString: process.env.NEON_CONNECTION_STRING,
+    }),
   }),
 })
-
-export { db }

@@ -54,6 +54,13 @@ module.exports = withAxiom(
         use: [options.defaultLoaders.babel],
       })
 
+      if (typeof nextRuntime === "undefined") {
+        config.resolve.fallback = {
+          ...config.resolve.fallback,
+          fs: false,
+        }
+      }
+
       return config
     },
     experimental: {

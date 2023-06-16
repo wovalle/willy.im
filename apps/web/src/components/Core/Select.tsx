@@ -1,5 +1,5 @@
 import { Listbox } from "@headlessui/react"
-import { IconCaretDown, IconCaretUp } from "@tabler/icons"
+import { IconCaretDown, IconCaretUp } from "@tabler/icons-react"
 import clsx from "clsx"
 
 interface SelectProps {
