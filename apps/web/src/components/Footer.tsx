@@ -1,4 +1,4 @@
-import { IconBrandSpotify } from "@tabler/icons"
+import { IconBrandSpotify } from "@tabler/icons-react"
 import clsx from "clsx"
 import Link from "next/link"
 import React from "react"

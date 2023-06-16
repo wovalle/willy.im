@@ -1,4 +1,4 @@
-import { IconArrowUpRight, IconBrandTwitter } from "@tabler/icons"
+import { IconArrowUpRight, IconBrandTwitter } from "@tabler/icons-react"
 import { allPosts } from "contentlayer/generated"
 import { InferGetStaticPropsType } from "next"
 import Image from "next/image"

@@ -15,7 +15,7 @@ export async function up(db: Kysely<any>): Promise<void> {
 
   await db.schema
     .createTable("pageviews")
-    .addColumn("id", "integer", (col) => col.primaryKey().autoIncrement())
+    .addColumn("id", "bigserial", (col) => col.primaryKey())
     .addColumn("session_id", "uuid", (col) => col.notNull().references("sessions.id"))
     .addColumn("created_at", "timestamp", (col) => col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull())
     .addColumn("url", "varchar(500)", (col) => col.notNull()) // TODO: revisit
@@ -25,7 +25,7 @@ export async function up(db: Kysely<any>): Promise<void> {
 
   await db.schema
     .createTable("events")
-    .addColumn("id", "integer", (col) => col.primaryKey().autoIncrement())
+    .addColumn("id", "bigserial", (col) => col.primaryKey())
     .addColumn("session_id", "uuid", (col) => col.notNull().references("sessions.id"))
     .addColumn("created_at", "timestamp", (col) => col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull())
     .addColumn("url", "varchar(500)", (col) => col.notNull())
@@ -37,7 +37,7 @@ export async function up(db: Kysely<any>): Promise<void> {
   // TODO: maybe include in the events table?
   await db.schema
     .createTable("event_data")
-    .addColumn("id", "integer", (col) => col.primaryKey().autoIncrement())
+    .addColumn("id", "bigserial", (col) => col.primaryKey())
     .addColumn("event_id", "integer", (col) => col.notNull().unique().references("events.id"))
     .addColumn("event_data", "jsonb", (col) => col.notNull())
     .execute()

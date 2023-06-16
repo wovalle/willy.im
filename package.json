@@ -20,13 +20,5 @@
     "jest-mock-extended": "^3.0.3",
     "typescript": "^5.0.4"
   },
-  "license": "MIT",
-  "pnpm": {
-    "peerDependencyRules": {
-      "allowedVersions": {
-        "next": "^13.0.0",
-        "esbuild": "^0.15.0"
-      }
-    }
-  }
+  "license": "MIT"
 }
