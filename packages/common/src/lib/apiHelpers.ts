@@ -27,14 +27,16 @@ export const mergeRouteHandlers =
       ? `/${req.query.path.join("/")}`
       : req.query.path ?? "/"
 
-    const handler = maybeRoutes[flatPath]
+    for (const path of Object.keys(maybeRoutes)) {
+      if (flatPath.startsWith(path)) {
+        const handler = maybeRoutes[path]
 
-    if (!handler) {
-      res.status(404).end()
-      return
+        return asHandler([handler], {
+          decorators,
+        })(req, res)
+      }
     }
 
-    return asHandler([handler], {
-      decorators,
-    })(req, res)
+    res.status(404).end()
+    return
   }

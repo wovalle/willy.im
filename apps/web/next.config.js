@@ -21,6 +21,11 @@ const links = {
     playlist,
     "posts/how-to-check-if-youre-being-rickrolled-in-telegram":
       "https://www.youtube.com/watch?v=UNuogmk7oEA",
+    r: {
+      source: "/r/:path*",
+      destination: "/api/butler/r/:path*",
+      permanent: false,
+    },
   },
   aliases: {
     twitter: ["tw"],
@@ -37,14 +42,18 @@ module.exports = withAxiom(
   withContentlayer({
     async redirects() {
       return Object.entries(links.redirects)
-        .map(([key, link]) => {
+        .map(([key, linkOrRedirectObject]) => {
           const sources = [key].concat(links.aliases[key])
 
-          return sources.map((s) => ({
-            source: `/${s}`,
-            destination: link,
-            permanent: true,
-          }))
+          return sources.map((s) =>
+            typeof linkOrRedirectObject === "string"
+              ? {
+                  source: `/${s}`,
+                  destination: linkOrRedirectObject,
+                  permanent: true,
+                }
+              : linkOrRedirectObject
+          )
         })
         .flat()
     },

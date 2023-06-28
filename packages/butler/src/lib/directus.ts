@@ -15,6 +15,12 @@ const ReminderSchema = z.object({
   chat_id: z.string(),
 })
 
+const RedirectSchema = z.object({
+  key: z.string(),
+  url: z.string(),
+  password: z.string().nullable().optional(),
+})
+
 const KVSchema = z.object({
   key: z.string(),
   value: z.string(),
@@ -78,6 +84,18 @@ export const directus = {
         // The API could return an empty object - in which case the status text is logged instead.
         const message = error?.response?.data?.error?.message || error?.response?.statusText
         console.error("directus_error", "Error getting reminder", message)
+        throw error
+      })
+  },
+  getRedirect: async (key: string) => {
+    return directusSDK
+      .items("redirects")
+      .readOne(key)
+      .then((r) => RedirectSchema.parse(r))
+      .catch((error) => {
+        // The API could return an empty object - in which case the status text is logged instead.
+        const message = error?.response?.data?.error?.message || error?.response?.statusText
+        console.error("directus_error", "Error getting redirect", message, error)
         throw error
       })
   },
