@@ -2,7 +2,6 @@ import { IconPlayerPause, IconPlayerPlay } from "@tabler/icons-react"
 import clsx from "clsx"
 import { FC, ReactNode } from "react"
 import { useAudioPlayer } from "../../hooks"
-import { ClientOnly } from "../ClientOnly"
 
 type PlayButtonOverlayProps = {
   diameter: number
@@ -29,36 +28,38 @@ export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
   const Icon = audio.playing ? IconPlayerPause : IconPlayerPlay
 
   return (
-    <ClientOnly>
+    <div
+      className={clsx(
+        "relative cursor-pointer",
+        "aspect-square",
+        `h-[${diameter}px]`,
+        `w-[${diameter}px]`
+      )}
+      onClick={() => audio.toggle()}
+    >
       <div
-        className="relative cursor-pointer"
-        onClick={() => audio.toggle()}
-        style={{ width: diameter, height: diameter }}
+        className={clsx("absolute left-0 top-0 rounded-xl", {
+          "opacity-50": !isHovered && !audio.playing,
+          "bg-black/50": isHovered || audio.playing,
+        })}
       >
-        <div
-          className={clsx("absolute left-0 top-0 rounded-xl", {
-            "opacity-50": !isHovered && !audio.playing,
-            "bg-black/50": isHovered || audio.playing,
-          })}
-        >
-          <div className="absolute" style={{ top: radius - 10, left: radius - 10 }}>
-            <Icon size={20} className="stroke-white" />
-          </div>
-          <svg height={diameter} width={diameter}>
-            <circle
-              className={clsx("stroke-white")}
-              fill="transparent"
-              strokeWidth={stroke}
-              strokeDasharray={circumference + " " + circumference}
-              style={{ strokeDashoffset, transform: "rotate(-90deg)", transformOrigin: "50% 50%" }}
-              r={normalizedRadius}
-              cx={radius}
-              cy={radius}
-            />
-          </svg>
+        <div className="absolute" style={{ top: radius - 10, left: radius - 10 }}>
+          <Icon size={20} className="stroke-white" />
         </div>
-        {children}
+        <svg height={diameter} width={diameter}>
+          <circle
+            className={clsx("stroke-white")}
+            fill="transparent"
+            strokeWidth={stroke}
+            strokeDasharray={circumference + " " + circumference}
+            style={{ strokeDashoffset, transform: "rotate(-90deg)", transformOrigin: "50% 50%" }}
+            r={normalizedRadius}
+            cx={radius}
+            cy={radius}
+          />
+        </svg>
       </div>
-    </ClientOnly>
+      {children}
+    </div>
   )
 }

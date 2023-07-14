@@ -16,6 +16,8 @@ export const playlist =
   "https://open.spotify.com/playlist/2DTIGceTBxntcToaVl0lxR?si=M5aF2T7OQjCyO2lS2wxMzw"
 export const ama = "https://github.com/wovalle/willy.im/discussions/6"
 
+export const tweetIntent = "https://twitter.com/intent/tweet?text="
+
 export const socialMedia = [
   {
     name: "twitter",
