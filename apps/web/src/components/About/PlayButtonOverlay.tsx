@@ -29,12 +29,8 @@ export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
 
   return (
     <div
-      className={clsx(
-        "relative cursor-pointer",
-        "aspect-square",
-        `h-[${diameter}px]`,
-        `w-[${diameter}px]`
-      )}
+      className={clsx("relative cursor-pointer", "aspect-square")}
+      style={{ width: diameter, height: diameter }}
       onClick={() => audio.toggle()}
     >
       <div
