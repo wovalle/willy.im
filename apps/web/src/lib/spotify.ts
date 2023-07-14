@@ -68,12 +68,18 @@ export const getNowPlaying = async (): Promise<SimpleNowPlaying> => {
   }
 }
 
+export const SpotifyTimeRanges = ["days", "months", "years"] as const
+export type SpotifyTimeRange = (typeof SpotifyTimeRanges)[number]
+
+export const SpotifyLimitOptions = [10, 25, 50] as const
+export type SpotifyLimitOption = (typeof SpotifyLimitOptions)[number]
+
 export type ValidTimeframe = "days" | "months" | "years"
 
 export const getTopTracks = async ({
   limit,
 }: {
-  limit: number
+  limit: SpotifyLimitOption
 }): Promise<Record<ValidTimeframe, SimpleSpotifySong[]>> => {
   const client = await createSpotifyClient()
 
@@ -99,3 +105,5 @@ export const getTopTracks = async ({
     years,
   }
 }
+
+export type GetTopTracksResult = Awaited<ReturnType<typeof getTopTracks>>

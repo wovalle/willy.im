@@ -2,17 +2,21 @@ import { Listbox } from "@headlessui/react"
 import { IconCaretDown, IconCaretUp } from "@tabler/icons-react"
 import clsx from "clsx"
 
-interface SelectProps {
+interface SelectProps<T> {
   options: {
-    value: string
+    value: T
     label: string
   }[]
   id?: string
-  selected: string
-  onChange: (value: string) => void
+  selected: T
+  onChange: (value: T) => void
 }
 
-export const InlineSelect: React.FC<SelectProps> = ({ options, onChange, selected }) => {
+export const InlineSelect = <T extends string | number>({
+  options,
+  onChange,
+  selected,
+}: SelectProps<T>) => {
   return (
     <span className="relative">
       <Listbox value={selected} onChange={onChange}>
@@ -21,12 +25,12 @@ export const InlineSelect: React.FC<SelectProps> = ({ options, onChange, selecte
 
           return (
             <>
-              <Listbox.Button className="cursor-pointer border-b-2 border-dotted border-neuda font-bold">
+              <Listbox.Button className="cursor-pointer select-none border-b-2 border-dotted border-neuda font-bold">
                 <span className="flex items-center pl-1">
                   {selected} <Caret size="1em" />
                 </span>
               </Listbox.Button>
-              <Listbox.Options className="text-md absolute -left-3 z-10 mt-2 flex flex-col gap-2 rounded-md bg-white font-medium text-gray-700 shadow-lg dark:bg-gray-800 dark:text-gray-200">
+              <Listbox.Options className="text-md absolute -left-3 z-10 mt-2 flex select-none flex-col gap-2 rounded-md bg-white font-medium text-gray-700 shadow-lg dark:bg-gray-800 dark:text-gray-200">
                 {options.map((o) => (
                   <Listbox.Option
                     key={o.value}
