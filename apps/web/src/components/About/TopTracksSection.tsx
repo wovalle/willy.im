@@ -26,7 +26,7 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
       subtitle={t.artistName}
       url={t.url}
       leftPanel={(isHovered) => (
-        <PlayButtonOverlay audioUrl={t.previewUrl} diameter={60} isHovered={isHovered}>
+        <PlayButtonOverlay audioUrl={t.previewUrl} diameter={70} isHovered={isHovered}>
           <img
             src={t.thumbnailUrl ?? "/public/android-chrome-512x512.png"}
             alt={t.songName}
@@ -58,7 +58,7 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
         <IconBrandSpotify size="3em" color="#1ED760" />
       </div>
 
-      <ul className="-mx-2 grid grid-cols-1 md:grid-cols-2 md:gap-6">{topTracksList}</ul>
+      <ul className="-mx-2 grid grid-cols-1 md:grid-cols-2 md:gap-2">{topTracksList}</ul>
       <PaginationRow pagination={pagination} />
     </PageSection>
   )
