@@ -8,7 +8,7 @@ import { PaginationRow } from "./PaginationRow"
 export const VideosSection = ({ videos }: { videos: YoutubeVideo[] }) => {
   const pagination = usePagination({
     initialPage: 0,
-    itemsPerPage: 10,
+    itemsPerPage: 6,
     items: videos,
   })
 

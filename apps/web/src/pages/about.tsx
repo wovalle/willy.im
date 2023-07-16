@@ -50,7 +50,6 @@ const AboutPage: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
   )
 }
 
-// TODO: runtime validations
 export const getStaticProps = async () => {
   const bio = allGlobals.find((g) => g.path == "global/bio")
 

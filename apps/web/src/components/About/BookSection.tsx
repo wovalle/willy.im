@@ -15,7 +15,7 @@ export const BooksSection = ({
 }) => {
   const pagination = usePagination({
     initialPage: 0,
-    itemsPerPage: 10,
+    itemsPerPage: 6,
     items: reviews,
   })
 
@@ -62,13 +62,15 @@ export const BooksSection = ({
         ) : (
           <article className="flex flex-col items-center gap-3">
             <div className="text-title">nothing really :(</div>
-            <a
-              className="text-subtitle text-sm"
-              href={`${tweetIntent}` + encodeURIComponent("hey @wovalle, you should read: ")}
-              target="_blank"
-            >
-              recommend something
-            </a>
+            <p>
+              <a
+                className="text-subtitle text-sm"
+                href={`${tweetIntent}` + encodeURIComponent("hey @wovalle, you should read: ")}
+                target="_blank"
+              >
+                recommend something
+              </a>
+            </p>
           </article>
         )}
       </fieldset>

@@ -1,6 +1,5 @@
-import { Listbox } from "@headlessui/react"
-import { IconCaretDown, IconCaretUp } from "@tabler/icons-react"
-import clsx from "clsx"
+import * as Select from "@radix-ui/react-select"
+import { IconChevronDown, IconChevronUp } from "@tabler/icons-react"
 
 interface SelectProps<T> {
   options: {
@@ -12,42 +11,38 @@ interface SelectProps<T> {
   onChange: (value: T) => void
 }
 
-export const InlineSelect = <T extends string | number>({
-  options,
-  onChange,
-  selected,
-}: SelectProps<T>) => {
+export const InlineSelect = <T extends string>({ options, onChange, selected }: SelectProps<T>) => {
+  const selectOptions = options.map((o) => (
+    <Select.Item
+      className="cursor-pointer px-4 py-2 hover:bg-slate-200 data-[state=checked]:font-bold dark:hover:bg-slate-600 md:px-3 md:py-1"
+      key={o.value}
+      value={o.value}
+    >
+      <Select.ItemText>{o.label}</Select.ItemText>
+    </Select.Item>
+  ))
+
   return (
     <span className="relative">
-      <Listbox value={selected} onChange={onChange}>
-        {({ open }) => {
-          const Caret = open ? IconCaretUp : IconCaretDown
-
-          return (
-            <>
-              <Listbox.Button className="cursor-pointer select-none border-b-2 border-dotted border-neuda font-bold">
-                <span className="flex items-center pl-1">
-                  {selected} <Caret size="1em" />
-                </span>
-              </Listbox.Button>
-              <Listbox.Options className="text-md absolute -left-3 z-10 mt-2 flex select-none flex-col gap-2 rounded-md bg-white font-medium text-gray-700 shadow-lg dark:bg-gray-800 dark:text-gray-200">
-                {options.map((o) => (
-                  <Listbox.Option
-                    key={o.value}
-                    value={o.value}
-                    className={clsx(
-                      { "font-bold": o.value === selected },
-                      "cursor-pointer px-4 py-2 hover:bg-slate-200 dark:hover:bg-slate-600 md:px-3 md:py-1"
-                    )}
-                  >
-                    {o.label}
-                  </Listbox.Option>
-                ))}
-              </Listbox.Options>
-            </>
-          )
-        }}
-      </Listbox>
+      <Select.Root value={selected} onValueChange={onChange}>
+        <Select.Trigger className="inline-flex cursor-pointer select-none items-center border-b-2 border-dotted border-neuda font-bold">
+          <Select.Value />
+          <Select.Icon>
+            <IconChevronDown size="1rem" />
+          </Select.Icon>
+        </Select.Trigger>
+        <Select.Portal>
+          <Select.Content className="text-md flex select-none flex-col gap-2 rounded-md bg-white text-sm text-gray-700 shadow-lg dark:bg-gray-800 dark:text-gray-200">
+            <Select.ScrollUpButton>
+              <IconChevronUp size="1rem" />
+            </Select.ScrollUpButton>
+            <Select.Viewport>{selectOptions}</Select.Viewport>
+            <Select.ScrollDownButton>
+              <IconChevronDown size="1rem" />
+            </Select.ScrollDownButton>
+          </Select.Content>
+        </Select.Portal>
+      </Select.Root>
     </span>
   )
 }
