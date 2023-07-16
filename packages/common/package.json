@@ -14,6 +14,6 @@
     "next-better-api": "^0.1.5"
   },
   "devDependencies": {
-    "next": "13.1.6"
+    "next": "13.4.10"
   }
 }
