@@ -15,7 +15,7 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
 
   const pagination = usePagination({
     initialPage: 0,
-    itemsPerPage: 10,
+    itemsPerPage: 6,
     items: topTracks[timeRange],
   })
 
