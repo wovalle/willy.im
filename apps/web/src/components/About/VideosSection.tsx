@@ -44,11 +44,8 @@ export const VideosSection = ({ videos }: { videos: YoutubeVideo[] }) => {
       title="what i've been watching"
       bleed
       subtitle="videos I've liked lately"
+      icon={<IconBrandYoutube size="3em" color="#b2071d" />}
     >
-      <div className="absolute right-6 md:right-20 md:top-14">
-        <IconBrandYoutube size="3em" color="#b2071d" />
-      </div>
-
       <ul className="-mx-2 grid grid-cols-1 md:grid-cols-2 md:gap-2">{videoList}</ul>
 
       <PaginationRow pagination={pagination} />
