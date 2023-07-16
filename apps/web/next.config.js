@@ -52,7 +52,7 @@ module.exports = withAxiom(
                   destination: linkOrRedirectObject,
                   permanent: true,
                 }
-              : linkOrRedirectObject
+              : linkOrRedirectObject,
           )
         })
         .flat()
@@ -78,5 +78,6 @@ module.exports = withAxiom(
     images: {
       domains: ["i.scdn.co"], // Spotify
     },
-  })
+    transpilePackages: ["@luchyio/next"],
+  }),
 )

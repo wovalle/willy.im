@@ -53,11 +53,8 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
           />
         </>
       }
+      icon={<IconBrandSpotify size="3em" color="#1ED760" />}
     >
-      <div className="absolute right-6 md:right-20 md:top-14">
-        <IconBrandSpotify size="3em" color="#1ED760" />
-      </div>
-
       <ul className="-mx-2 grid grid-cols-1 md:grid-cols-2 md:gap-2">{topTracksList}</ul>
       <PaginationRow pagination={pagination} />
     </PageSection>
