@@ -1,6 +1,6 @@
 import { IconBrandSpotify } from "@tabler/icons-react"
 import { useState } from "react"
-import { usePagination } from "../../hooks"
+import { useAudioPlayer, usePagination } from "../../hooks"
 import { GetTopTracksResult, SpotifyTimeRanges } from "../../lib/spotify"
 import { InlineSelect } from "../Core"
 import { PageSection } from "../PageSection"
@@ -12,6 +12,7 @@ const timeRangeOptions = SpotifyTimeRanges.map((t) => ({ value: t, label: t }))
 
 export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult }) => {
   const [timeRange, setTimeRange] = useState(timeRangeOptions[0].value)
+  const audioPlayer = useAudioPlayer()
 
   const pagination = usePagination({
     initialPage: 0,
@@ -26,7 +27,13 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
       subtitle={t.artistName}
       url={t.url}
       leftPanel={(isHovered) => (
-        <PlayButtonOverlay audioUrl={t.previewUrl} diameter={70} isHovered={isHovered}>
+        <PlayButtonOverlay
+          diameter={70}
+          isHovered={isHovered}
+          isPlaying={audioPlayer.isPlayingUrl(t.previewUrl ?? "")}
+          onClick={() => audioPlayer.toggle(t.previewUrl)}
+          audioProgress={audioPlayer.getProgress(t.previewUrl)}
+        >
           <img
             src={t.thumbnailUrl ?? "/public/android-chrome-512x512.png"}
             alt={t.songName}

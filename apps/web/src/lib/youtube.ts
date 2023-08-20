@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { refreshAccessToken } from "./google"
 
 const thumbnailDetailsSchema = z.object({
   url: z.string(),
@@ -55,7 +56,9 @@ export const getLikedVideos = async (opts: {
   maxResults?: number
   pageToken?: string
   userToken: string
-}) => {
+  retry?: boolean
+  refreshToken: string
+}): Promise<YoutubeVideo[]> => {
   const { maxResults, pageToken, userToken } = opts
 
   const url = new URL(YOUTUBE_API_HOST + "/playlistItems")
@@ -76,7 +79,18 @@ export const getLikedVideos = async (opts: {
 
   const data = await response.json()
 
-  return responseSchema.parse(data).items.map((i) => i.snippet)
+  if (response.status === 401 && !opts.retry) {
+    console.log("refreshing access token")
+    const r = await refreshAccessToken(opts.refreshToken)
+
+    return getLikedVideos({ ...opts, userToken: r.accessToken, retry: true })
+  }
+
+  if (!response.ok) {
+    throw data
+  }
+
+  return responseSchema.parse(data).items.map((item) => item.snippet)
 }
 
 export const getYouTubeVideoUrlFromVideo = (video: YoutubeVideo) =>
