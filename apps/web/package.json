@@ -12,9 +12,8 @@
     "migrate": "node -r @swc-node/register -r dotenv/config db/runMigrations.ts"
   },
   "dependencies": {
-    "@clerk/nextjs": "^4.21.15",
     "@luchyio/next": "^1.7.9",
-    "@neondatabase/serverless": "^0.5.2",
+    "@neondatabase/serverless": "^0.6.0",
     "@octokit/rest": "^20.0.1",
     "@radix-ui/react-dropdown-menu": "^2.0.5",
     "@radix-ui/react-select": "^1.2.2",
@@ -26,7 +25,8 @@
     "contentlayer": "0.3.1",
     "dayjs": "^1.11.9",
     "kysely": "^0.26.1",
-    "next": "13.4.10",
+    "next": "13.4.19",
+    "next-auth": "^4.22.5",
     "next-better-api": "^0.1.5",
     "next-contentlayer": "0.3.1",
     "next-seo": "^6.1.0",
@@ -48,6 +48,7 @@
     "jest-environment-jsdom": "^29.6.1",
     "next-axiom": "^0.18.0",
     "next-sitemap": "^4.1.8",
+    "pg": "^8.11.3",
     "postcss": "^8.4.26",
     "prettier": "^3.0.0",
     "prettier-plugin-tailwindcss": "^0.4.1",

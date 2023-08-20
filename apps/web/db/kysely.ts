@@ -1,5 +1,7 @@
-import { Pool } from "@neondatabase/serverless"
+import { Pool as PoolServerless } from "@neondatabase/serverless"
 import { Generated, Kysely, PostgresDialect } from "kysely"
+import { Pool as PoolPg } from "pg"
+import { AuthDb } from "../src/pages/api/auth/KyselyAuthInterface"
 
 // TODO: maybe zod interfaces + { generated }?
 interface Session {
@@ -38,14 +40,24 @@ interface EventData {
   event_data: string
 }
 
-interface Db {
+type Db = {
   sessions: Session
   pageviews: Pageview
   events: Event
   event_data: EventData
 }
 
+const Pool = typeof window === "undefined" ? PoolPg : PoolServerless
+
 export const db = new Kysely<Db>({
+  dialect: new PostgresDialect({
+    pool: new Pool({
+      connectionString: process.env.NEON_CONNECTION_STRING,
+    }),
+  }),
+})
+
+export const authDb = new Kysely<AuthDb>({
   dialect: new PostgresDialect({
     pool: new Pool({
       connectionString: process.env.NEON_CONNECTION_STRING,

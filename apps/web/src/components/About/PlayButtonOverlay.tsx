@@ -1,42 +1,43 @@
 import { IconPlayerPause, IconPlayerPlay } from "@tabler/icons-react"
 import clsx from "clsx"
 import { FC, ReactNode } from "react"
-import { useAudioPlayer } from "../../hooks"
 
 type PlayButtonOverlayProps = {
   diameter: number
   stroke?: number
   children: ReactNode
-  audioUrl?: string
   isHovered: boolean
+  onClick: () => void
+  audioProgress: number
+  isPlaying?: boolean
 }
 
 export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
   stroke = 4,
   children,
-  audioUrl,
   diameter,
   isHovered,
+  onClick,
+  audioProgress,
+  isPlaying,
 }) => {
-  const audio = useAudioPlayer(audioUrl)
-
   const radius = diameter / 2
   const normalizedRadius = radius - stroke * 2
   const circumference = normalizedRadius * 2 * Math.PI
-  const strokeDashoffset = circumference - (audio.progress / 100) * circumference
+  const strokeDashoffset = circumference - (audioProgress / 100) * circumference
 
-  const Icon = audio.playing ? IconPlayerPause : IconPlayerPlay
+  const Icon = isPlaying ? IconPlayerPause : IconPlayerPlay
 
   return (
     <div
       className={clsx("relative cursor-pointer", "aspect-square")}
       style={{ width: diameter, height: diameter }}
-      onClick={() => audio.toggle()}
+      onClick={onClick}
     >
       <div
         className={clsx("absolute left-0 top-0 rounded-xl", {
-          "opacity-50": !isHovered && !audio.playing,
-          "bg-black/50": isHovered || audio.playing,
+          "opacity-50": !isHovered && !isPlaying,
+          "bg-black/50": isHovered || isPlaying,
         })}
       >
         <div className="absolute" style={{ top: radius - 10, left: radius - 10 }}>

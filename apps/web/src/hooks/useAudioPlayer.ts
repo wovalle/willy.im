@@ -1,92 +1,78 @@
-import React, { createContext, useContext, useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
-type AudioPlayerContextProps = {
-  audioRef: React.MutableRefObject<HTMLAudioElement | null>
-  intervalRef: React.MutableRefObject<NodeJS.Timer | null>
-  currentUrl: string | undefined
-  setCurrentUrl: (url: string | undefined) => void
-}
-
-export const AudioPlayerContext = createContext<AudioPlayerContextProps | undefined>(undefined)
-
-export const useAudioPlayer = (url: string | undefined) => {
-  const audioContext = useContext(AudioPlayerContext)
-
-  if (!audioContext) {
-    throw new Error("useAudioPlayer must be used within an AudioPlayerContext")
-  }
-
-  const { audioRef, intervalRef, currentUrl, setCurrentUrl } = audioContext
-  const [playing, setPlaying] = useState(false)
+export const useAudioPlayer = () => {
+  const [audioUrl, setAudioUrl] = useState<string | undefined>(undefined)
   const [progress, setProgress] = useState(0)
+  const audio = useMemo(() => new Audio(audioUrl), [audioUrl])
 
-  // Clear any timers already running
-  const startTimer = () => {
-    intervalRef.current && clearInterval(intervalRef.current)
-
-    intervalRef.current = setInterval(() => {
-      if (audioRef.current && audioRef.current.ended) {
-        audioRef.current.currentTime = 0
-        setProgress(0)
-        setPlaying(false)
-      }
-      setProgress(audioRef.current ? audioRef.current.currentTime : 0)
-    }, 250)
-  }
-
-  const pauseAndCleanUp = () => {
-    intervalRef.current && clearInterval(intervalRef.current)
-    audioRef.current?.pause()
-  }
-
-  // Cleanup when we change previews
+  // When an audioUrl is assigned, we need to play it
+  // When hook is unmounted, we need to pause the audio
   useEffect(() => {
-    // If is the initial render or the currently playing url is this one, abort
-    if (!currentUrl || url === currentUrl) {
+    async function play() {
+      await audio?.play()
+    }
+
+    if (audioUrl) {
+      void play()
+    }
+
+    return () => {
+      audio?.pause()
+      setProgress(0)
+    }
+  }, [audio, audioUrl])
+
+  // Attach ended event listeners if audio is defined
+  useEffect(() => {
+    if (!audioUrl) {
       return
     }
 
-    // If the url was changed, reset the component state
-    setProgress(0)
-    setPlaying(false)
-  }, [currentUrl])
+    audio?.addEventListener("ended", () => {
+      setAudioUrl(undefined)
+    })
 
-  useEffect(() => {
-    const urlChanged = url !== currentUrl
-
-    if (playing && url !== currentUrl) {
-      pauseAndCleanUp()
-
-      setCurrentUrl(url)
-      audioRef.current = new Audio(url)
-      setProgress(audioRef.current.currentTime)
-    }
-
-    if (playing) {
-      audioRef.current?.play()
-      startTimer()
-    } else {
-      // we already clean up before changing the url
-      if (urlChanged) {
-        return
-      }
-      pauseAndCleanUp()
-    }
-  }, [playing])
-
-  // Pause and clean up on unmount
-  useEffect(() => {
     return () => {
-      audioRef.current?.pause()
-      intervalRef.current && clearInterval(intervalRef.current)
+      audio?.removeEventListener("ended", () => setAudioUrl(undefined))
     }
-  }, [])
+  }, [audio, audioUrl])
+
+  // Update progress
+  useEffect(() => {
+    if (!audioUrl) {
+      return
+    }
+
+    const interval = setInterval(() => {
+      setProgress(
+        (audio?.currentTime /
+          (!audio?.duration || Number.isNaN(audio?.duration) ? 1 : audio.duration)) *
+          100,
+      )
+    }, 250)
+
+    return () => {
+      clearInterval(interval)
+      setProgress(0)
+    }
+  }, [audio, audioUrl])
 
   return {
-    playing,
-    toggle: () => {
-      setPlaying((p) => !p)
+    isAnyAudioPlaying: audioUrl !== undefined,
+    isPlayingUrl: (url: string) => audioUrl === url,
+    getProgress: (currentUrl?: string) => (currentUrl === audioUrl ? progress : 0),
+    play: (audioUrl: string) => {
+      setAudioUrl(audioUrl)
     },
-    progress: audioRef.current ? (progress / audioRef.current.duration || 0) * 100 : 0,
+    stop: () => {
+      setAudioUrl(undefined)
+    },
+    toggle: (currentAudioUrl: string | undefined) => {
+      if (currentAudioUrl === audioUrl) {
+        setAudioUrl(undefined)
+      } else {
+        setAudioUrl(currentAudioUrl)
+      }
+    },
   }
 }

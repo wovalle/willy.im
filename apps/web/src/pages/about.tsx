@@ -1,10 +1,12 @@
-import { clerkClient } from "@clerk/nextjs"
+import { required } from "@willyim/common"
 import { allGlobals } from "contentlayer/generated"
 import type { InferGetStaticPropsType, NextPage } from "next"
 import { useMDXComponent } from "next-contentlayer/hooks"
+import { authDb } from "../../db/kysely"
 import { BooksSection } from "../components/About/BookSection"
 import { TopTracksSection } from "../components/About/TopTracksSection"
 import { VideosSection } from "../components/About/VideosSection"
+import { ClientOnly } from "../components/ClientOnly"
 import { DefaultLayout } from "../components/Layout"
 import { PageSection } from "../components/PageSection"
 import { getCurrentlyReading, getReviews } from "../lib/goodreads"
@@ -31,7 +33,9 @@ const AboutPage: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
           <Bio />
         </PageSection>
 
-        <TopTracksSection topTracks={topTracks} />
+        <ClientOnly>
+          <TopTracksSection topTracks={topTracks} />
+        </ClientOnly>
 
         <VideosSection videos={videos} />
 
@@ -57,18 +61,27 @@ export const getStaticProps = async () => {
     throw new Error("No bio found, check global content")
   }
 
-  const [topTracks, reviews, currentlyReading, oAuthAccessToken] = await Promise.all([
+  const [topTracks, reviews, currentlyReading] = await Promise.all([
     getTopTracks({ limit: 50 }),
     getReviews({ limit: 50, trimTitle: true }),
     getCurrentlyReading({ limit: 2, trimTitle: true }),
-    clerkClient.users.getUserOauthAccessToken(
-      process.env.CLERK_DEFAULT_OAUTH_USER ?? "",
-      "oauth_google"
-    ),
   ])
 
+  // Eventually this will become a getServerSideProps call, now I cannot use it
+  // because is not allowed in getStaticProps
+  const account = await authDb
+    .selectFrom("auth_account")
+    .select(["access_token", "refresh_token"])
+    .where(
+      "id",
+      "=",
+      required(process.env.AUTH_MAIN_ACCOUNT_ID, "AUTH_MAIN_ACCOUNT_ID is required"),
+    )
+    .executeTakeFirstOrThrow()
+
   const videos = await getLikedVideos({
-    userToken: oAuthAccessToken.at(0)?.token ?? "",
+    userToken: required(account.access_token, "account.access_token is required"),
+    refreshToken: required(account.refresh_token, "account.refresh_token is required"),
   }).catch((e) => {
     console.error("Error fetching youtube videos", e)
     return []
