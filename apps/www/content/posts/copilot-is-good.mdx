@@ -1,0 +1,28 @@
+---
+title: GitHub Copilot is... Good.
+published: 05/11/2023
+tags: ["development", "ai"]
+summary: This is my experience using GitHub Copilot.
+---
+
+I was recently asked about my experience with [GitHub Copilot](https://github.com/features/copilot) (just Copilot from now on) privately, and I decided to turn it into a blog post instead.
+
+**Copilot has completely changed the way I work as a developer**. It is capable of writing boilerplate code, suggesting variable names, and even generating entire functions. My experience with Copilot has been incredibly positive, and I can't imagine working without it. In this post, I'd like to share some insights that may not be immediately obvious when using it.
+
+## Boilerplate-y code
+
+Copilot is pretty good at generating boilerplate-y code, such as tests. This is good news for developers since writing tests can be a tedious task, especially after modifying 48 files to implement a feature. Copilot is not perfect, as I'll explain in the third point, but anything that can help us write mundane code is _always_ welcome.
+
+## Understanding your intention
+
+I'm used to writing long, descriptive variable names. This works extremely well with Copilot since the suggestions improve with more context. When I'm writing something and the suggestion I'm getting doesn't solve the problem, a small comment like `// only execute this method if the foo variable is not null` usually does the trick. The more context we give Copilot, the better the suggestions.
+
+Another underrated aspect of Copilot is the instant gratification you get when you and Copilot agree on something. Sometimes I found myself stopping mid-sentence and waiting for Copilot to suggest the next piece of code. It makes writing complex code a bit more playful.
+
+## Is not perfect
+
+Copilot may generate slight "off-by-one" type of bugs if you're not careful, but to be fair this can happen even without it. Many wise tech people advise against executing code snippets you don't understand, and the same applies to Copilot. We’re not strangers to that practice though, _cough_ Stack Overflow _cough_. In fact, I think this marks the end of Stack Overflow as we know it.
+
+In conclusion, I recommend any developer to try Copilot. It provides a productivity boost by suggesting code in a timely manner and reducing the burden of writing boilerplate-y code.
+
+We need to keep in mind that Copilot is classified as a Generative AI, so sometimes it may try guess its way out of a problem... But don't we all do it? Don't we all do things like “let's add a space to see if this fixes the issue” or “lets add an `as any` here so the typescript compiler stops yelling at me”? Copilot sometimes is not different but it's an amazing tool that is only getting better.

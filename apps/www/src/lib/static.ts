@@ -51,18 +51,19 @@ export const socialMedia = [
   },
 ]
 
-export const footerLinks = [
+export const navLinks = [
   { name: "/home", url: "/" },
   { name: "/about", url: "/about" },
 ]
 
 export const siteConfig = {
+  pathPrefix: "/",
   keywords: [
     "Willy Ovalle",
     "wovalle",
-    "willyim",
-    "willy.im",
     "willy Ovalle",
+    "Software Developer",
+    "Software Engineer",
     "react",
     "Redux",
     "Typescript",
@@ -71,7 +72,7 @@ export const siteConfig = {
     "Frontend",
     "Engineering",
     "Blog",
-    "Serverless",
+    "serverless",
   ],
   title: "Willy Ovalle's Blog",
   titleAlt: "Willy Ovalle | Blog",
@@ -87,3 +88,5 @@ export const siteConfig = {
   twitterDesc:
     "Willy Ovalle is a software engineer and bad jokes enthusiast currently based in Berlin.",
 }
+
+// TODO: deduplicate siteConfig
