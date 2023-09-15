@@ -1,7 +1,6 @@
 import { Pool as PoolServerless } from "@neondatabase/serverless"
 import { Generated, Kysely, PostgresDialect } from "kysely"
-import { Pool as PoolPg } from "pg"
-import { AuthDb } from "../src/pages/api/auth/KyselyAuthInterface"
+import { AuthDb } from "./KyselyAuthInterface"
 
 // TODO: maybe zod interfaces + { generated }?
 interface Session {
@@ -48,40 +47,26 @@ interface Redirects {
   password_hash?: string
 }
 
-type Db = {
+type LuchyDb = {
   sessions: Session
   pageviews: Pageview
   events: Event
   event_data: EventData
-  redirects: Redirects
 }
 
-const Pool = typeof window === "undefined" ? PoolPg : PoolServerless
+type Db = {
+  redirects: Redirects
+} & LuchyDb &
+  AuthDb
 
-export const db = new Kysely<Db>({
-  dialect: new PostgresDialect({
-    pool: new Pool({
-      connectionString: process.env.NEON_CONNECTION_STRING,
-    }),
-  }),
-})
-
-export const authDb = new Kysely<AuthDb>({
-  dialect: new PostgresDialect({
-    pool: new Pool({
-      connectionString: process.env.NEON_CONNECTION_STRING,
-    }),
-  }),
-})
-
-export const getDb = () => {
-  const Pool = typeof window === "undefined" ? PoolPg : PoolServerless
-
-  return new Kysely<Db>({
+export const getDb = <GenericDb extends {} = Db>() => {
+  return new Kysely<GenericDb>({
     dialect: new PostgresDialect({
-      pool: new Pool({
+      pool: new PoolServerless({
         connectionString: process.env.NEON_CONNECTION_STRING,
       }),
     }),
   })
 }
+
+export const getAuthDb = () => getDb<AuthDb>()

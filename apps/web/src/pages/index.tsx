@@ -58,7 +58,7 @@ const HomePage: React.FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ re
 
   return (
     <DefaultLayout title="Home">
-      <main className="flex flex-grow flex-col gap-24 py-16 px-6">
+      <main className="flex flex-grow flex-col gap-24 px-6 py-16">
         <section id="hero" className="grid md:grid-cols-5">
           <div className="text-subtitle col-span-4 mr-4 flex flex-col gap-4">
             <p>
@@ -94,6 +94,7 @@ const HomePage: React.FC<InferGetStaticPropsType<typeof getStaticProps>> = ({ re
               width={296}
               height={296}
               className="opacity-85 rounded-full object-cover dark:contrast-75"
+              priority={false}
             />
           </div>
         </section>
