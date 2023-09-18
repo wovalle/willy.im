@@ -1,5 +1,6 @@
 "use client"
 
+import { LuchyNextAppProvider } from "@luchyio/next"
 import { ThemeProvider } from "next-themes"
 import { FC, ReactNode } from "react"
 
@@ -10,10 +11,7 @@ type ProvidersProps = {
 const Providers: FC<ProvidersProps> = ({ children }) => {
   return (
     <ThemeProvider attribute="class" defaultTheme="system">
-      {/* TODO: defaults */}
-      {/* <LuchyNextProvider baseUrl={"/api/luchy"}> */}
-      {children}
-      {/* </LuchyNextProvider> */}
+      <LuchyNextAppProvider>{children}</LuchyNextAppProvider>
     </ThemeProvider>
   )
 }

@@ -48,7 +48,7 @@ const getRedirectsNext = () =>
           ? {
               source: `/${s}`,
               destination: linkOrRedirectObject,
-              permanent: true,
+              permanent: false,
             }
           : linkOrRedirectObject,
       )
@@ -67,9 +67,15 @@ module.exports =
     images: {
       domains: ["i.scdn.co"], // Spotify
     },
-    transpilePackages: ["@luchyio/next"],
 
     webpack: (config, options) => {
+      if (typeof nextRuntime === "undefined") {
+        config.resolve.fallback = {
+          ...config.resolve.fallback,
+          fs: false,
+        }
+      }
+
       // WORKAROUND: contentlayer adds a rule that breaks @neondatabase/severless, let's remove it
       const rules = config.module?.rules
       const weirdRule = rules.findIndex((rule) => rule.test?.toString() === "/\\.m?js$/")

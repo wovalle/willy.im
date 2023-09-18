@@ -38,6 +38,8 @@ export const Header = () => {
 
       <ClientOnly>
         <button
+          data-luchy-event="toggle-theme-pressed"
+          data-luchy-event-data={resolvedTheme}
           onClick={() => {
             toggleTheme()
           }}

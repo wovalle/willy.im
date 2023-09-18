@@ -70,3 +70,5 @@ export const getDb = <GenericDb extends {} = Db>() => {
 }
 
 export const getAuthDb = () => getDb<AuthDb>()
+
+export const getLuchyDb = () => getDb<LuchyDb>()

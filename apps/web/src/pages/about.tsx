@@ -6,7 +6,6 @@ import { authDb } from "../../db/kysely"
 import { BooksSection } from "../components/About/BookSection"
 import { TopTracksSection } from "../components/About/TopTracksSection"
 import { VideosSection } from "../components/About/VideosSection"
-import { ClientOnly } from "../components/ClientOnly"
 import { DefaultLayout } from "../components/Layout"
 import { PageSection } from "../components/PageSection"
 import { getCurrentlyReading, getReviews } from "../lib/goodreads"
@@ -33,9 +32,7 @@ const AboutPage: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
           <Bio />
         </PageSection>
 
-        <ClientOnly>
-          <TopTracksSection topTracks={topTracks} />
-        </ClientOnly>
+        <TopTracksSection topTracks={topTracks} />
 
         <VideosSection videos={videos} />
 
