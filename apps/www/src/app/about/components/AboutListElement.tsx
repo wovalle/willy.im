@@ -38,6 +38,8 @@ export const AboutListElement: React.FC<AboutListElementProps> = ({
             className="text-title flex border-transparent"
             target="_blank"
             rel="noopener noreferrer"
+            data-luchy-event="about-link-click"
+            data-luchy-event-data={url}
           >
             {title} <IconExternalLink className="ml-1 self-center" size="1em" />
           </Link>

@@ -1,8 +1,9 @@
 "use client"
 
+import { getTracker } from "@luchyio/next"
 import { IconBrandSpotify } from "@tabler/icons-react"
 import { useState } from "react"
-import { GetTopTracksResult, SpotifyTimeRanges } from "../../../lib/spotify"
+import { GetTopTracksResult, SpotifyTimeRange, SpotifyTimeRanges } from "../../../lib/spotify"
 import { InlineSelect } from "../../components/InlineSelect"
 import { PageSection } from "../../components/PageSection"
 import { usePagination } from "../../hooks/usePagination"
@@ -16,6 +17,11 @@ const timeRangeOptions = SpotifyTimeRanges.map((t) => ({ value: t, label: t }))
 
 export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult }) => {
   const [timeRange, setTimeRange] = useState(timeRangeOptions[0].value)
+  const tracker = getTracker()
+  const setTimeRangeAndTrack = (timeRange: SpotifyTimeRange) => {
+    setTimeRange(timeRange)
+    tracker.collectEvent("top_tracks_time_range", timeRange)
+  }
 
   const audioPlayer = useAudioPlayer()
 
@@ -38,6 +44,7 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
           isPlaying={audioPlayer.isPlayingUrl(t.previewUrl ?? "")}
           onClick={() => audioPlayer.toggle(t.previewUrl)}
           audioProgress={audioPlayer.getProgress(t.previewUrl)}
+          url={t.url}
         >
           <img
             src={t.thumbnailUrl ?? "/public/android-chrome-512x512.png"}
@@ -60,7 +67,7 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
           songs in the last few{" "}
           <InlineSelect
             options={timeRangeOptions}
-            onChange={(v) => setTimeRange(v)}
+            onChange={(v) => setTimeRangeAndTrack(v)}
             selected={timeRange}
           />
         </>

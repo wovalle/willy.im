@@ -9,6 +9,7 @@ export const PaginationRow = ({ pagination }: { pagination: UsePaginationRespons
         className={clsx("flex cursor-pointer select-none items-center text-xs", {
           invisible: pagination.page <= 0,
         })}
+        data-luchy-event="pagination-back-click"
         onClick={() => {
           pagination.prev()
         }}
@@ -22,6 +23,7 @@ export const PaginationRow = ({ pagination }: { pagination: UsePaginationRespons
         className={clsx("flex cursor-pointer select-none items-center text-xs", {
           invisible: pagination.page >= pagination.totalPages - 1,
         })}
+        data-luchy-event="pagination-forward-click"
         onClick={() => {
           pagination.next()
         }}

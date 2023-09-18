@@ -10,6 +10,7 @@ type PlayButtonOverlayProps = {
   onClick: () => void
   audioProgress: number
   isPlaying?: boolean
+  url: string
 }
 
 export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
@@ -20,6 +21,7 @@ export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
   onClick,
   audioProgress,
   isPlaying,
+  url,
 }) => {
   const radius = diameter / 2
   const normalizedRadius = radius - stroke * 2
@@ -33,6 +35,8 @@ export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
       className={clsx("relative cursor-pointer", "aspect-square")}
       style={{ width: diameter, height: diameter }}
       onClick={onClick}
+      data-luchy-event={isPlaying ? "play-button-click" : "pause-button-click"}
+      data-luchy-event-data={url}
     >
       <div
         className={clsx("absolute left-0 top-0 rounded-xl", {
