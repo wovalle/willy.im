@@ -1,4 +1,3 @@
-import { cache } from "react"
 import { Client, Episode, TimeRange, Track } from "spotify-api.js"
 
 const clientId = process.env.SPOTIFY_CLIENT_ID
@@ -77,33 +76,30 @@ export type SpotifyLimitOption = (typeof SpotifyLimitOptions)[number]
 
 export type ValidTimeframe = "days" | "months" | "years"
 
-export const getTopTracks = async ({ limit }: { limit: SpotifyLimitOption }) =>
-  cache(async ({ limit }) => {
-    const client = await createSpotifyClient()
+export const getTopTracks = async ({ limit }) => {
+  const client = await createSpotifyClient()
 
-    const topTracks = await Promise.all([
-      client.user.getTopTracks({ limit, timeRange: TimeRange.Short }),
-      client.user.getTopTracks({ limit, timeRange: TimeRange.Medium }),
-      client.user.getTopTracks({ limit, timeRange: TimeRange.Long }),
-    ])
+  const topTracks = await Promise.all([
+    client.user.getTopTracks({ limit, timeRange: TimeRange.Short }),
+    client.user.getTopTracks({ limit, timeRange: TimeRange.Medium }),
+    client.user.getTopTracks({ limit, timeRange: TimeRange.Long }),
+  ])
 
-    const [days, months, years] = topTracks.map((timeframe) =>
-      timeframe.map((t) => ({
-        songName: t.name,
-        artistName: t.artists.map((m) => m.name).join(", "),
-        previewUrl: t.previewURL ?? "",
-        url: t.externalURL["spotify"],
-        thumbnailUrl: t.album?.images[1]?.url,
-      })),
-    )
+  const [days, months, years] = topTracks.map((timeframe) =>
+    timeframe.map((t) => ({
+      songName: t.name,
+      artistName: t.artists.map((m) => m.name).join(", "),
+      previewUrl: t.previewURL ?? "",
+      url: t.externalURL["spotify"],
+      thumbnailUrl: t.album?.images[1]?.url,
+    }))
+  )
 
-    return {
-      days,
-      months,
-      years,
-    }
-  })({ limit })
+  return {
+    days,
+    months,
+    years,
+  }
+}
 
 export type GetTopTracksResult = Awaited<ReturnType<typeof getTopTracks>>
-
-export const revalidate = 3600 // revalidate the data at most every hour

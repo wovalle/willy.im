@@ -7,12 +7,27 @@ import { getMainAccountTokens } from "../../lib/queries/auth"
 import { getTopTracks } from "../../lib/spotify"
 import { getLikedVideos, YoutubeVideo } from "../../lib/youtube"
 import { PageSection } from "../components/PageSection"
+import { BooksSection } from "./components/BookSection"
 import { TopTracksSection } from "./components/TopTracksSection"
+import { VideosSection } from "./components/VideosSection"
 
 export const metadata: Metadata = {
   title: "About",
   description: "About me",
 }
+
+const getAboutData = () =>
+  Promise.all([
+    getTopTracks({ limit: 50 }),
+    getReviews({ limit: 50, trimTitle: true }),
+    getCurrentlyReading({ limit: 2, trimTitle: true }),
+    getMainAccountTokens().then((tokens) =>
+      getLikedVideos({
+        userToken: required(tokens.access_token, "account.access_token is required"),
+        refreshToken: required(tokens.refresh_token, "account.refresh_token is required"),
+      }).catch(() => [] as YoutubeVideo[])
+    ),
+  ])
 
 export default async function AboutPage() {
   const bio = required(
@@ -20,20 +35,7 @@ export default async function AboutPage() {
     "Invalid bio, check global content"
   )
 
-  const [topTracks, reviews, currentlyReading, videos] = await Promise.all([
-    getTopTracks({ limit: 50 }),
-    getReviews({ limit: 50, trimTitle: true }),
-    getCurrentlyReading({ limit: 2, trimTitle: true }),
-    getMainAccountTokens()
-      .then((tokens) =>
-        getLikedVideos({
-          userToken: required(tokens.access_token, "account.access_token is required"),
-          refreshToken: required(tokens.refresh_token, "account.refresh_token is required"),
-        })
-      )
-      .catch(() => [] as YoutubeVideo[]),
-  ])
-
+  const [topTracks, reviews, currentlyReading, videos] = await getAboutData()
   const Bio = getMDXComponent(bio.body.code)
 
   return (
@@ -48,9 +50,9 @@ export default async function AboutPage() {
 
       <TopTracksSection topTracks={topTracks} />
 
-      {/* <VideosSection videos={videos} />
+      <VideosSection videos={videos} />
 
-      <BooksSection reviews={reviews} currentlyReading={currentlyReading} /> */}
+      <BooksSection reviews={reviews} currentlyReading={currentlyReading} />
 
       {/* 
         <AboutSection title="what i've been doing">

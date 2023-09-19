@@ -8,6 +8,8 @@ import { usePagination } from "../../hooks/usePagination"
 import { AboutListElement } from "./AboutListElement"
 import { PaginationRow } from "./PaginationRow"
 
+export const revalidate = 60 * 60 * 24 // 1 day
+
 export const BooksSection = ({
   reviews,
   currentlyReading,

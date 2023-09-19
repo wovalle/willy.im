@@ -12,6 +12,8 @@ import { AboutListElement } from "./AboutListElement"
 import { PaginationRow } from "./PaginationRow"
 import { PlayButtonOverlay } from "./PlayButtonOverlay"
 
+export const revalidate = 60 * 60 * 24 // 1 day
+
 const timeRangeOptions = SpotifyTimeRanges.map((t) => ({ value: t, label: t }))
 
 export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult }) => {
