@@ -4,7 +4,10 @@ import { AudioPlayerContext } from "../components/AudioPlayerContext"
 export const useAudioPlayer = () => {
   const { audioUrl, setAudioUrl } = useContext(AudioPlayerContext)
   const [progress, setProgress] = useState(0)
-  const audio = useMemo(() => new Audio(audioUrl), [audioUrl])
+  const audio = useMemo(
+    () => (typeof Audio !== "undefined" ? new Audio(audioUrl) : undefined),
+    [audioUrl]
+  )
 
   // When an audioUrl is assigned, we need to play it
   // When hook is unmounted, we need to pause the audio
@@ -45,11 +48,10 @@ export const useAudioPlayer = () => {
     }
 
     const interval = setInterval(() => {
-      setProgress(
-        (audio?.currentTime /
-          (!audio?.duration || Number.isNaN(audio?.duration) ? 1 : audio.duration)) *
-          100
-      )
+      const currentTime = audio?.currentTime ?? 0
+      const duration = audio?.duration ? audio.duration : 1
+
+      setProgress((currentTime / duration) * 100)
     }, 250)
 
     return () => {
