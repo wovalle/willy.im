@@ -5,7 +5,7 @@ import { allGlobals } from "../../../.contentlayer/generated"
 import { getCurrentlyReading, getReviews } from "../../lib/goodreads"
 import { getMainAccountTokens } from "../../lib/queries/auth"
 import { getTopTracks } from "../../lib/spotify"
-import { getLikedVideos, YoutubeVideo } from "../../lib/youtube"
+import { getLikedVideos } from "../../lib/youtube"
 import { PageSection } from "../components/PageSection"
 import { BooksSection } from "./components/BookSection"
 import { TopTracksSection } from "./components/TopTracksSection"
@@ -25,7 +25,7 @@ const getAboutData = () =>
       getLikedVideos({
         userToken: required(tokens.access_token, "account.access_token is required"),
         refreshToken: required(tokens.refresh_token, "account.refresh_token is required"),
-      }).catch(() => [] as YoutubeVideo[])
+      })
     ),
   ])
 
