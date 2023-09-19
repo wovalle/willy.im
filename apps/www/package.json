@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "clean": "rm -rf .next .contentlayer"
+    "clean": "rm -rf .next .contentlayer",
+    "migrate": "bun run ./src/db/runMigrations up"
   },
   "dependencies": {
     "@luchyio/adapter-kysely": "^1.0.0",

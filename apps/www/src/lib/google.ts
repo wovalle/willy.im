@@ -1,3 +1,5 @@
+import { updateMainAccountAccessToken } from "./queries/auth"
+
 /**
  * Takes a token, and returns a new token with updated
  * `accessToken` and `accessTokenExpires`. If an error occurs,
@@ -23,6 +25,9 @@ export async function refreshAccessToken(refreshToken: string) {
     if (!response.ok) {
       throw refreshedTokens
     }
+
+    // This should be handled outside of this lib function but here we are
+    await updateMainAccountAccessToken(refreshedTokens.access_token)
 
     return {
       accessToken: refreshedTokens.access_token,

@@ -78,7 +78,6 @@ export type ValidTimeframe = "days" | "months" | "years"
 
 export const getTopTracks = async ({ limit }) => {
   const client = await createSpotifyClient()
-
   const topTracks = await Promise.all([
     client.user.getTopTracks({ limit, timeRange: TimeRange.Short }),
     client.user.getTopTracks({ limit, timeRange: TimeRange.Medium }),
