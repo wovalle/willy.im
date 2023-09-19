@@ -50,7 +50,7 @@ const getRedirectsNext = () =>
               destination: linkOrRedirectObject,
               permanent: false,
             }
-          : linkOrRedirectObject,
+          : linkOrRedirectObject
       )
     })
     .flat()
@@ -86,5 +86,6 @@ module.exports =
 
       return config
     },
+    transpilePackages: ["@willyim/common"],
   })
 // )
