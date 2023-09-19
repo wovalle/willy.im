@@ -7,9 +7,7 @@ import { getMainAccountTokens } from "../../lib/queries/auth"
 import { getTopTracks } from "../../lib/spotify"
 import { getLikedVideos, YoutubeVideo } from "../../lib/youtube"
 import { PageSection } from "../components/PageSection"
-import { BooksSection } from "./components/BookSection"
 import { TopTracksSection } from "./components/TopTracksSection"
-import { VideosSection } from "./components/VideosSection"
 
 export const metadata: Metadata = {
   title: "About",
@@ -19,7 +17,7 @@ export const metadata: Metadata = {
 export default async function AboutPage() {
   const bio = required(
     allGlobals.find((g) => g.path == "global/bio"),
-    "Invalid bio, check global content",
+    "Invalid bio, check global content"
   )
 
   const [topTracks, reviews, currentlyReading, videos] = await Promise.all([
@@ -31,7 +29,7 @@ export default async function AboutPage() {
         getLikedVideos({
           userToken: required(tokens.access_token, "account.access_token is required"),
           refreshToken: required(tokens.refresh_token, "account.refresh_token is required"),
-        }),
+        })
       )
       .catch(() => [] as YoutubeVideo[]),
   ])
@@ -50,9 +48,9 @@ export default async function AboutPage() {
 
       <TopTracksSection topTracks={topTracks} />
 
-      <VideosSection videos={videos} />
+      {/* <VideosSection videos={videos} />
 
-      <BooksSection reviews={reviews} currentlyReading={currentlyReading} />
+      <BooksSection reviews={reviews} currentlyReading={currentlyReading} /> */}
 
       {/* 
         <AboutSection title="what i've been doing">

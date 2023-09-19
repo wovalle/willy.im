@@ -4,7 +4,6 @@ import { IconMoon, IconSun } from "@tabler/icons-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
 import { useMenuItems } from "../../hooks/useMenuItems"
-import { ClientOnly } from "../core/ClientOnly"
 import Logo from "../core/Logo"
 
 import { HamburgerMenu } from "./HamburgerMenu"
@@ -36,18 +35,16 @@ export const Header = () => {
 
       <nav className="hidden list-none justify-between gap-10 md:flex">{menuItems}</nav>
 
-      <ClientOnly>
-        <button
-          data-luchy-event="toggle-theme-pressed"
-          data-luchy-event-data={resolvedTheme}
-          onClick={() => {
-            toggleTheme()
-          }}
-          className="hidden md:block"
-        >
-          {themeIcon}
-        </button>
-      </ClientOnly>
+      <button
+        data-luchy-event="toggle-theme-pressed"
+        data-luchy-event-data={resolvedTheme}
+        onClick={() => {
+          toggleTheme()
+        }}
+        className="hidden md:block"
+      >
+        {themeIcon}
+      </button>
       <HamburgerMenu
         toggleTheme={toggleTheme}
         toggleThemeButtonLabel={
