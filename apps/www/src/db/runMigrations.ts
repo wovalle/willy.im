@@ -1,7 +1,7 @@
 import { promises as fs } from "fs"
 import { FileMigrationProvider, Kysely, Migrator } from "kysely"
 import * as path from "path"
-import { db } from "./kysely"
+import { getLuchyDb } from "./kysely"
 
 export async function runMigrations(db: Kysely<any>) {
   const migrator = new Migrator({
@@ -45,4 +45,4 @@ export async function runMigrations(db: Kysely<any>) {
   process.exit(0)
 }
 
-runMigrations(db)
+runMigrations(getLuchyDb())

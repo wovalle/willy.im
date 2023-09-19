@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react"
+import { useContext, useEffect, useMemo, useState } from "react"
+import { AudioPlayerContext } from "../components/AudioPlayerContext"
 
 export const useAudioPlayer = () => {
-  const [audioUrl, setAudioUrl] = useState<string | undefined>(undefined)
+  const { audioUrl, setAudioUrl } = useContext(AudioPlayerContext)
   const [progress, setProgress] = useState(0)
   const audio = useMemo(() => new Audio(audioUrl), [audioUrl])
 
@@ -47,7 +48,7 @@ export const useAudioPlayer = () => {
       setProgress(
         (audio?.currentTime /
           (!audio?.duration || Number.isNaN(audio?.duration) ? 1 : audio.duration)) *
-          100,
+          100
       )
     }, 250)
 

@@ -7,7 +7,6 @@ import { GetTopTracksResult, SpotifyTimeRange, SpotifyTimeRanges } from "../../.
 import { InlineSelect } from "../../components/InlineSelect"
 import { PageSection } from "../../components/PageSection"
 import { usePagination } from "../../hooks/usePagination"
-import { useAudioPlayer } from "../hooks/useAudioPlayer"
 
 import { AboutListElement } from "./AboutListElement"
 import { PaginationRow } from "./PaginationRow"
@@ -23,8 +22,6 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
     tracker.collectEvent("top_tracks_time_range", timeRange)
   }
 
-  const audioPlayer = useAudioPlayer()
-
   const pagination = usePagination({
     initialPage: 0,
     itemsPerPage: 6,
@@ -38,14 +35,7 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
       subtitle={t.artistName}
       url={t.url}
       leftPanel={(isHovered) => (
-        <PlayButtonOverlay
-          diameter={70}
-          isHovered={isHovered}
-          isPlaying={audioPlayer.isPlayingUrl(t.previewUrl ?? "")}
-          onClick={() => audioPlayer.toggle(t.previewUrl)}
-          audioProgress={audioPlayer.getProgress(t.previewUrl)}
-          url={t.url}
-        >
+        <PlayButtonOverlay diameter={70} isHovered={isHovered} url={t.previewUrl}>
           <img
             src={t.thumbnailUrl ?? "/public/android-chrome-512x512.png"}
             alt={t.songName}

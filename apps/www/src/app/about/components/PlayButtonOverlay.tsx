@@ -1,15 +1,15 @@
+"use client"
+
 import { IconPlayerPause, IconPlayerPlay } from "@tabler/icons-react"
 import clsx from "clsx"
 import { FC, ReactNode } from "react"
+import { useAudioPlayer } from "../hooks/useAudioPlayer"
 
 type PlayButtonOverlayProps = {
   diameter: number
   stroke?: number
   children: ReactNode
   isHovered: boolean
-  onClick: () => void
-  audioProgress: number
-  isPlaying?: boolean
   url: string
 }
 
@@ -18,15 +18,14 @@ export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
   children,
   diameter,
   isHovered,
-  onClick,
-  audioProgress,
-  isPlaying,
   url,
 }) => {
+  const player = useAudioPlayer()
   const radius = diameter / 2
+  const isPlaying = player.isPlayingUrl(url)
   const normalizedRadius = radius - stroke * 2
   const circumference = normalizedRadius * 2 * Math.PI
-  const strokeDashoffset = circumference - (audioProgress / 100) * circumference
+  const strokeDashoffset = circumference - (player.getProgress(url) / 100) * circumference
 
   const Icon = isPlaying ? IconPlayerPause : IconPlayerPlay
 
@@ -34,7 +33,7 @@ export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
     <div
       className={clsx("relative cursor-pointer", "aspect-square")}
       style={{ width: diameter, height: diameter }}
-      onClick={onClick}
+      onClick={() => player.toggle(url)}
       data-luchy-event={isPlaying ? "play-button-click" : "pause-button-click"}
       data-luchy-event-data={url}
     >

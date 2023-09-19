@@ -1,44 +1,7 @@
+import { DefaultKyselyDb } from "@luchyio/adapter-kysely"
 import { Pool as PoolServerless } from "@neondatabase/serverless"
-import { Generated, Kysely, PostgresDialect } from "kysely"
+import { Kysely, PostgresDialect } from "kysely"
 import { AuthDb } from "./KyselyAuthInterface"
-
-// TODO: maybe zod interfaces + { generated }?
-interface Session {
-  id: string
-  created_at: Generated<string>
-  browser?: string
-  os?: string
-  language?: string
-  country?: string
-  device?: string
-  referrer?: string
-}
-
-interface Pageview {
-  id: Generated<number>
-  session_id: string
-  created_at: Generated<string>
-  url: string
-  origin: string | null
-  raw: string | null
-}
-
-interface Event {
-  id: Generated<number>
-  session_id: string
-  created_at: Generated<string>
-  url: string
-  type: string
-  origin: string | null
-  raw: string | null
-}
-
-interface EventData {
-  id: Generated<number>
-  event_id: number
-  event_data: string
-}
-
 interface Redirects {
   id: string
   status: string
@@ -47,16 +10,9 @@ interface Redirects {
   password_hash?: string
 }
 
-type LuchyDb = {
-  sessions: Session
-  pageviews: Pageview
-  events: Event
-  event_data: EventData
-}
-
 type Db = {
   redirects: Redirects
-} & LuchyDb &
+} & DefaultKyselyDb &
   AuthDb
 
 export const getDb = <GenericDb extends {} = Db>() => {
@@ -71,4 +27,4 @@ export const getDb = <GenericDb extends {} = Db>() => {
 
 export const getAuthDb = () => getDb<AuthDb>()
 
-export const getLuchyDb = () => getDb<LuchyDb>()
+export const getLuchyDb = () => getDb<DefaultKyselyDb>()
