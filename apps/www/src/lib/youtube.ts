@@ -13,10 +13,10 @@ export const videoSchema = z.object({
   title: z.string(),
   description: z.string(),
   thumbnails: z.object({
-    default: thumbnailDetailsSchema,
-    medium: thumbnailDetailsSchema,
-    high: thumbnailDetailsSchema,
-    standard: thumbnailDetailsSchema,
+    default: thumbnailDetailsSchema.optional(),
+    medium: thumbnailDetailsSchema.optional(),
+    high: thumbnailDetailsSchema.optional(),
+    standard: thumbnailDetailsSchema.optional(),
     maxres: thumbnailDetailsSchema.optional(),
   }),
   channelTitle: z.string(),
@@ -26,8 +26,8 @@ export const videoSchema = z.object({
     kind: z.string(),
     videoId: z.string(),
   }),
-  videoOwnerChannelTitle: z.string(),
-  videoOwnerChannelId: z.string(),
+  videoOwnerChannelTitle: z.string().default("(unknown)"),
+  videoOwnerChannelId: z.string().default("(unknown)"),
 })
 
 export const itemSchema = z.object({
@@ -64,7 +64,7 @@ export const getLikedVideos = async (opts: {
   const url = new URL(YOUTUBE_API_HOST + "/playlistItems")
   url.searchParams.append("part", "snippet")
   url.searchParams.append("playlistId", "LL")
-  url.searchParams.append("maxResults", maxResults?.toString() ?? "50")
+  url.searchParams.append("maxResults", (maxResults || 50).toString())
 
   if (pageToken) {
     url.searchParams.append("pageToken", pageToken)
@@ -87,7 +87,7 @@ export const getLikedVideos = async (opts: {
   }
 
   if (!response.ok) {
-    throw data
+    throw { type: "error", data }
   }
 
   return responseSchema.parse(data).items.map((item) => item.snippet)

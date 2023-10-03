@@ -2,11 +2,13 @@ import { required } from "@willyim/common"
 import { NextAuthOptions } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import { getAuthDb } from "../../../../db/kysely"
+import { updateMainAccount } from "../../../../lib/queries/auth"
 import { KyselyAdapter } from "../kyselyAuthAdapter"
 
 const authDb = getAuthDb()
 
 export const authOptions: NextAuthOptions = {
+  // debug: true,
   adapter: KyselyAdapter(authDb),
   secret: required(process.env.NEXT_AUTH_SECRET, "NEXT_AUTH_SECRET is required"),
   providers: [
@@ -27,4 +29,16 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
+  callbacks: {
+    async signIn({ account }) {
+      if (account) {
+        await updateMainAccount({
+          access_token: account.access_token,
+          refresh_token: account.refresh_token,
+          expires_at: account.expires_at,
+        })
+      }
+      return true
+    },
+  },
 }
