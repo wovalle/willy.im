@@ -30,7 +30,7 @@ export const VideosSection = ({ videos }: { videos: YoutubeVideo[] }) => {
           className="h-[70px]"
         >
           <img
-            src={v.thumbnails.default.url}
+            src={v.thumbnails.default?.url ?? "/android-chrome-192x192.png"}
             alt={v.description}
             className="h-full w-full rounded-xl object-contain"
             loading="lazy"

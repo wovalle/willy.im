@@ -30,11 +30,11 @@ type ParseFeedOptions = {
 
 const parseFeed = async (
   shelf: string,
-  options: ParseFeedOptions = { limit: 10, trimTitle: false },
+  options: ParseFeedOptions = { limit: 10, trimTitle: false }
 ): Promise<GoodReadsReview[]> => {
   const parser = new Parser()
   const feed = await parser.parseURL(
-    `${baseRss}?key=${rssKey}&shelf=${shelf}&per_page=${options.limit}`,
+    `${baseRss}?key=${rssKey}&shelf=${shelf}&per_page=${options.limit}`
   )
 
   const items = feed.items.length ? feed.items : feed.item ? [feed.item] : []

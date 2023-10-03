@@ -18,11 +18,12 @@ export const metadata: Metadata = {
 
 const getAboutData = () =>
   Promise.all([
-    getTopTracks({ limit: 50 }),
-    getReviews({ limit: 50, trimTitle: true }),
+    getTopTracks({ limit: 30 }),
+    getReviews({ limit: 30, trimTitle: true }),
     getCurrentlyReading({ limit: 2, trimTitle: true }),
     getMainAccountTokens().then((tokens) =>
       getLikedVideos({
+        maxResults: 30,
         userToken: required(tokens.access_token, "account.access_token is required"),
         refreshToken: required(tokens.refresh_token, "account.refresh_token is required"),
       })
