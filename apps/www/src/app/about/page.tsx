@@ -66,3 +66,6 @@ export default async function AboutPage() {
     </main>
   )
 }
+
+// Revalidate every hour
+export const revalidate = 3600
