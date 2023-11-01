@@ -12,6 +12,8 @@ const resume = "/resume.pdf"
 const playlist =
   "https://open.spotify.com/playlist/2DTIGceTBxntcToaVl0lxR?si=M5aF2T7OQjCyO2lS2wxMzw"
 
+const potato = "https://open.spotify.com/playlist/7dBxHUquhxttBd2T9IFFwk?si=64dac0806fa34038"
+
 const links = {
   redirects: {
     twitter,
@@ -21,6 +23,7 @@ const links = {
     github,
     resume,
     playlist,
+    potato,
     "posts/how-to-check-if-youre-being-rickrolled-in-telegram":
       "https://www.youtube.com/watch?v=UNuogmk7oEA",
     r: {
