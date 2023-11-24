@@ -4,11 +4,11 @@ import { getMDXComponent } from "next-contentlayer/hooks"
 import { allGlobals } from "../../../.contentlayer/generated"
 import { getCurrentlyReading, getReviews } from "../../lib/goodreads"
 import { getMainAccountTokens } from "../../lib/queries/auth"
-import { getTopTracks } from "../../lib/spotify"
+import { getTopArtists, getTopTracks } from "../../lib/spotify"
 import { getLikedVideos } from "../../lib/youtube"
 import { PageSection } from "../components/PageSection"
 import { BooksSection } from "./components/BookSection"
-import { TopTracksSection } from "./components/TopTracksSection"
+import { TopTracksAndArtistsSection } from "./components/TopTracksSection"
 import { VideosSection } from "./components/VideosSection"
 
 export const metadata: Metadata = {
@@ -19,6 +19,7 @@ export const metadata: Metadata = {
 const getAboutData = () =>
   Promise.all([
     getTopTracks({ limit: 30 }),
+    getTopArtists({ limit: 30 }),
     getReviews({ limit: 30, trimTitle: true }),
     getCurrentlyReading({ limit: 2, trimTitle: true }),
     getMainAccountTokens().then((tokens) =>
@@ -36,7 +37,7 @@ export default async function AboutPage() {
     "Invalid bio, check global content"
   )
 
-  const [topTracks, reviews, currentlyReading, videos] = await getAboutData()
+  const [topTracks, topArtists, reviews, currentlyReading, videos] = await getAboutData()
   const Bio = getMDXComponent(bio.body.code)
 
   return (
@@ -49,7 +50,7 @@ export default async function AboutPage() {
         <Bio />
       </PageSection>
 
-      <TopTracksSection topTracks={topTracks} />
+      <TopTracksAndArtistsSection topTracks={topTracks} topArtists={topArtists} />
 
       <VideosSection videos={videos} />
 
