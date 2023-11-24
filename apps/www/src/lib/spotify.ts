@@ -101,4 +101,29 @@ export const getTopTracks = async ({ limit }) => {
   }
 }
 
+export const getTopArtists = async ({ limit }) => {
+  const client = await createSpotifyClient()
+  const topTracks = await Promise.all([
+    client.user.getTopArtists({ limit, timeRange: TimeRange.Short }),
+    client.user.getTopArtists({ limit, timeRange: TimeRange.Medium }),
+    client.user.getTopArtists({ limit, timeRange: TimeRange.Long }),
+  ])
+
+  const [days, months, years] = topTracks.map((timeframe) =>
+    timeframe.map((t) => ({
+      name: t.name,
+      genres: t.genres?.join(", ") ?? "",
+      thumbnailUrl: t.images?.[0].url ?? "",
+      url: t.externalURL["spotify"],
+    }))
+  )
+
+  return {
+    days,
+    months,
+    years,
+  }
+}
+
 export type GetTopTracksResult = Awaited<ReturnType<typeof getTopTracks>>
+export type GetTopArtistsResult = Awaited<ReturnType<typeof getTopArtists>>

@@ -3,11 +3,18 @@
 import { getTracker } from "@luchyio/next"
 import { IconBrandSpotify } from "@tabler/icons-react"
 import { useState } from "react"
-import { GetTopTracksResult, SpotifyTimeRange, SpotifyTimeRanges } from "../../../lib/spotify"
+import {
+  GetTopArtistsResult,
+  GetTopTracksResult,
+  SpotifyTimeRange,
+  SpotifyTimeRanges,
+} from "../../../lib/spotify"
 import { InlineSelect } from "../../components/InlineSelect"
 import { PageSection } from "../../components/PageSection"
 import { usePagination } from "../../hooks/usePagination"
 
+import Link from "next/link"
+import { AboutItemOverlay } from "./AboutItemOverlay"
 import { AboutListElement } from "./AboutListElement"
 import { PaginationRow } from "./PaginationRow"
 import { PlayButtonOverlay } from "./PlayButtonOverlay"
@@ -16,7 +23,18 @@ export const revalidate = 60 * 60 * 24 // 1 day
 
 const timeRangeOptions = SpotifyTimeRanges.map((t) => ({ value: t, label: t }))
 
-export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult }) => {
+const topSections = [
+  { value: "topTracks", label: "songs" },
+  { value: "topArtists", label: "artists" },
+] as const
+
+export const TopTracksAndArtistsSection = ({
+  topTracks,
+  topArtists,
+}: {
+  topTracks: GetTopTracksResult
+  topArtists: GetTopArtistsResult
+}) => {
   const [timeRange, setTimeRange] = useState(timeRangeOptions[0].value)
   const tracker = getTracker()
   const setTimeRangeAndTrack = (timeRange: SpotifyTimeRange) => {
@@ -24,13 +42,22 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
     tracker.collectEvent("top_tracks_time_range", timeRange)
   }
 
-  const pagination = usePagination({
+  const [musicSection, setMusicSection] =
+    useState<(typeof topSections)[number]["value"]>("topTracks")
+
+  const tracksPagination = usePagination({
     initialPage: 0,
     itemsPerPage: 6,
     items: topTracks[timeRange],
   })
 
-  const topTracksList = pagination.items.map((t) => (
+  const artistsPagination = usePagination({
+    initialPage: 0,
+    itemsPerPage: 6,
+    items: topArtists[timeRange],
+  })
+
+  const topTracksList = tracksPagination.items.map((t) => (
     <AboutListElement
       key={t.url}
       title={t.songName}
@@ -49,6 +76,27 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
     />
   ))
 
+  const topArtistsList = artistsPagination.items.map((t) => (
+    <AboutListElement
+      key={t.url}
+      title={t.name}
+      subtitle={t.genres}
+      url={t.url}
+      leftPanel={(isHovered) => (
+        <AboutItemOverlay diameter={70} isHovered={isHovered}>
+          <Link href={t.url} target="_blank">
+            <img
+              src={t.thumbnailUrl ?? "/public/android-chrome-512x512.png"}
+              alt={t.name}
+              className="h-full w-full rounded-xl"
+              loading="lazy"
+            />
+          </Link>
+        </AboutItemOverlay>
+      )}
+    />
+  ))
+
   return (
     <PageSection
       id="songs"
@@ -56,7 +104,12 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
       bleed
       subtitle={
         <>
-          songs in the last few{" "}
+          <InlineSelect
+            options={topSections.map(({ value, label }) => ({ value, label }))}
+            onChange={(v) => setMusicSection(v)}
+            selected={musicSection}
+          />{" "}
+          in the last few{" "}
           <InlineSelect
             options={timeRangeOptions}
             onChange={(v) => setTimeRangeAndTrack(v)}
@@ -66,8 +119,17 @@ export const TopTracksSection = ({ topTracks }: { topTracks: GetTopTracksResult 
       }
       icon={<IconBrandSpotify size="3em" color="#1ED760" />}
     >
-      <ul className="-mx-2 grid grid-cols-1 md:grid-cols-2 md:gap-2">{topTracksList}</ul>
-      <PaginationRow pagination={pagination} />
+      {musicSection === "topTracks" ? (
+        <>
+          <ul className="-mx-2 grid grid-cols-1 md:grid-cols-2 md:gap-2">{topTracksList}</ul>
+          <PaginationRow pagination={tracksPagination} />
+        </>
+      ) : (
+        <>
+          <ul className="-mx-2 grid grid-cols-1 md:grid-cols-2 md:gap-2">{topArtistsList}</ul>
+          <PaginationRow pagination={artistsPagination} />
+        </>
+      )}
     </PageSection>
   )
 }
