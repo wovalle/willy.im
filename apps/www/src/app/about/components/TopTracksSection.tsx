@@ -14,6 +14,7 @@ import { PageSection } from "../../components/PageSection"
 import { usePagination } from "../../hooks/usePagination"
 
 import Link from "next/link"
+import { useAudioPlayer } from "../hooks/useAudioPlayer"
 import { AboutItemOverlay } from "./AboutItemOverlay"
 import { AboutListElement } from "./AboutListElement"
 import { PaginationRow } from "./PaginationRow"
@@ -35,6 +36,8 @@ export const TopTracksAndArtistsSection = ({
   topTracks: GetTopTracksResult
   topArtists: GetTopArtistsResult
 }) => {
+  const player = useAudioPlayer()
+
   const [timeRange, setTimeRange] = useState(timeRangeOptions[0].value)
   const tracker = getTracker()
   const setTimeRangeAndTrack = (timeRange: SpotifyTimeRange) => {
@@ -64,7 +67,7 @@ export const TopTracksAndArtistsSection = ({
       subtitle={t.artistName}
       url={t.url}
       leftPanel={(isHovered) => (
-        <PlayButtonOverlay diameter={70} isHovered={isHovered} url={t.previewUrl}>
+        <PlayButtonOverlay diameter={70} isHovered={isHovered} url={t.previewUrl} player={player}>
           <img
             src={t.thumbnailUrl ?? "/public/android-chrome-512x512.png"}
             alt={t.songName}

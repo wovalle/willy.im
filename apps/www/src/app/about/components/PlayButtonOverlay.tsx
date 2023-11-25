@@ -13,6 +13,7 @@ type PlayButtonOverlayProps = Omit<
   stroke?: number
   url: string
   isHovered: boolean
+  player: ReturnType<typeof useAudioPlayer>
 }
 
 export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
@@ -21,8 +22,8 @@ export const PlayButtonOverlay: FC<PlayButtonOverlayProps> = ({
   diameter,
   isHovered,
   url,
+  player,
 }) => {
-  const player = useAudioPlayer()
   const radius = diameter / 2
   const isPlaying = player.isPlayingUrl(url)
   const normalizedRadius = radius - stroke * 2
