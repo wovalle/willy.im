@@ -32,7 +32,7 @@
     "react-dom": "^18.2.0",
     "rehype-autolink-headings": "^7.1.0",
     "rehype-slug": "^6.0.0",
-    "remark-gfm": "^4.0.0",
+    "remark-gfm": "^3.0.0",
     "rss": "^1.2.2",
     "rss-parser": "^3.13.0",
     "spotify-api.js": "^9.2.5",
