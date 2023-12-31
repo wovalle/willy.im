@@ -10,13 +10,21 @@ import { Providers } from "./providers"
 
 const font = Lato({ weight: ["400", "700"], display: "swap", subsets: ["latin"] })
 
+export const viewport = {
+  width: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+  ],
+}
+
 export const metadata: Metadata = {
   title: {
     default: "Willy Ovalle",
     template: "%s | Willy Ovalle",
   },
   description: "Willy Ovalle's home on the internet",
-  viewport: "width=device-width, initial-scale=1",
+  // viewport: "width=device-width, initial-scale=1",
   metadataBase: new URL("https://willy.im"),
   openGraph: {
     title: "Willy Ovalle",
@@ -48,10 +56,10 @@ export const metadata: Metadata = {
     creatorId: "148689340",
   },
   keywords: siteConfig.keywords.join(","),
-  themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#000000" },
-    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
-  ],
+  // themeColor: [
+  //   { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  //   { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+  // ],
   icons: {
     icon: [
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
