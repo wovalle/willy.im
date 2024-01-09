@@ -1,9 +1,15 @@
-import type { MetaFunction } from "@remix-run/node"
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node"
 import { Link } from "@remix-run/react"
 import { useState } from "react"
 
 export const meta: MetaFunction = () => {
   return [{ title: "Foo" }, { name: "description", content: "Don't mind me, just testing" }]
+}
+
+export const loader = ({ request }: LoaderFunctionArgs) => {
+  console.log("request", Object.fromEntries(request.headers))
+  console.log("Host Header", request.headers.get("host"))
+  return {}
 }
 
 export default function Index() {
