@@ -12,8 +12,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.485.0",
-    "@aws-sdk/s3-request-presigner": "^3.485.0",
     "@luchyio/adapter-kysely": "^1.0.0",
     "@luchyio/next": "^1.8.3",
     "@neondatabase/serverless": "^0.6.1",
