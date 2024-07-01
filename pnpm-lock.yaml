@@ -39,11 +39,11 @@ importers:
   apps/www:
     dependencies:
       '@luchyio/adapter-kysely':
-        specifier: ^1.0.0
-        version: 1.0.0(kysely@0.27.0)
+        specifier: ^1.1.0
+        version: 1.1.0(kysely@0.27.0)
       '@luchyio/next':
-        specifier: ^1.8.3
-        version: 1.8.3(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^1.9.0
+        version: 1.9.0(@babel/core@7.22.20)(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
       '@neondatabase/serverless':
         specifier: ^0.6.1
         version: 0.6.1
@@ -76,7 +76,7 @@ importers:
         version: 0.27.0
       next:
         specifier: 14.0.4
-        version: 14.0.4(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
+        version: 14.0.4(@babel/core@7.22.20)(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
       next-auth:
         specifier: ^4.24.5
         version: 4.24.5(next@14.0.4)(react-dom@18.2.0)(react@18.2.0)
@@ -1325,42 +1325,42 @@ packages:
       tslib: 2.6.2
     dev: true
 
-  /@luchyio/adapter-kysely@1.0.0(kysely@0.27.0):
-    resolution: {integrity: sha512-fCM0/0rBHWhFqGDV8YHKZv9NKqJSMA9u0XroVCU1zV1WtAGCBEiaj9ElEVOe1rVchNuqs6tA6YHgzxIV8zvMeA==, tarball: https://npm.pkg.github.com/download/@luchyio/adapter-kysely/1.0.0/9985d2c7a37ad61212939ac97e4e564feeb2d3b0}
+  /@luchyio/adapter-kysely@1.1.0(kysely@0.27.0):
+    resolution: {integrity: sha512-f0j8TxUtfpSN0BvTKqb7ISdTeJQB1EYelfsme27uruVgBtAlPawEfViDGe0Sr8nuVrYR0K51AcTY1viv4vObEg==, tarball: https://npm.pkg.github.com/download/@luchyio/adapter-kysely/1.1.0/91e081af80275ce6fe9123cdbb33d8c646b2b922}
     peerDependencies:
       kysely: '*'
     dependencies:
-      '@luchyio/common': 1.0.0
-      '@luchyio/core': 1.8.0
+      '@luchyio/common': 1.1.0
+      '@luchyio/core': 1.9.0
       kysely: 0.27.0
     dev: false
 
-  /@luchyio/common@1.0.0:
-    resolution: {integrity: sha512-OFUYT6xM9psbYRcDVoQ5D2MRFlDRQliPl7jjiTE+8qge6nHFKNahFj7FLx9ta8bOHP/w8ovvNBICsEwg6NtfdQ==, tarball: https://npm.pkg.github.com/download/@luchyio/common/1.0.0/207aea8791dc904e398d96b5410be77d7400f996}
+  /@luchyio/common@1.1.0:
+    resolution: {integrity: sha512-JEM9ceHlh4oAcUVYlxZrWOc02BnSBgyFnsoWADqXuVoLQB1hLi2Gu3NA19OuHB3FJ4NtwmHKaC7V6IMo7Or4Ww==, tarball: https://npm.pkg.github.com/download/@luchyio/common/1.1.0/d6cc1c211470a9b543db0528baaf087528dfd35c}
     dependencies:
       valibot: 0.2.1
     dev: false
 
-  /@luchyio/core@1.8.0:
-    resolution: {integrity: sha512-GgFHQGxzuFfUf+O8MpIGQhdo2hTn1ZOe8TYv77dgHb0zjCCwsy6Gsvem4tRbSKn2PmQ0fs3+A7nC+OMtwPi9xw==, tarball: https://npm.pkg.github.com/download/@luchyio/core/1.8.0/01a61b34b2de6944b7fe9cbe23f4e2078c44de2a}
+  /@luchyio/core@1.9.0:
+    resolution: {integrity: sha512-5iiDQ44ii4Gp3ZzH+4oxKSmy6bmwMoaOX7p3u3N5OV/v4Iwyf8q6RCv/+lC0WIOdiUJarMdc77aLiqhv3S158Q==, tarball: https://npm.pkg.github.com/download/@luchyio/core/1.9.0/b16eb6c62dcd279eb316c7fc29b61e7a7df72f21}
     dependencies:
-      '@luchyio/common': 1.0.0
+      '@luchyio/common': 1.1.0
       intl-parse-accept-language: 1.0.0
       ua-parser-js: 1.0.37
       uuid: 9.0.1
       zod: 3.22.4
     dev: false
 
-  /@luchyio/next@1.8.3(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-y8YI9LBqEzsrBveewIZW/06UbzJfvGfUEAkBIG5I0vb3UGATwGb4sgJkwNby/li0pxk6C4W5utZoH2OqfaKN/w==, tarball: https://npm.pkg.github.com/download/@luchyio/next/1.8.3/cf2c4d8f81658a05b9e0426f777a9a90acf633f5}
+  /@luchyio/next@1.9.0(@babel/core@7.22.20)(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-LPlC5EpLVGZxLSDvC+h95iTUISDgh9uCyqeJQWryIdM9DGCY8r5TfyfMF70lPv6DO1GCc5RV8s3oANb//13Wsg==, tarball: https://npm.pkg.github.com/download/@luchyio/next/1.9.0/a56f1dad482b155a9be94dec00ce8ffe2ac3764c}
     peerDependencies:
       react: ^18.2.0
       react-dom: ^18.2.0
     dependencies:
-      '@luchyio/common': 1.0.0
-      '@luchyio/core': 1.8.0
-      '@luchyio/react': 1.4.1
-      next: 13.4.4(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
+      '@luchyio/common': 1.1.0
+      '@luchyio/core': 1.9.0
+      '@luchyio/react': 1.5.0
+      next: 13.4.4(@babel/core@7.22.20)(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
       zod: 3.22.4
@@ -1372,14 +1372,14 @@ packages:
       - sass
     dev: false
 
-  /@luchyio/react@1.4.1:
-    resolution: {integrity: sha512-yIqLc8PMVlSAMxVnTuk7Umsn3EwMw6xTi+ef3tVDYPrboJ8PSI974jwPZL5/N4bDXRa0IRD6DX7syEnzSVDjOg==, tarball: https://npm.pkg.github.com/download/@luchyio/react/1.4.1/1551dbaf7324e31a9bf235f450ed79bb5bbdfef8}
+  /@luchyio/react@1.5.0:
+    resolution: {integrity: sha512-TW/+onHh7xUKoKmBmP3m4/EX1QabN87lx0HSwoHKfsORNacR9YpPAqkSBcsfbxGTlx9PsUZ2WNMp1kiIafX13Q==, tarball: https://npm.pkg.github.com/download/@luchyio/react/1.5.0/91203d2eab20bc7e36801168cc84814957a55ffc}
     dependencies:
-      '@luchyio/tracker': 1.7.1
+      '@luchyio/tracker': 1.8.0
     dev: false
 
-  /@luchyio/tracker@1.7.1:
-    resolution: {integrity: sha512-aBv0nDUTrK9hYzWwYnXTIKkfR7RNdsAwGufS+lTao+fx+nMwRwZWcnktq1Ra6yUKgp7lQ/TUE7thBWlCST4GYg==, tarball: https://npm.pkg.github.com/download/@luchyio/tracker/1.7.1/4a8172bd972e7d2fa27fd21f6b189f6c5dffa450}
+  /@luchyio/tracker@1.8.0:
+    resolution: {integrity: sha512-sGjYy7sdFuCHiKze5aFNkOZJu/3S4slwjeNJhtPkRDKv3htUHj6cd1aRgiFA55a5jmPZ4DNcomMUERUiEiYntA==, tarball: https://npm.pkg.github.com/download/@luchyio/tracker/1.8.0/e1a47ce2bfcadee4efc7ce523f0eadd1c2af262f}
     dev: false
 
   /@mdx-js/esbuild@2.3.0(esbuild@0.18.20):
@@ -5565,7 +5565,7 @@ packages:
       '@panva/hkdf': 1.1.1
       cookie: 0.5.0
       jose: 4.15.4
-      next: 14.0.4(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
+      next: 14.0.4(@babel/core@7.22.20)(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
       oauth: 0.9.15
       openid-client: 5.6.2
       preact: 10.19.3
@@ -5606,7 +5606,7 @@ packages:
       '@contentlayer/core': 0.3.4(esbuild@0.18.20)
       '@contentlayer/utils': 0.3.4
       contentlayer: 0.3.4(esbuild@0.18.20)
-      next: 14.0.4(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
+      next: 14.0.4(@babel/core@7.22.20)(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
     transitivePeerDependencies:
@@ -5623,7 +5623,7 @@ packages:
       react: '*'
       react-dom: '*'
     dependencies:
-      next: 14.0.4(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
+      next: 14.0.4(@babel/core@7.22.20)(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
     dev: false
@@ -5670,7 +5670,7 @@ packages:
       - '@babel/core'
       - babel-plugin-macros
 
-  /next@13.4.4(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0):
+  /next@13.4.4(@babel/core@7.22.20)(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-C5S0ysM0Ily9McL4Jb48nOQHT1BukOWI59uC3X/xCMlYIh9rJZCv7nzG92J6e1cOBqQbKovlpgvHWFmz4eKKEA==}
     engines: {node: '>=16.8.0'}
     hasBin: true
@@ -5696,7 +5696,7 @@ packages:
       postcss: 8.4.14
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      styled-jsx: 5.1.1(react@18.2.0)
+      styled-jsx: 5.1.1(@babel/core@7.22.20)(react@18.2.0)
       zod: 3.21.4
     optionalDependencies:
       '@next/swc-darwin-arm64': 13.4.4
@@ -5713,7 +5713,7 @@ packages:
       - babel-plugin-macros
     dev: false
 
-  /next@14.0.4(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0):
+  /next@14.0.4(@babel/core@7.22.20)(@opentelemetry/api@1.7.0)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-qbwypnM7327SadwFtxXnQdGiKpkuhaRLE2uq62/nRul9cj9KhQ5LhHmlziTNqUidZotw/Q1I9OjirBROdUJNgA==}
     engines: {node: '>=18.17.0'}
     hasBin: true
@@ -5737,7 +5737,7 @@ packages:
       postcss: 8.4.31
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      styled-jsx: 5.1.1(react@18.2.0)
+      styled-jsx: 5.1.1(@babel/core@7.22.20)(react@18.2.0)
       watchpack: 2.4.0
     optionalDependencies:
       '@next/swc-darwin-arm64': 14.0.4
@@ -6612,22 +6612,6 @@ packages:
         optional: true
     dependencies:
       '@babel/core': 7.22.20
-      client-only: 0.0.1
-      react: 18.2.0
-
-  /styled-jsx@5.1.1(react@18.2.0):
-    resolution: {integrity: sha512-pW7uC1l4mBZ8ugbiZrcIsiIvVx1UmTfw7UkC3Um2tmfUq9Bhk8IiyEIPl6F8agHgjzku6j0xQEZbfA5uSgSaCw==}
-    engines: {node: '>= 12.0.0'}
-    peerDependencies:
-      '@babel/core': '*'
-      babel-plugin-macros: '*'
-      react: '>= 16.8.0 || 17.x.x || ^18.0.0-0'
-    peerDependenciesMeta:
-      '@babel/core':
-        optional: true
-      babel-plugin-macros:
-        optional: true
-    dependencies:
       client-only: 0.0.1
       react: 18.2.0
 
