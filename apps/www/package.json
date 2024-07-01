@@ -12,8 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@luchyio/adapter-kysely": "^1.0.0",
-    "@luchyio/next": "^1.8.3",
+    "@luchyio/adapter-kysely": "^1.1.0",
+    "@luchyio/next": "^1.9.0",
     "@neondatabase/serverless": "^0.6.1",
     "@octokit/rest": "^20.0.2",
     "@radix-ui/react-dropdown-menu": "^2.0.6",
