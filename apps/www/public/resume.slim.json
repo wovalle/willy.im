@@ -6,12 +6,12 @@
     "email": "hey@willy.im",
     "url": "willy.im",
     "website": "willy.im",
-    "summary": "Willy has been around software development for the last 7 years. Team focused, proactive, I'm always looking for new things to learn and to share among my teammates. When I'm not coding for work, I'm scratching my head trying to make new shining leds to turn on with my Arduino based circuits or making jokes about why my Raspberry Pi doesn't want to turn on again. ",
+    "summary": "Willy has been around software development for the last 12 years. Team focused, proactive, I'm always looking for new things to learn and to share among my teammates. When I'm not coding for work, I'm scratching my head trying to make new shining leds to turn on with my Arduino based circuits or making jokes about why my Raspberry Pi doesn't want to turn on again. ",
     "location": {
-      "address": "Berlin, Germany",
-      "postalCode": "10115",
-      "city": "Berlin",
-      "countryCode": "DE"
+      "address": "Santo Domingo, Dominican Republic",
+      "postalCode": "11102",
+      "city": "Santo Domingo",
+      "countryCode": "DR"
     },
     "profiles": [
       {
@@ -25,7 +25,7 @@
         "url": "https://twitter.com/wovalle"
       }
     ],
-    "_phone": "+46 73 146 24 53"
+    "_phone": "+1 829 908 5404"
   },
   "education": [
     {
@@ -47,15 +47,29 @@
   ],
   "work": [
     {
-      "name": "Smartly",
+      "name": "Safary",
       "endDate": "",
-      "highlights": ["Technologies: Typescript, React, Docker, GitHub, NodeJS"],
+      "position": "Founding Engineer",
+      "startDate": "2023-10-02",
+      "url": "https://safary.club",
+      "company": "Safary",
+      "location": "Remote",
+      "highlights": []
+    },
+    {
+      "name": "Smartly",
       "position": "Senior Software Engineer",
       "startDate": "2021-07-19",
-      "summary": "",
+      "endDate": "2023-09-08",
       "url": "https://smartly.io",
       "company": "Smartly",
-      "location": "Berlin, Germany"
+      "location": "Berlin, Germany",
+      "highlights": [
+        "Led the expansion of the TikTok solution, growing it from inception to managing millions in client marketing budgets.",
+        "Released multiple product features and provided technical leadership on two large multi-team projects (Shopping Ads and Smartly Automation).",
+        "Worked with TikTok engineers to optimize advertising spend, successfully managing high-budget campaigns.",
+        "Technologies: Typescript, React, Docker, GitHub, NodeJS"
+      ]
     },
     {
       "name": "Klarna",
@@ -124,11 +138,7 @@
     {
       "name": "SISALRIL: Superintendencia de Salud y Riesgos Laborales",
       "endDate": "2016-01-31",
-      "highlights": [
-        "Implemented a project to help poor Dominican mothers to get government help if, for any reason, couldn’t complete the process for receiving maternity or breastfeeding benefits.",
-        "Created a new subsidies evaluation platform that increased productivity among the evaluators by 27% within 3 months after the implementation.",
-        "Technologies: SQL Server, ASP.Net MVC, C#, Bootstrap, PHP, jQuery, Microsoft Dynamics CRM, Microsoft Dynamics GP, Reporting Services, Integration Services."
-      ],
+      "highlights": [],
       "position": "Deputy Production Manager",
       "startDate": "2014-10-31",
       "summary": "- Ensure compliance with safety measures, information systems, and access gained with regard to  systems under my responsibility. \n- Receive and evaluate system improvements requirements. \n- Quality assurance, monitoring, and maintenance of systems development and publishing to the production environment. \n- Implemented the \"Subsidies Extraordinary\" (Subsidios Extraordinarios) project that helps poor Dominican mothers to get government help if, for any reason, they couldn't complete the process for receiving maternity or breastfeeding benefits.\n- Created a new subsidies evaluation platform that increased productivity among the \nevaluators by 27% in a three months timeframe.\n- Technologies used on daily basis: SQL Server, ASP.Net MVC, C#, Bootstrap, jQuery, Microsoft Dynamics CRM, Microsoft Dynamics GP, Reporting Services, Integration Services.",
@@ -139,12 +149,8 @@
     {
       "name": "TeKnowLogic Dominicana",
       "endDate": "2014-10-31",
-      "highlights": [
-        "Preparation, development and implementation of business processes (Dynamics CRM, Dynamics GP).",
-        "Task coordination within Dynamics dev team: Manage SQL Server databases.",
-        "ASP.NET web programming, MVC4, Visual Basic. NET, C#, Reporting Services, customization of Dynamics GP, implementation and development of solutions with Dynamics CRM, extensive use of SQL Server."
-      ],
-      "position": "Dynamics Senior Developer",
+      "highlights": [],
+      "position": "Software Developer / Dynamics Senior Developer",
       "startDate": "2012-01-13",
       "summary": "Preparation, development and implementation of business processes (Dynamics CRM, Dynamics GP). Task coordination within Dynamics dev team: Manage SQL Server databases.",
       "url": "https://www.teknowlogic.com",
