@@ -14,6 +14,7 @@
     @apply underline;
 
     /* default text */
+    @apply text-gray-700
     @apply decoration-neuda-50;
     @apply hover:decoration-neuda-500;
 
