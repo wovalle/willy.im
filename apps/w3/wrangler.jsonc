@@ -4,7 +4,7 @@
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "w3",
+  "name": "willy-im",
   "compatibility_date": "2025-04-04",
   "main": "./workers/app.ts",
   "observability": {
