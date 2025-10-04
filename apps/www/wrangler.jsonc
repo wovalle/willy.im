@@ -13,7 +13,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "BETTER_AUTH_URL": "https://willy.im",
-    "STATIC_ACCOUNT_ID": "PKZBEH0Xw21GJIy9Z0Gd6cOJacICNPiK",
+    "STATIC_ACCOUNT_ID": "Hxi8enx9WfrmuFWw2u0lpVjOhG3ofHhZ",
   },
   "d1_databases": [
     {
