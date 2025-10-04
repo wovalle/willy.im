@@ -1,6 +1,7 @@
 import { data } from "react-router"
 import { z } from "zod"
 import { kv } from "../../db/schema"
+import { internalUserId } from "../../static"
 import type { Route } from "./+types/update"
 
 const updateSchema = z.object({
@@ -38,15 +39,6 @@ export const action = async ({ context, request }: Route.ActionArgs) => {
       youtube: { success: false, count: 0, error: null as string | null },
       spotify: { success: false, count: 0, error: null as string | null },
       goodreads: { success: false, count: 0, error: null as string | null },
-    }
-
-    // Find the account with the specific ID
-    const account = await context.db.query.account.findFirst({
-      where: (accounts, { eq }) => eq(accounts.id, "4p9QPUqNXgbo4mO2Tx1GfsD0PK6LhdFy"),
-    })
-
-    if (!account || !account.accessToken) {
-      return data({ error: "Account not found or no access token available" }, { status: 404 })
     }
 
     // Update GitHub repositories
@@ -88,15 +80,27 @@ export const action = async ({ context, request }: Route.ActionArgs) => {
     // Update YouTube liked videos (last 30)
     if (requestedServices.includes("youtube")) {
       try {
+        let { accessToken } = await context.services.auth.api.getAccessToken({
+          body: {
+            providerId: "google",
+            userId: internalUserId,
+          },
+        })
+
+        if (!accessToken) {
+          results.youtube.error = "No valid access token found"
+          context.logger.warn("YouTube update skipped: No valid access token found")
+          return
+        }
+
         const videos = await context.services.youtube.getLikedVideos({
-          userToken: account.accessToken,
+          userToken: accessToken,
           maxResults: 30,
         })
 
         const youtubeData = {
           videos,
           updatedAt: new Date().toISOString(),
-          accountId: account.id,
           totalVideos: videos.length,
         }
 

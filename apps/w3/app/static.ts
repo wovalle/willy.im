@@ -93,3 +93,5 @@ export const siteConfig = {
   twitterDesc:
     "Willy Ovalle is a software engineer and bad jokes enthusiast currently based in Santo Domingo, Dominican Republic.",
 }
+
+export const internalUserId = "ovcnUkMQBdyzOzT8o2n1HgmwSUCmCVR5"
