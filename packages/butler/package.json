@@ -12,10 +12,8 @@
   "license": "MPL-2.0",
   "dependencies": {
     "@directus/sdk": "^10.3.5",
-    "@willyim/common": "workspace:*",
     "chrono-node": "^2.6.4",
     "dayjs": "^1.11.9",
-    "next-better-api": "^0.1.5",
     "wretch": "^2.6.0",
     "zod": "^3.21.4"
   },
