@@ -1,4 +1,4 @@
-import { signIn } from "~/lib/auth-client"
+import { authClient } from "~/lib/auth-client"
 import type { Route } from "./+types/login"
 
 export const loader = async ({ context }: Route.LoaderArgs) => {
@@ -9,17 +9,19 @@ export const loader = async ({ context }: Route.LoaderArgs) => {
   }
 }
 
-export default function SignIn({ loaderData }: Route.ComponentProps) {
+export default function SignIn() {
   const handleGoogleSignIn = async () => {
     try {
-      await signIn()
+      await authClient.signIn.social({
+        provider: "google",
+      })
     } catch (error) {
       console.error("Sign in failed:", error)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-centerw-full">
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">

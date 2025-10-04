@@ -50,7 +50,6 @@ export const responseSchema = z.object({
 export const youtubeLikedVideosSchema = z.object({
   videos: z.array(videoSchema),
   updatedAt: z.string(),
-  accountId: z.string(),
   totalVideos: z.number(),
 })
 

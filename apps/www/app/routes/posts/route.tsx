@@ -15,8 +15,8 @@ export default function Component({ loaderData }: Route.ComponentProps) {
   const { posts } = loaderData
 
   return (
-    <div className="py-10">
-      <ul className="space-y-8">
+    <div className="px-6 py-10">
+      <ul className="space-y-6">
         {posts.map((post) => (
           <li key={post._meta.path}>
             <Post {...post} />
