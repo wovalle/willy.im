@@ -11,6 +11,9 @@
     "enabled": true,
   },
   "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "BETTER_AUTH_URL": "https://willy.im",
+  },
   "d1_databases": [
     {
       "binding": "db",
