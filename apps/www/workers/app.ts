@@ -20,6 +20,7 @@ declare module "react-router" {
     }
     db: DrizzleClient
     logger: ILogger
+    getAppEnv: typeof getAppEnv
     services: {
       auth: AuthService
       github: GithubService
@@ -55,6 +56,7 @@ export default {
       cloudflare: { env, ctx },
       db,
       logger: createConsoleLogger(),
+      getAppEnv,
       services: {
         auth,
         github,

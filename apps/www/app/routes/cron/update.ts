@@ -1,7 +1,6 @@
 import { data } from "react-router"
 import { z } from "zod"
 import { kv } from "../../db/schema"
-import { internalUserId } from "../../static"
 import type { Route } from "./+types/update"
 
 const updateSchema = z.object({
@@ -83,7 +82,7 @@ export const action = async ({ context, request }: Route.ActionArgs) => {
         let { accessToken } = await context.services.auth.api.getAccessToken({
           body: {
             providerId: "google",
-            userId: internalUserId,
+            userId: context.getAppEnv("STATIC_ACCOUNT_ID"),
           },
         })
 

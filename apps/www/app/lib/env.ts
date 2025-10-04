@@ -13,6 +13,7 @@ const appEnvSchema = z.object({
   SPOTIFY_REFRESH_TOKEN: z.string(),
 
   INTERNAL_TOKEN: z.string(),
+  STATIC_ACCOUNT_ID: z.string(),
 })
 
 export type AppEnv = z.infer<typeof appEnvSchema>
