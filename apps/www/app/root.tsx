@@ -42,7 +42,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         <Links />
       </head>
-      <body className="flex h-screen w-full flex-col bg-white text-gray-700 dark:dark-bg dark:text-gray-200">
+      <body className="flex h-screen w-full flex-col bg-stone-100 text-gray-700 dark:dark-bg dark:text-gray-200">
         {children}
         <ScrollRestoration />
         <script

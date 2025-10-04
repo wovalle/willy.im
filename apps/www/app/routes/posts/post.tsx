@@ -10,7 +10,7 @@ export const Post = (post: PostType) => {
 
       <p className="text-gray-600">{post.summary}</p>
 
-      <time className="block text-sm text-cyan-700" dateTime={post.publishedAt}>
+      <time className="block text-sm text-stone-600" dateTime={post.publishedAt}>
         {post.publishedAt.replace(/-/g, "/")}
       </time>
     </article>

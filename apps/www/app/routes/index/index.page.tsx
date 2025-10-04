@@ -65,7 +65,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           <p className="flex">
             <Link
               to="/about"
-              className="flex items-center justify-center gap-1 rounded-xl border-0 bg-prim-700 px-4 py-3 font-bold text-white decoration-transparent hover:bg-prim-900 hover:text-gray-50 hover:decoration-transparent dark:bg-prim-900 dark:hover:bg-prim-700"
+              className="flex items-center justify-center gap-1 rounded-xl border-0 bg-stone-600 px-4 py-3 font-bold text-white decoration-transparent hover:bg-stone-700 hover:text-gray-50 hover:decoration-transparent dark:bg-stone-700 dark:hover:bg-stone-600"
               data-luchy-event="cta-click"
             >
               about me <IconArrowUpRight size="1em" />
@@ -87,7 +87,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
         title="what i've been writing"
         id="posts"
         bleed={true}
-        className="bg-neuli-500/60 dark:bg-neuda-700"
+        className="bg-stone-200/80 dark:bg-stone-700"
       >
         <div className="grid grid-cols-1 gap-2">{PostCards}</div>
       </PageSection>

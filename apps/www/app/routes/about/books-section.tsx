@@ -51,7 +51,7 @@ export const BooksSection = ({
       bodyClassName="flex flex-col gap-4"
     >
       <fieldset
-        className="border-neuda relative rounded-xl border-2 border-dashed bg-slate-50 p-4 dark:bg-slate-900/70"
+        className="border-stone-300 relative rounded-xl border-2 border-dashed bg-stone-50 p-4 dark:bg-stone-800/70"
         style={
           currentlyReading.length === 1
             ? {
@@ -61,7 +61,7 @@ export const BooksSection = ({
         }
       >
         <legend className="flex p-2 py-1">
-          <strong className="bg-neuli text-neuda dark:bg-neuda dark:text-neuli rounded text-center text-xs font-bold">
+          <strong className="bg-stone-200 text-stone-800 dark:bg-stone-700 dark:text-stone-100 rounded text-center text-xs font-bold">
             currently reading
           </strong>
         </legend>
