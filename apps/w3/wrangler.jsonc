@@ -10,6 +10,15 @@
   "observability": {
     "enabled": true,
   },
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "db",
+      "database_name": "willy-im",
+      "database_id": "9924ec5c-c17e-4866-845c-b0e6e3aa6bca",
+      "migrations_dir": "drizzle",
+    },
+  ],
   /**
    * Smart Placement
    * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

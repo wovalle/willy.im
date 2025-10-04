@@ -1,14 +1,9 @@
-import {
-  isRouteErrorResponse,
-  Links,
-  Meta,
-  Outlet,
-  Scripts,
-  ScrollRestoration,
-} from "react-router";
+import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router"
 
-import type { Route } from "./+types/root";
-import "./app.css";
+import type { Route } from "./+types/root"
+import "./app.css"
+import { Footer } from "./components/layout/footer"
+import { Header } from "./components/layout/header"
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -19,9 +14,23 @@ export const links: Route.LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&display=swap",
   },
-];
+  {
+    rel: "icon",
+    href: "/favicon-32x32.png",
+    type: "image/png",
+  },
+]
+
+export const loader = async ({ context }: Route.LoaderArgs) => {
+  // Return a promise for now playing data to enable streaming with Suspense
+  const nowPlaying = context.services.spotify.getNowPlaying().catch(() => null)
+
+  return {
+    nowPlaying,
+  }
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -30,35 +39,50 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
+
         <Links />
       </head>
-      <body>
+      <body className="flex h-screen w-full flex-col bg-white text-gray-700 dark:dark-bg dark:text-gray-200">
         {children}
         <ScrollRestoration />
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: needed to pass data to the client
+          dangerouslySetInnerHTML={{
+            __html: `window.ENV = {}`,
+          }}
+        />
         <Scripts />
       </body>
     </html>
-  );
+  )
 }
 
-export default function App() {
-  return <Outlet />;
+export default function App({ loaderData }: Route.ComponentProps) {
+  const { nowPlaying } = loaderData
+
+  return (
+    <>
+      <Header />
+      <main className="flex w-full max-w-4xl flex-grow self-center">
+        <Outlet />
+      </main>
+      <Footer nowPlaying={nowPlaying} />
+    </>
+  )
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = "Oops!";
-  let details = "An unexpected error occurred.";
-  let stack: string | undefined;
+  let message = "Oops!"
+  let details = "An unexpected error occurred."
+  let stack: string | undefined
 
   if (isRouteErrorResponse(error)) {
-    message = error.status === 404 ? "404" : "Error";
+    message = error.status === 404 ? "404" : "Error"
     details =
-      error.status === 404
-        ? "The requested page could not be found."
-        : error.statusText || details;
+      error.status === 404 ? "The requested page could not be found." : error.statusText || details
   } else if (import.meta.env.DEV && error && error instanceof Error) {
-    details = error.message;
-    stack = error.stack;
+    details = error.message
+    stack = error.stack
   }
 
   return (
@@ -71,5 +95,5 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
         </pre>
       )}
     </main>
-  );
+  )
 }

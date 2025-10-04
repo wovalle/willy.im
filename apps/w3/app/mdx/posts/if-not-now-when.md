@@ -1,0 +1,27 @@
+---
+title: if not now, when?
+publishedAt: 2022-07-10
+updatedAt: 2022-07-10
+tags: ["personal"]
+summary: This is literally my first rodeo. Welcome to my space.
+---
+
+I'm a sharer. I'm always sending tweets, reddit posts or whatever rant I have that day to my friends. I mean, what's the joy of finding something cool on the internet and not having anyone to enjoy it with?
+
+I have wanted to start a blog to share my thoughts with a broader audience for a long time now, but… maintaining a healthy blog is just too much work. I mean, I enjoy sharing interesting bits I find but when I find the least friction I can become a full time procrastinator (I guess that’s my super power?)
+
+> Writing content is easy. Writing **good** content? That’s another story.
+>
+> — Somebody, probably
+
+That’s the reason this is not a “blog” per se. My intention with this space is... mumbling about anything, really. Somewhere safe where I can share my thoughts with my friends and family without having to copy/paste messages all over telegram/whatsapp/twitter. Somewhere where I can write without thinking too much or feeling the pressure of having to write a “formal” blog post (what is such thing anyways?)
+
+> Twitter is too ephemeral. blogs are too permanent. I want something in-between.
+>
+> — [@jlongster](https://twitter.com/jlongster)
+
+[Brian Lovin](https://twitter.com/brian_lovin) wrote a great piece about [why you’re not updating your personal site](https://brianlovin.com/writing/reasons-you-arent-updating-your-personal-site) (his blog is amazing, you should read it). In summary, he’s using an array of tools to reduce all of the points of friction he encounters when writing content. In my case having to think and write in a foreign language is one of those eventually discourages me to write content. English is considered the universal language when working in tech, I wonder how many non-english speaking folks want to start blogging but are discouraged because how much harder is to write english blog posts for them.
+
+Anyways, if I want this to become a new habit I want to I have to make it as easy as possible for me. Less is better. Prefer progress over perfection. I’ll prioritize sharing “thoughts” frequently over sharing long, formal, well research “articles” every once in a while. If you’re along for the ride, you have been warned.
+
+Wish me luck.

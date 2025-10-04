@@ -1,7 +1,196 @@
-@import "tailwindcss" source(".");
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans:
-    "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Lato", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
     "Segoe UI Symbol", "Noto Color Emoji";
+
+  /* Primary Colors */
+  --color-prim-50: #83d0ff;
+  --color-prim-100: #79c6f9;
+  --color-prim-200: #6fbcef;
+  --color-prim-300: #65b2e5;
+  --color-prim-400: #5ba8db;
+  --color-prim-500: #519ed1;
+  --color-prim-600: #4794c7;
+  --color-prim-700: #3d8abd;
+  --color-prim-800: #3380b3;
+  --color-prim-900: #2976a9;
+
+  /* Alternative Colors */
+  --color-alt: #009c85;
+  --color-alt-50: #55ffe6;
+  --color-alt-100: #40ffe3;
+  --color-alt-200: #17ffdd;
+  --color-alt-300: #00eecb;
+  --color-alt-400: #00c5a8;
+  --color-alt-500: #009c85;
+  --color-alt-600: #006455;
+  --color-alt-700: #002c25;
+  --color-alt-800: #000000;
+  --color-alt-900: #000000;
+
+  /* Neuda Colors */
+  --color-neuda: #375b85;
+  --color-neuda-50: #9db8d7;
+  --color-neuda-100: #8fadd1;
+  --color-neuda-200: #7298c5;
+  --color-neuda-300: #5583b9;
+  --color-neuda-400: #436fa2;
+  --color-neuda-500: #375b85;
+  --color-neuda-600: #27405d;
+  --color-neuda-700: #162536;
+  --color-neuda-800: #060a0e;
+  --color-neuda-900: #000000;
+
+  /* Neuli Colors */
+  --color-neuli: #e4f5fc;
+  --color-neuli-50: #ffffff;
+  --color-neuli-100: #ffffff;
+  --color-neuli-200: #ffffff;
+  --color-neuli-300: #ffffff;
+  --color-neuli-400: #ffffff;
+  --color-neuli-500: #e4f5fc;
+  --color-neuli-600: #b2e2f6;
+  --color-neuli-700: #7fd0f1;
+  --color-neuli-800: #4dbdeb;
+  --color-neuli-900: #1aaae6;
+
+  /* Grayish Colors */
+  --color-grayish: #cde2eb;
+  --color-grayish-50: #ffffff;
+  --color-grayish-100: #ffffff;
+  --color-grayish-200: #ffffff;
+  --color-grayish-300: #ffffff;
+  --color-grayish-400: #eaf3f7;
+  --color-grayish-500: #cde2eb;
+  --color-grayish-600: #a5cbdb;
+  --color-grayish-700: #7db4cb;
+  --color-grayish-800: #559cbb;
+  --color-grayish-900: #3e7e9a;
+
+  /* Background Color */
+  --color-background: #e4f5fc;
+
+  /* Animations */
+  --animate-ping-2s: ping 2s linear infinite;
+}
+
+@layer base {
+  :root {
+    --default-text-color: var(--color-gray-700);
+
+    @media (prefers-color-scheme: dark) {
+      --default-text-color: var(--color-gray-300);
+    }
+  }
+
+  /* Default transition for all elements */
+  * {
+    transition-property:
+      color, background-color, border-color, text-decoration-color, fill, stroke, opacity,
+      box-shadow, transform, filter, backdrop-filter;
+    transition-timing-function: ease-in-out;
+    transition-duration: 0.5s;
+  }
+
+  .dark-bg {
+    background-color: var(--color-neuda-800);
+  }
+
+  a {
+    transition-property:
+      color, background-color, border-color, text-decoration-color, fill, stroke, opacity,
+      box-shadow, transform, filter, backdrop-filter;
+    transition-timing-function: var(--ease-in-out);
+    transition-duration: var(--duration-normal);
+    text-decoration-line: underline;
+    text-decoration-color: var(--color-neuda-50);
+    color: var(--color-gray-700);
+
+    &:hover {
+      text-decoration-color: var(--color-neuda-500);
+      color: color-mix(in oklab, var(--color-gray-700) 60%, black);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      text-decoration-color: var(--color-neuda-300);
+
+      &:hover {
+        text-decoration-color: var(--color-neuda-50);
+        color: color-mix(in oklab, var(--color-gray-300) 60%, black);
+      }
+    }
+  }
+
+  a.active {
+    text-decoration-color: var(--color-prim-500);
+
+    &:hover {
+      color: color-mix(in oklab, var(--color-gray-700) 60%, black);
+    }
+  }
+
+  nav a:not(.active) {
+    color: var(--color-gray-400);
+
+    &:hover {
+      color: color-mix(in oklab, var(--color-gray-400) 80%, black);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      &:hover {
+        color: color-mix(in oklab, var(--color-gray-100) 60%, black);
+      }
+    }
+  }
+}
+
+base-trans {
+  transition-property:
+    color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow,
+    transform, filter, backdrop-filter;
+  transition-timing-function: var(--ease-in-out);
+  transition-duration: var(--duration-normal);
+}
+
+@layer components {
+  .wave {
+    display: inline-block;
+    animation: wave-animation 7s var(--ease-in-out) 3s infinite;
+    transform-origin: 70% 70%;
+  }
+}
+
+@keyframes wave-animation {
+  0%,
+  20% {
+    transform: rotate(0deg);
+  }
+  2% {
+    transform: rotate(14deg);
+  }
+  4% {
+    transform: rotate(-8deg);
+  }
+  6% {
+    transform: rotate(14deg);
+  }
+  8% {
+    transform: rotate(-4deg);
+  }
+  10% {
+    transform: rotate(10deg);
+  }
+  12% {
+    transform: rotate(0deg);
+  }
+}
+
+.text-subtitle {
+  @apply text-gray-500;
+  @apply dark:text-gray-400;
 }
