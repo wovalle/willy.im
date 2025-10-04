@@ -24,7 +24,7 @@ export const AboutListElement: FC<AboutListElementProps> = ({
   return (
     <li
       className={cn("flex items-center gap-4 rounded-xl p-2 text-sm dark:border-gray-800", {
-        "hover:bg-slate-200 dark:hover:bg-slate-800": withHover,
+        "hover:bg-stone-200 dark:hover:bg-stone-700": withHover,
       })}
       {...hoverProps}
     >

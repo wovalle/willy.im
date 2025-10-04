@@ -32,9 +32,9 @@ export const Header = () => {
 
   const themeIcon =
     theme === "dark" ? (
-      <IconSun size="1.5em" className="hover:text-amber-200" />
+      <IconSun size="1.5em" className="hover:text-stone-600" />
     ) : (
-      <IconMoon size="1.5em" className="hover:text-neuda" />
+      <IconMoon size="1.5em" className="hover:text-stone-600" />
     )
 
   return (

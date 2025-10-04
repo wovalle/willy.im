@@ -108,19 +108,19 @@
     transition-timing-function: var(--ease-in-out);
     transition-duration: var(--duration-normal);
     text-decoration-line: underline;
-    text-decoration-color: var(--color-neuda-50);
+    text-decoration-color: var(--color-stone-300);
     color: var(--color-gray-700);
 
     &:hover {
-      text-decoration-color: var(--color-neuda-500);
+      text-decoration-color: var(--color-stone-600);
       color: color-mix(in oklab, var(--color-gray-700) 60%, black);
     }
 
     @media (prefers-color-scheme: dark) {
-      text-decoration-color: var(--color-neuda-300);
+      text-decoration-color: var(--color-stone-400);
 
       &:hover {
-        text-decoration-color: var(--color-neuda-50);
+        text-decoration-color: var(--color-stone-300);
         color: color-mix(in oklab, var(--color-gray-300) 60%, black);
       }
     }
