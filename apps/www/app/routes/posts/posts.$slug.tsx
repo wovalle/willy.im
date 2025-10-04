@@ -1,5 +1,5 @@
 import { IconRss } from "@tabler/icons-react"
-import { allPosts } from "content-collections/generated"
+import { allPosts } from "content-collections"
 import { Link } from "react-router"
 
 import { Time } from "~/components/time"

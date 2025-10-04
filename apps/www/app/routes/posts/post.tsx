@@ -1,4 +1,4 @@
-import type { Post as PostType } from "content-collections/generated"
+import type { Post as PostType } from "content-collections"
 import { Link } from "react-router"
 
 export const Post = (post: PostType) => {

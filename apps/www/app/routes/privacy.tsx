@@ -1,4 +1,4 @@
-import { allSingletons } from "content-collections/generated"
+import { allSingletons } from "content-collections"
 import invariant from "tiny-invariant"
 import type { Route } from "./+types/privacy"
 

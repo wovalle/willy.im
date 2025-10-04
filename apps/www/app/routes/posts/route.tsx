@@ -1,4 +1,4 @@
-import { allPosts } from "content-collections/generated"
+import { allPosts } from "content-collections"
 
 import type { Route } from "./+types/route"
 import { Post } from "./post"

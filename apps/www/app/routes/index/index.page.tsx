@@ -1,5 +1,5 @@
 import { IconArrowUpRight, IconBrandTwitter } from "@tabler/icons-react"
-import { allPosts } from "content-collections/generated"
+import { allPosts } from "content-collections"
 import { Link } from "react-router"
 import type { Route } from "./+types/index.page"
 
