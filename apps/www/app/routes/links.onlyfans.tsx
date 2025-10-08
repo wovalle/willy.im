@@ -51,7 +51,7 @@ export default function OnlyFans() {
 
           {/* Additional Info */}
           <div className="mt-8 text-center">
-            <div className="inline-flex items-center gap-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl px-6 py-4 shadow-lg">
+            <div className="inline-flex items-center gap-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl px-6 py-4 shadow-lg animate-float">
               <span className="rounded-full bg-gradient-to-r from-pink-500 to-purple-500 px-4 py-2 text-sm font-bold text-white shadow-lg">
                 10% OFF
               </span>
@@ -63,6 +63,19 @@ export default function OnlyFans() {
               Limited time offer - Join now!
             </p>
           </div>
+          <style>{`
+            @keyframes float {
+              0%, 100% {
+                transform: translateY(0px);
+              }
+              50% {
+                transform: translateY(-10px);
+              }
+            }
+            .animate-float {
+              animation: float 3s ease-in-out infinite;
+            }
+          `}</style>
         </div>
       </div>
     </div>
