@@ -2,8 +2,6 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration }
 
 import type { Route } from "./+types/root"
 import "./app.css"
-import { Footer } from "./components/layout/footer"
-import { Header } from "./components/layout/header"
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -57,18 +55,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function App({ loaderData }: Route.ComponentProps) {
-  const { nowPlaying } = loaderData
-
-  return (
-    <>
-      <Header />
-      <main className="flex w-full max-w-4xl flex-grow self-center">
-        <Outlet />
-      </main>
-      <Footer nowPlaying={nowPlaying} />
-    </>
-  )
+export default function App() {
+  return <Outlet />
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
