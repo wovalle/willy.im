@@ -49,6 +49,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
             __html: `window.ENV = {}`,
           }}
         />
+        {!import.meta.env.DEV && (
+          <script
+            src="https://cdn.luchy.app/luchy.min.js"
+            data-api-key="d615154c8d7c4c2eb14ebe7706b4d6be"
+            data-endpoint="https://dash.luchy.app/api/ingest"
+          />
+        )}
         <Scripts />
       </body>
     </html>

@@ -12,5 +12,6 @@ export default [
     route("privacy", "routes/privacy.tsx"),
     route("links/onlyfans", "routes/links.onlyfans.tsx"),
   ]),
+  route("33", "routes/33/route.tsx"),
   route("links", "routes/links.tsx"),
 ] satisfies RouteConfig

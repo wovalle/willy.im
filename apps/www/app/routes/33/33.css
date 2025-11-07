@@ -1,0 +1,363 @@
+.invitation-33 {
+  --accent-color: #0135d0;
+  flex: 1 0 auto;
+  align-self: stretch;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2.5rem;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2000 1500'%3E%3Cdefs%3E%3Crect stroke='%23ffffff' stroke-width='0.7' width='1' height='1' id='s'/%3E%3Cpattern id='a' width='3' height='3' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cuse fill='%23fcfcfc' href='%23s' y='2'/%3E%3Cuse fill='%23fcfcfc' href='%23s' x='1' y='2'/%3E%3Cuse fill='%23fafafa' href='%23s' x='2' y='2'/%3E%3Cuse fill='%23fafafa' href='%23s'/%3E%3Cuse fill='%23f7f7f7' href='%23s' x='2'/%3E%3Cuse fill='%23f7f7f7' href='%23s' x='1' y='1'/%3E%3C/pattern%3E%3Cpattern id='b' width='7' height='11' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%23f5f5f5'%3E%3Cuse href='%23s'/%3E%3Cuse href='%23s' y='5' /%3E%3Cuse href='%23s' x='1' y='10'/%3E%3Cuse href='%23s' x='2' y='1'/%3E%3Cuse href='%23s' x='2' y='4'/%3E%3Cuse href='%23s' x='3' y='8'/%3E%3Cuse href='%23s' x='4' y='3'/%3E%3Cuse href='%23s' x='4' y='7'/%3E%3Cuse href='%23s' x='5' y='2'/%3E%3Cuse href='%23s' x='5' y='6'/%3E%3Cuse href='%23s' x='6' y='9'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='h' width='5' height='13' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%23f5f5f5'%3E%3Cuse href='%23s' y='5'/%3E%3Cuse href='%23s' y='8'/%3E%3Cuse href='%23s' x='1' y='1'/%3E%3Cuse href='%23s' x='1' y='9'/%3E%3Cuse href='%23s' x='1' y='12'/%3E%3Cuse href='%23s' x='2'/%3E%3Cuse href='%23s' x='2' y='4'/%3E%3Cuse href='%23s' x='3' y='2'/%3E%3Cuse href='%23s' x='3' y='6'/%3E%3Cuse href='%23s' x='3' y='11'/%3E%3Cuse href='%23s' x='4' y='3'/%3E%3Cuse href='%23s' x='4' y='7'/%3E%3Cuse href='%23s' x='4' y='10'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='c' width='17' height='13' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%23f2f2f2'%3E%3Cuse href='%23s' y='11'/%3E%3Cuse href='%23s' x='2' y='9'/%3E%3Cuse href='%23s' x='5' y='12'/%3E%3Cuse href='%23s' x='9' y='4'/%3E%3Cuse href='%23s' x='12' y='1'/%3E%3Cuse href='%23s' x='16' y='6'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='d' width='19' height='17' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%23ffffff'%3E%3Cuse href='%23s' y='9'/%3E%3Cuse href='%23s' x='16' y='5'/%3E%3Cuse href='%23s' x='14' y='2'/%3E%3Cuse href='%23s' x='11' y='11'/%3E%3Cuse href='%23s' x='6' y='14'/%3E%3C/g%3E%3Cg fill='%23efefef'%3E%3Cuse href='%23s' x='3' y='13'/%3E%3Cuse href='%23s' x='9' y='7'/%3E%3Cuse href='%23s' x='13' y='10'/%3E%3Cuse href='%23s' x='15' y='4'/%3E%3Cuse href='%23s' x='18' y='1'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='e' width='47' height='53' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%230135D0'%3E%3Cuse href='%23s' x='2' y='5'/%3E%3Cuse href='%23s' x='16' y='38'/%3E%3Cuse href='%23s' x='46' y='42'/%3E%3Cuse href='%23s' x='29' y='20'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='f' width='59' height='71' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%230135D0'%3E%3Cuse href='%23s' x='33' y='13'/%3E%3Cuse href='%23s' x='27' y='54'/%3E%3Cuse href='%23s' x='55' y='55'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='g' width='139' height='97' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%230135D0'%3E%3Cuse href='%23s' x='11' y='8'/%3E%3Cuse href='%23s' x='51' y='13'/%3E%3Cuse href='%23s' x='17' y='73'/%3E%3Cuse href='%23s' x='99' y='57'/%3E%3C/g%3E%3C/pattern%3E%3C/defs%3E%3Crect fill='url(%23a)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23b)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23h)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23c)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23d)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23e)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23f)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23g)' width='100%25' height='100%25'/%3E%3C/svg%3E");
+  background-attachment: fixed;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  position: relative;
+  overflow: hidden;
+}
+
+.invitation-33::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 200%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2000 1500'%3E%3Cdefs%3E%3Crect stroke='%23ffffff' stroke-width='0.7' width='1' height='1' id='s'/%3E%3Cpattern id='a' width='3' height='3' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cuse fill='%23fcfcfc' href='%23s' y='2'/%3E%3Cuse fill='%23fcfcfc' href='%23s' x='1' y='2'/%3E%3Cuse fill='%23fafafa' href='%23s' x='2' y='2'/%3E%3Cuse fill='%23fafafa' href='%23s'/%3E%3Cuse fill='%23f7f7f7' href='%23s' x='2'/%3E%3Cuse fill='%23f7f7f7' href='%23s' x='1' y='1'/%3E%3C/pattern%3E%3Cpattern id='b' width='7' height='11' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%23f5f5f5'%3E%3Cuse href='%23s'/%3E%3Cuse href='%23s' y='5' /%3E%3Cuse href='%23s' x='1' y='10'/%3E%3Cuse href='%23s' x='2' y='1'/%3E%3Cuse href='%23s' x='2' y='4'/%3E%3Cuse href='%23s' x='3' y='8'/%3E%3Cuse href='%23s' x='4' y='3'/%3E%3Cuse href='%23s' x='4' y='7'/%3E%3Cuse href='%23s' x='5' y='2'/%3E%3Cuse href='%23s' x='5' y='6'/%3E%3Cuse href='%23s' x='6' y='9'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='h' width='5' height='13' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%23f5f5f5'%3E%3Cuse href='%23s' y='5'/%3E%3Cuse href='%23s' y='8'/%3E%3Cuse href='%23s' x='1' y='1'/%3E%3Cuse href='%23s' x='1' y='9'/%3E%3Cuse href='%23s' x='1' y='12'/%3E%3Cuse href='%23s' x='2'/%3E%3Cuse href='%23s' x='2' y='4'/%3E%3Cuse href='%23s' x='3' y='2'/%3E%3Cuse href='%23s' x='3' y='6'/%3E%3Cuse href='%23s' x='3' y='11'/%3E%3Cuse href='%23s' x='4' y='3'/%3E%3Cuse href='%23s' x='4' y='7'/%3E%3Cuse href='%23s' x='4' y='10'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='c' width='17' height='13' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%23f2f2f2'%3E%3Cuse href='%23s' y='11'/%3E%3Cuse href='%23s' x='2' y='9'/%3E%3Cuse href='%23s' x='5' y='12'/%3E%3Cuse href='%23s' x='9' y='4'/%3E%3Cuse href='%23s' x='12' y='1'/%3E%3Cuse href='%23s' x='16' y='6'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='d' width='19' height='17' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%23ffffff'%3E%3Cuse href='%23s' y='9'/%3E%3Cuse href='%23s' x='16' y='5'/%3E%3Cuse href='%23s' x='14' y='2'/%3E%3Cuse href='%23s' x='11' y='11'/%3E%3Cuse href='%23s' x='6' y='14'/%3E%3C/g%3E%3Cg fill='%23efefef'%3E%3Cuse href='%23s' x='3' y='13'/%3E%3Cuse href='%23s' x='9' y='7'/%3E%3Cuse href='%23s' x='13' y='10'/%3E%3Cuse href='%23s' x='15' y='4'/%3E%3Cuse href='%23s' x='18' y='1'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='e' width='47' height='53' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%230135D0'%3E%3Cuse href='%23s' x='2' y='5'/%3E%3Cuse href='%23s' x='16' y='38'/%3E%3Cuse href='%23s' x='46' y='42'/%3E%3Cuse href='%23s' x='29' y='20'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='f' width='59' height='71' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%230135D0'%3E%3Cuse href='%23s' x='33' y='13'/%3E%3Cuse href='%23s' x='27' y='54'/%3E%3Cuse href='%23s' x='55' y='55'/%3E%3C/g%3E%3C/pattern%3E%3Cpattern id='g' width='139' height='97' patternUnits='userSpaceOnUse' patternTransform='scale(20.8) translate(-951.92 -713.94)'%3E%3Cg fill='%230135D0'%3E%3Cuse href='%23s' x='11' y='8'/%3E%3Cuse href='%23s' x='51' y='13'/%3E%3Cuse href='%23s' x='17' y='73'/%3E%3Cuse href='%23s' x='99' y='57'/%3E%3C/g%3E%3C/pattern%3E%3C/defs%3E%3Crect fill='url(%23a)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23b)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23h)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23c)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23d)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23e)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23f)' width='100%25' height='100%25'/%3E%3Crect fill='url(%23g)' width='100%25' height='100%25'/%3E%3C/svg%3E");
+  background-attachment: fixed;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  animation: background-dots-pulse 4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.invitation-33__image-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.invitation-33__image-wrapper img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 28px;
+}
+
+.invitation-33__faq {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.75rem 1.5rem 2rem;
+  background-color: rgba(1, 59, 210, 1);
+  color: #ffffff;
+  backdrop-filter: blur(4px);
+  position: relative;
+  z-index: 1;
+}
+
+.invitation-33__faq-title {
+  padding-top: 3rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+.invitation-33__faq-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.invitation-33__faq-item {
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1rem 1rem 0.75rem;
+  transition: background 0.3s ease;
+}
+
+.invitation-33__faq-item:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.invitation-33__faq-question {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.invitation-33__faq-item[data-open="true"] {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.invitation-33__faq-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 0.3s ease,
+    background 0.3s ease;
+}
+
+.invitation-33__faq-icon[data-open="true"] {
+  transform: rotate(180deg);
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.invitation-33__faq-icon svg {
+  width: 18px;
+  height: 18px;
+  color: #ffffff;
+}
+
+.invitation-33__faq-answer {
+  margin: 0.75rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.88);
+  animation: faq-expand 0.35s ease;
+}
+
+.invitation-33__faq-answer a {
+  color: #ffffff;
+  text-decoration: underline;
+  font-weight: 700;
+}
+
+@keyframes faq-expand {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 640px) {
+  .invitation-33 {
+    gap: 3rem;
+    padding: 3rem 2.5rem 4rem;
+  }
+
+  .invitation-33__image-wrapper,
+  .invitation-33__faq {
+    width: min(100%, 32rem);
+  }
+
+  .invitation-33__faq {
+    padding: 2.25rem 2rem 2.5rem;
+  }
+
+  .invitation-33__faq-title {
+    font-size: 1.75rem;
+  }
+}
+
+@media (min-width: 960px) {
+  .invitation-33 {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 3.5rem;
+    padding: 3.5rem 2.5rem 4.5rem;
+  }
+
+  .invitation-33__image-wrapper,
+  .invitation-33__faq {
+    width: min(100%, 36rem);
+  }
+}
+
+.invitation-33__falling-heads {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.invitation-33__falling-heads span {
+  position: absolute;
+  top: -22vh;
+  display: block;
+  width: var(--size, 60px);
+  height: var(--size, 60px);
+  background-image: url("/33/head.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  opacity: 0;
+  animation: invitation-head-fall var(--duration, 14s) linear infinite;
+  animation-delay: var(--delay, 0s);
+  transform: translate3d(0, 0, 0) scale(var(--scale, 1));
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.2));
+}
+
+.invitation-33__falling-heads span:nth-child(1) {
+  left: 4%;
+  --duration: 18s;
+  --delay: 0s;
+  --scale: 0.6;
+  --drift: -40px;
+  --rotation: 180deg;
+}
+
+.invitation-33__falling-heads span:nth-child(2) {
+  left: 16%;
+  --duration: 16s;
+  --delay: -3s;
+  --scale: 1.3;
+  --drift: 28px;
+  --rotation: -540deg;
+}
+
+.invitation-33__falling-heads span:nth-child(3) {
+  left: 27%;
+  --duration: 20s;
+  --delay: -8s;
+  --scale: 1.8;
+  --drift: -18px;
+  --rotation: 720deg;
+}
+
+.invitation-33__falling-heads span:nth-child(4) {
+  left: 38%;
+  --duration: 15s;
+  --delay: -5s;
+  --scale: 0.5;
+  --drift: 36px;
+  --rotation: -270deg;
+}
+
+.invitation-33__falling-heads span:nth-child(5) {
+  left: 50%;
+  --duration: 21s;
+  --delay: -11s;
+  --scale: 2;
+  --drift: -26px;
+  --rotation: 450deg;
+}
+
+.invitation-33__falling-heads span:nth-child(6) {
+  left: 60%;
+  --duration: 19s;
+  --delay: -6s;
+  --scale: 0.8;
+  --drift: 18px;
+  --rotation: -360deg;
+}
+
+.invitation-33__falling-heads span:nth-child(7) {
+  left: 68%;
+  --duration: 17s;
+  --delay: -2s;
+  --scale: 1.5;
+  --drift: -14px;
+  --rotation: 630deg;
+}
+
+.invitation-33__falling-heads span:nth-child(8) {
+  left: 76%;
+  --duration: 22s;
+  --delay: -9s;
+  --scale: 0.7;
+  --drift: 20px;
+  --rotation: -180deg;
+}
+
+.invitation-33__falling-heads span:nth-child(9) {
+  left: 84%;
+  --duration: 24s;
+  --delay: -4s;
+  --scale: 1.9;
+  --drift: -35px;
+  --rotation: 900deg;
+}
+
+.invitation-33__falling-heads span:nth-child(10) {
+  left: 12%;
+  --duration: 26s;
+  --delay: -15s;
+  --scale: 0.55;
+  --drift: 30px;
+  --rotation: -450deg;
+}
+
+.invitation-33__falling-heads span:nth-child(11) {
+  left: 34%;
+  --duration: 19s;
+  --delay: -13s;
+  --scale: 1.6;
+  --drift: -22px;
+  --rotation: 540deg;
+}
+
+.invitation-33__falling-heads span:nth-child(12) {
+  left: 58%;
+  --duration: 23s;
+  --delay: -7s;
+  --scale: 1.1;
+  --drift: 26px;
+  --rotation: -720deg;
+}
+
+@keyframes invitation-head-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -130vh, 0) scale(var(--scale, 1)) rotate(0deg);
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift, 0), 120vh, 0) scale(var(--scale, 1))
+      rotate(var(--rotation, 360deg));
+  }
+}
+
+@keyframes background-dots-pulse {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}

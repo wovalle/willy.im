@@ -1,0 +1,6680 @@
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: **/*.svg, **/*.json, **/*.d.ts
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.github/
+  workflows/
+    pr.yml
+    release.yml
+packages/
+  adapter-kysely/
+    src/
+      migrations/
+        postgres/
+          20230722_Initial_migration.ts
+        sqlite/
+          20230722_Initial_migration.ts
+        index.ts
+      test/
+        index.ts
+        memory-db.ts
+        runMigrations.ts
+        utils.ts
+      adapter.spec.ts
+      adapter.ts
+      index.testing.ts
+      index.ts
+      parseCustomQuery.ts
+      types.ts
+    README.md
+    vitest.config.ts
+  common/
+    src/
+      lib/
+        ParsingError.ts
+        timeUnit.spec.ts
+        timeUnit.ts
+      query/
+        where/
+          comparators/
+            binary.spec.ts
+            binary.ts
+            binaryParamsParser.ts
+            common.ts
+            index.ts
+            nodeValues.ts
+            unary.spec.ts
+            unary.ts
+            unaryParamsParser.ts
+            utils.ts
+          index.ts
+          where.spec.ts
+          where.ts
+        aggregators.spec.ts
+        aggregators.ts
+        experiment.ts
+        from.spec.ts
+        from.ts
+        index.ts
+        pagination.ts
+        query.spec.ts
+        query.ts
+        README.md
+        roadmap.spec.ts
+        select.spec.ts
+        select.ts
+        utils.ts
+      utils/
+        assertUnreachable.ts
+        index.ts
+        withOverrides.ts
+      validators/
+        entity.ts
+        index.ts
+        message.ts
+        utilityTypes.ts
+      constants.ts
+      entityTypes.ts
+      index.ts
+    README.md
+    vitest.config.ts
+  core/
+    src/
+      helpers/
+        countriesHelpers.ts
+        languageHelpers.ts
+      lib/
+        fromQueryParams.ts
+        getBaseMessageFromHeaders.ts
+        isMethodAllowedInPath.ts
+        parseLanguage.ts
+        parseUserAgentProps.ts
+        session.spec.ts
+        session.ts
+        utils.spec.ts
+        utils.ts
+      core.spec.ts
+      core.ts
+      forwardLuchyMessage.ts
+      index.ts
+      parseLuchyMessage.spec.ts
+      parseLuchyMessage.ts
+      processLuchyMessage.ts
+      types.ts
+    README.md
+    vitest.config.ts
+  middleware/
+    src/
+      index.test.ts
+      index.ts
+    README.md
+    vitest.config.ts
+  react/
+    src/
+      index.ts
+      react.tsx
+      reactUtils.ts
+    README.md
+    vitest.config.ts
+  tracker/
+    src/
+      browser/
+        constants.ts
+        index.ts
+        utils.ts
+      index.ts
+      tracker.ts
+      types.ts
+    README.md
+    webpack.config.js
+.gitignore
+.npmrc
+.prettierrc.js
+pnpm-workspace.yaml
+README.md
+vitest.workspace.ts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".prettierrc.js">
+module.exports = {
+  semi: false,
+}
+</file>
+
+<file path="packages/adapter-kysely/src/migrations/postgres/20230722_Initial_migration.ts">
+import { Kysely, sql } from "kysely"
+
+// TODO: expose a migration api
+
+export async function up(db: Kysely<any>): Promise<void> {
+  await db.schema
+    .createTable("sessions")
+    .addColumn("id", "uuid", (col) => col.primaryKey())
+    .addColumn("created_at", "timestamp", (col) =>
+      col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull()
+    )
+    .addColumn("browser", "varchar(20)")
+    .addColumn("os", "varchar(20)")
+    .addColumn("language", "varchar(35)")
+    .addColumn("country", "varchar(10)")
+    .addColumn("device", "varchar(20)")
+    .execute()
+
+  await db.schema
+    .createTable("pageviews")
+    .addColumn("id", "bigserial", (col) => col.primaryKey())
+    .addColumn("session_id", "uuid", (col) =>
+      col.notNull().references("sessions.id")
+    )
+    .addColumn("created_at", "timestamp", (col) =>
+      col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull()
+    )
+    .addColumn("url", "varchar(500)", (col) => col.notNull()) // TODO: revisit
+    .addColumn("origin", "varchar(30)")
+    .addColumn("raw", "jsonb")
+    .addColumn("referrer", "varchar(500)")
+    .execute()
+
+  await db.schema
+    .createTable("events")
+    .addColumn("id", "bigserial", (col) => col.primaryKey())
+    .addColumn("session_id", "uuid", (col) =>
+      col.notNull().references("sessions.id")
+    )
+    .addColumn("created_at", "timestamp", (col) =>
+      col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull()
+    )
+    .addColumn("url", "varchar(500)", (col) => col.notNull())
+    .addColumn("type", "varchar(50)", (col) => col.notNull())
+    .addColumn("origin", "varchar(30)")
+    .addColumn("raw", "jsonb")
+    .execute()
+
+  // TODO: maybe include in the events table?
+  await db.schema
+    .createTable("event_data")
+    .addColumn("id", "bigserial", (col) => col.primaryKey())
+    .addColumn("event_id", "integer", (col) =>
+      col.notNull().unique().references("events.id")
+    )
+    .addColumn("event_data", "jsonb", (col) => col.notNull())
+    .execute()
+
+  // created_at indexes
+  await db.schema
+    .createIndex("session_created_at")
+    .on("sessions")
+    .column("created_at")
+    .execute()
+  await db.schema
+    .createIndex("event_created_at")
+    .on("events")
+    .column("created_at")
+    .execute()
+  await db.schema
+    .createIndex("pageview_created_at")
+    .on("pageviews")
+    .column("created_at")
+    .execute()
+
+  // session indexes
+  await db.schema
+    .createIndex("pageview_session")
+    .on("pageviews")
+    .column("session_id")
+    .execute()
+  await db.schema
+    .createIndex("event_session")
+    .on("events")
+    .column("session_id")
+    .execute()
+}
+
+export async function down(db: Kysely<any>): Promise<void> {
+  await db.schema.dropTable("event_data").execute()
+  await db.schema.dropTable("events").execute()
+  await db.schema.dropTable("pageviews").execute()
+  await db.schema.dropTable("sessions").execute()
+}
+</file>
+
+<file path="packages/adapter-kysely/src/migrations/index.ts">
+export const postgres = []
+</file>
+
+<file path="packages/adapter-kysely/src/test/index.ts">
+export * from "./memory-db"
+export * from "./runMigrations"
+export * from "./utils"
+</file>
+
+<file path="packages/adapter-kysely/src/test/memory-db.ts">
+import BetterSqlite from "better-sqlite3"
+import { Kysely, SqliteDialect } from "kysely"
+import { DefaultKyselyDb } from "../types"
+
+export const getMemoryDb = (log: boolean = false) =>
+  new Kysely<DefaultKyselyDb>({
+    dialect: new SqliteDialect({
+      database: new BetterSqlite(":memory:"),
+    }),
+    log(event) {
+      if (log && event.level === "query") {
+        console.log("sql", event.query.sql, event.query.parameters)
+      }
+    },
+  })
+</file>
+
+<file path="packages/adapter-kysely/src/test/utils.ts">
+import { Kysely } from "kysely"
+import { DefaultKyselyDb } from "../types"
+
+export const clearDb = async (db: Kysely<DefaultKyselyDb>) => {
+  await db.deleteFrom("event_data").execute()
+  await db.deleteFrom("events").execute()
+  await db.deleteFrom("pageviews").execute()
+  await db.deleteFrom("sessions").execute()
+}
+</file>
+
+<file path="packages/adapter-kysely/src/index.testing.ts">
+export * as migration from "./migrations"
+export * from "./test/memory-db"
+export * from "./test/runMigrations"
+export * from "./test/utils"
+export * from "./types"
+</file>
+
+<file path="packages/adapter-kysely/README.md">
+## @luchyio/kysely
+
+Kysely backend adapter for luchy
+</file>
+
+<file path="packages/adapter-kysely/vitest.config.ts">
+/// <reference types="vitest" />
+import { defineConfig } from "vitest/config"
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+})
+</file>
+
+<file path="packages/common/src/lib/ParsingError.ts">
+export class ParsingError extends Error {
+  constructor(message: string, private problem: Record<string, unknown> = {}) {
+    super(message)
+  }
+
+  getProblem() {
+    return this.problem
+  }
+
+  toString() {
+    return `${this.message} ${JSON.stringify(this.problem)}`
+  }
+}
+</file>
+
+<file path="packages/common/src/lib/timeUnit.ts">
+import { ParsingError } from "./ParsingError"
+
+type Branded<Base> = Base & { __brand: Base }
+export type ISODate = Branded<string>
+
+type Pluralize<T extends string> = T extends `${T}s` ? T : `${T}s`
+
+type TryParse<T> = { valid: false; error: string } | { valid: true; val: T }
+
+const tryParseISODate = (dateOrStr: string | Date): TryParse<ISODate> => {
+  if (typeof dateOrStr === "string") {
+    if (isNaN(Date.parse(dateOrStr))) {
+      return {
+        valid: false,
+        error: "Error Parsing ISODate: Invalid date " + dateOrStr,
+      }
+    }
+
+    return { valid: true, val: dateOrStr as ISODate }
+  } else {
+    return { valid: true, val: dateOrStr.toISOString() as ISODate }
+  }
+}
+
+const parseISODate = (dateOrStr: string) => {
+  const parsed = tryParseISODate(dateOrStr)
+
+  if (!parsed.valid) {
+    throw new Error("Invalid Date")
+  }
+
+  return parsed.val
+}
+
+export const PeriodMeta = {
+  second: { magnitude: 1, abbreviation: "s" },
+  minute: { magnitude: 1 * 60, abbreviation: "mi" },
+  hour: { magnitude: 1 * 60 * 60, abbreviation: "h" },
+  day: { magnitude: 1 * 60 * 60 * 24, abbreviation: "d" },
+  week: { magnitude: 1 * 60 * 60 * 24 * 7, abbreviation: "w" },
+  month: { magnitude: 1 * 60 * 60 * 24 * 30, abbreviation: "m" },
+  year: { magnitude: 1 * 60 * 60 * 24 * 365, abbreviation: "y" },
+  now: { magnitude: 0, abbreviation: "n" },
+} as const
+
+type ValueOf<T> = T[keyof T]
+type Entries<T> = {
+  [K in keyof T]: [K, T[K]]
+}[keyof T][]
+
+type Keys<T> = Array<keyof T>
+
+type Period = keyof typeof PeriodMeta
+type PeriodAbbreviation = ValueOf<typeof PeriodMeta>["abbreviation"]
+
+const PeriodByAbbr = (
+  Object.entries(PeriodMeta) as Entries<typeof PeriodMeta>
+).reduce((acc, [k, v]) => {
+  acc[v["abbreviation"]] = k
+  return acc
+}, {} as Record<PeriodAbbreviation, Period>)
+
+const PeriodArray = Object.keys(PeriodMeta) as Keys<typeof PeriodMeta>
+const PeriodAbbreviationArray = Object.values(PeriodMeta).map(
+  (v) => v.abbreviation
+)
+
+export type NowPeriod = "now" | "n"
+export type PeriodWithoutNow = Exclude<Period, NowPeriod>
+
+export type ValidPeriod =
+  | PeriodWithoutNow
+  | PeriodAbbreviation
+  | Pluralize<PeriodWithoutNow>
+  | NowPeriod
+
+export type TimeUnit = `${number}${ValidPeriod}` | NowPeriod
+
+export type ValidTimeUnit =
+  | { quantity: number; period: Period; type: "relative"; value: TimeUnit }
+  | { type: "absolute"; value: ISODate }
+
+export const parseTimeUnit = (val: unknown): ValidTimeUnit => {
+  if (typeof val !== "string") {
+    throw new Error("Invalid Time unit:" + val)
+  }
+
+  if (["n", "now"].includes(val)) {
+    return {
+      type: "relative",
+      period: "now",
+      value: val as TimeUnit,
+      quantity: 0,
+    }
+  }
+
+  const PeriodsWithAbbreviation = ([] as string[])
+    .concat(PeriodArray)
+    .concat(PeriodArray.map((p) => `${p}s`))
+    .concat(PeriodAbbreviationArray)
+
+  const foundPeriodEnding = PeriodsWithAbbreviation.find((e) => val.endsWith(e))
+
+  if (foundPeriodEnding) {
+    const [maybeNumber] = val.split(foundPeriodEnding)
+    const [_, maybePluralPeriodOrAbbr] = val.split(maybeNumber)
+
+    const parsedNumber = Number.parseInt(maybeNumber)
+
+    if (isNaN(parsedNumber)) {
+      throw new Error("Invalid quantity in time unit: " + maybeNumber)
+    }
+
+    let period: Period
+
+    const periodOrAbbr =
+      maybePluralPeriodOrAbbr.endsWith("s") &&
+      maybePluralPeriodOrAbbr.length > 1
+        ? maybePluralPeriodOrAbbr.slice(0, -1)
+        : maybePluralPeriodOrAbbr
+
+    if (PeriodByAbbr[periodOrAbbr as PeriodAbbreviation]) {
+      period = PeriodByAbbr[periodOrAbbr as PeriodAbbreviation]
+    } else if (PeriodMeta[periodOrAbbr as Period]) {
+      period = periodOrAbbr as Period
+    } else {
+      throw new Error("shouldnt happen")
+    }
+
+    return {
+      type: "relative",
+      quantity: parsedNumber,
+      period,
+      value: val as TimeUnit,
+    }
+  }
+
+  return {
+    type: "absolute",
+    value: parseISODate(val),
+  }
+}
+
+export const tu = parseTimeUnit
+
+export const tryParseTimeUnit = (param: unknown): TryParse<ValidTimeUnit> => {
+  try {
+    const val = parseTimeUnit(param)
+    return { valid: true, val }
+  } catch (e: unknown) {
+    if (e instanceof ParsingError) {
+      return {
+        valid: false,
+        error: e.toString(),
+      }
+    }
+
+    return { valid: false, error: `${e}` }
+  }
+}
+
+export const diffDatesInSeconds = (
+  startDate: Date,
+  endDate: Date = new Date()
+) => (endDate.getTime() - startDate.getTime()) / 1000
+
+export const getDateFromTimeUnit = (tu: ValidTimeUnit): Date => {
+  if (tu.type === "absolute") {
+    return new Date(tu.value)
+  }
+
+  const now = new Date()
+
+  const seconds = PeriodMeta[tu.period].magnitude * tu.quantity
+
+  return new Date(now.getTime() - seconds * 1000)
+}
+</file>
+
+<file path="packages/common/src/query/where/comparators/binary.spec.ts">
+import { tu } from "../../../lib/timeUnit"
+import { between } from "./binary"
+
+describe("binary", () => {
+  describe("between", () => {
+    const cases = [
+      ["1month", "1w"],
+      ["7years", "now"],
+      ["2022-01-01", "2023-01-01"],
+      ["2022-01-01T21:38:56.203Z", "2022-01-01T21:38:57.203Z"],
+    ] as const
+
+    it.each(cases)(
+      "should throw because from (%p) is after to (%p)",
+      (from, to) => {
+        expect(() => between(tu(to), tu(from))).toThrow()
+      }
+    )
+
+    it.each(cases)("should parser between: %p and %p", (fromStr, toStr) => {
+      const from = tu(fromStr)
+      const to = tu(toStr)
+
+      expect(between(from, to)).toEqual({
+        kind: "TimeUnitRange",
+        value: [from, to],
+      })
+    })
+  })
+})
+</file>
+
+<file path="packages/common/src/query/where/comparators/binary.ts">
+import {
+  PeriodMeta,
+  ValidTimeUnit,
+  diffDatesInSeconds,
+} from "../../../lib/timeUnit"
+import { TimeUnitRangeNode } from "./nodeValues"
+
+export type BetweenComparatorFn = (
+  from: ValidTimeUnit,
+  to: ValidTimeUnit
+) => TimeUnitRangeNode
+
+export type BinaryComparatorFn = BetweenComparatorFn
+
+export const between: BetweenComparatorFn = (from, to) => {
+  const fromMagnitude =
+    from.type === "absolute"
+      ? diffDatesInSeconds(new Date(from.value))
+      : PeriodMeta[from.period].magnitude
+
+  const toMagnitude =
+    to.type === "absolute"
+      ? diffDatesInSeconds(new Date(to.value))
+      : PeriodMeta[to.period].magnitude
+
+  if (toMagnitude > fromMagnitude) {
+    throw new Error("from date cannot be bigger relative value than to date")
+  }
+
+  return {
+    kind: "TimeUnitRange",
+    value: [from, to],
+  }
+}
+</file>
+
+<file path="packages/common/src/query/where/comparators/binaryParamsParser.ts">
+import { ParsingError } from "../../../lib/ParsingError"
+import { tryParseTimeUnit } from "../../../lib/timeUnit"
+
+import { TimeUnitRangeNode } from "./nodeValues"
+
+export type BinaryParamValidator = (param: string[]) => TimeUnitRangeNode
+
+export const binaryTimeUnitComparatorParser: BinaryParamValidator = (
+  params
+) => {
+  if (params.length !== 2) {
+    throw new ParsingError(
+      "parseBinaryComparatorTimeUnitParams: Invalid comparator param",
+      { params }
+    )
+  }
+
+  const [param1, param2] = params.map((p) => p.trim())
+
+  const parsedTimeUnit1 = tryParseTimeUnit(param1)
+  const parsedTimeUnit2 = tryParseTimeUnit(param2)
+
+  if (!parsedTimeUnit1.valid) {
+    throw new ParsingError(
+      "parseBinaryComparatorTimeUnitParams: Invalid parseUnit Param",
+      { param: param1 }
+    )
+  }
+
+  if (!parsedTimeUnit2.valid) {
+    throw new ParsingError(
+      "parseBinaryComparatorTimeUnitParams: Invalid parseUnit Param",
+      { param: param2 }
+    )
+  }
+
+  return {
+    kind: "TimeUnitRange",
+    value: [parsedTimeUnit1.val, parsedTimeUnit2.val],
+  }
+}
+</file>
+
+<file path="packages/common/src/query/where/comparators/index.ts">
+export * from "./binary"
+export * from "./common"
+export * from "./nodeValues"
+export * from "./unary"
+</file>
+
+<file path="packages/common/src/query/where/comparators/unary.ts">
+import { ValidTimeUnit } from "../../../lib/timeUnit"
+import { UnaryComparator } from "./common"
+import { TimeUnitNode, UnaryValueNode } from "./nodeValues"
+
+type SimpleUnaryComparatorFn = (
+  value: ValidTimeUnit | string | number | boolean
+) => UnaryValueNode
+
+function simpleComparatorMaker(op: UnaryComparator): SimpleUnaryComparatorFn {
+  return (value) => {
+    if (typeof value === "boolean") {
+      return {
+        kind: "BooleanLiteral",
+        value,
+        op,
+      }
+    }
+
+    if (typeof value === "number") {
+      return {
+        kind: "NumberLiteral",
+        value,
+        op,
+      }
+    }
+
+    if (typeof value === "number") {
+      return {
+        kind: "NumberLiteral",
+        value,
+        op,
+      }
+    }
+
+    if (typeof value === "string") {
+      return {
+        kind: "StringLiteral",
+        value,
+        op,
+      }
+    }
+
+    return {
+      kind: "TimeUnit",
+      value,
+      op,
+    }
+  }
+}
+
+export const gt = simpleComparatorMaker("gt")
+export const gte = simpleComparatorMaker("gte")
+export const lt = simpleComparatorMaker("lt")
+export const lte = simpleComparatorMaker("lte")
+export const eq = simpleComparatorMaker("eq")
+
+export const since = (value: ValidTimeUnit): TimeUnitNode => {
+  return {
+    kind: "TimeUnit",
+    value,
+  }
+}
+</file>
+
+<file path="packages/common/src/query/where/comparators/unaryParamsParser.ts">
+import { ParsingError } from "../../../lib/ParsingError"
+import { tryParseTimeUnit } from "../../../lib/timeUnit"
+
+import { TimeUnitNode, UnaryValueNode } from "./nodeValues"
+import { countOcurrences } from "./utils"
+
+export type UnaryParamValidator<R1 extends UnaryValueNode> = (
+  param: string[]
+) => R1
+
+export const unaryComparatorParser: UnaryParamValidator<UnaryValueNode> = (
+  params
+) => {
+  if (params.length !== 1) {
+    throw new ParsingError("unaryComparatorParser: Invalid comparator param", {
+      params,
+    })
+  }
+
+  const [param] = params.map((p) => p.trim())
+
+  if (["true", "false"].includes(param)) {
+    return {
+      kind: "BooleanLiteral",
+      value: param === "true",
+    }
+  }
+
+  // If it has quotes this is an explicit string
+  if (param.includes("'")) {
+    if (countOcurrences(param, "'") !== 2) {
+      throw new ParsingError("Invalid use of quotes (') in param", { params })
+    }
+
+    return {
+      kind: "StringLiteral",
+      value: param.replaceAll("'", ""),
+    }
+  }
+
+  const number = Number.parseFloat(param)
+
+  if (/^\d+$/.test(param) && !Number.isNaN(number)) {
+    return {
+      kind: "NumberLiteral",
+      value: number,
+    }
+  }
+
+  const parsedTimeUnit = tryParseTimeUnit(param)
+
+  if (parsedTimeUnit.valid) {
+    return {
+      kind: "TimeUnit",
+      value: parsedTimeUnit.val,
+    }
+  }
+
+  throw new ParsingError("unaryComparatorParser: Invalid comparator param", {
+    params,
+  })
+}
+
+export const unaryTimeUnitComparatorParser: UnaryParamValidator<
+  TimeUnitNode
+> = (params) => {
+  if (params.length !== 1) {
+    throw new ParsingError(
+      "unaryTimeUnitComparatorParser: Invalid comparator param",
+      { params }
+    )
+  }
+
+  const [param] = params.map((p) => p.trim())
+
+  const parsedTimeUnit = tryParseTimeUnit(param)
+
+  if (!parsedTimeUnit.valid) {
+    throw new ParsingError(
+      "unaryTimeUnitComparatorParser: Invalid parseUnit Param",
+      { param }
+    )
+  }
+
+  return {
+    kind: "TimeUnit",
+    value: parsedTimeUnit.val,
+  }
+}
+</file>
+
+<file path="packages/common/src/query/where/comparators/utils.ts">
+export const countOcurrences = (string: string, sub: string) =>
+  string.split(sub).length - 1
+</file>
+
+<file path="packages/common/src/query/where/index.ts">
+export * from "./comparators"
+export * from "./where"
+</file>
+
+<file path="packages/common/src/query/index.ts">
+export * from "./aggregators"
+export * from "./from"
+export * from "./query"
+export * from "./select"
+export * from "./utils"
+export * from "./where"
+</file>
+
+<file path="packages/common/src/query/README.md">
+// new operators
+time units (TU)=s,mi,h,d,w{7d},m,y,n(now),iso-date => 1w,7d,1h,2022-11-10T20:28:59.590Z
+since(TU) => since(7d)
+between(TU1,TU2) (TU1 > TU2) => between(2022-11-10T20:28:59.590Z, 2022-11-10T20:28:59.590Z)
+delta(TU) (only with count) =>
+select=fields,separated,by,comma
+count=(field) => count(null) same as count(\*) (no select)
+comparators gt,gte,lt,lte,eq = fn(value)
+
+aaa => // api.luchy.io/v1/q?select=\*&from=pageviews&where=eq(url, '/klk/manin')
+All Views => api.luchy.io/v1/q?count=id&from=pageviews&where=between(create_date, ISOTIME,ISOTIME)&delta=1w
+Sessions/Visitors => api.luchy.io/v1/q?count=id&from=sessions&where=create_date&where=gt(n,ISOTIME),lte(ISOTIME)
+Views timeframe => api.luchy.io/v1/q&count=idfrom=pageviews&where=since(created_date, 1w)&group=day(created_date)
+Sessions timeframe => api.luchy.io/v1/q&count=idfrom=pageviews&where=created_date=since(1w)&group=day(created_date)
+Sessions with 5+ views => api.luchy.io/v1/q?count&from=pageviews&join=session&where=gte(count(session.id),5)
+Views ranked by count => api.luchy.io/v1/q?select=url,count(url)&from=pageviews&where=since(7d)&group=url
+Referrers ranked by count => api.luchy.io/v1/q?select=referrer,count(referrer)&from=pageviews&where=since(7d)&group=referrer
+Browsers ranked by count => api.luchy.io/v1/q?select=referrer,count(referrer)&from=pageviews&join=session&where=since(7d)&group=referrer
+
+```
+{
+  type: 'query',
+  body: {
+    select: [''],
+    from: ['']
+    join: [
+      {}
+    ]
+  }
+}
+```
+</file>
+
+<file path="packages/common/src/query/roadmap.spec.ts">
+describe("roadmap", () => {
+  describe("join", () => {
+    it.todo("should throw if invalid join")
+    describe("select, where, group", () => {
+      it.todo("should throw if invalid field")
+      it.todo("should support any field in primary")
+      it.todo("should support any field in foreigns")
+    })
+  })
+
+  describe("group", () => {
+    it.todo("should throw when using invalid field")
+    it.todo("should parse group")
+  })
+})
+</file>
+
+<file path="packages/common/src/utils/assertUnreachable.ts">
+export const assertUnreachable = (_: never, message?: string): never => {
+  throw new Error(message ?? "Should never happen")
+}
+</file>
+
+<file path="packages/common/src/utils/withOverrides.ts">
+type AnyObject = Record<string, any>
+type DeepPartial<T> = {
+  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P]
+}
+
+/// Deep merge two objects
+export function deepMerge<T extends AnyObject>(
+  target: T,
+  source: DeepPartial<T>
+): T {
+  if (source instanceof Object) {
+    ;(Object.keys(source) as (keyof T)[]).forEach((key) => {
+      if (source[key] instanceof Object && key in target) {
+        target[key] = deepMerge(target[key], source[key] as any) // Safely handle recursive merging
+      } else {
+        target[key] = source[key] as any
+      }
+    })
+  }
+  return target
+}
+
+export function deepClone<T>(obj: T): T {
+  // Handle null, undefined, and primitive types (string, number, boolean, etc.)
+  if (obj === null || typeof obj !== "object") {
+    return obj
+  }
+
+  // Handle Date
+  if (obj instanceof Date) {
+    return new Date(obj.getTime()) as unknown as T
+  }
+
+  // Handle Array
+  if (Array.isArray(obj)) {
+    return obj.map((item) => deepClone(item)) as unknown as T
+  }
+
+  // Handle Map
+  if (obj instanceof Map) {
+    const mapCopy = new Map()
+    obj.forEach((value, key) => {
+      mapCopy.set(key, deepClone(value))
+    })
+    return mapCopy as unknown as T
+  }
+
+  // Handle Set
+  if (obj instanceof Set) {
+    const setCopy = new Set()
+    obj.forEach((value) => {
+      setCopy.add(deepClone(value))
+    })
+    return setCopy as unknown as T
+  }
+
+  // Handle Object (including handling functions by copying them directly)
+  if (obj instanceof Object) {
+    const objCopy = {} as T
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        objCopy[key] = deepClone(obj[key])
+      }
+    }
+    return objCopy
+  }
+
+  // If we reach here, it likely means we encountered a type that we do not handle.
+  throw new Error(`Type not handled by deepClone: ${typeof obj}`)
+}
+
+// Function to merge base options with overrides
+export function withOverrides<T extends AnyObject>(
+  base: T,
+  ...overrides: DeepPartial<T>[]
+): T {
+  const clone = deepClone(base)
+  return overrides.reduce(
+    (acc, override) => deepMerge(acc, override),
+    clone
+  ) as T
+}
+</file>
+
+<file path="packages/common/README.md">
+## @luchyio/common
+</file>
+
+<file path="packages/common/vitest.config.ts">
+/// <reference types="vitest" />
+import { defineConfig } from "vitest/config"
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+})
+</file>
+
+<file path="packages/core/src/helpers/countriesHelpers.ts">
+export const Countries = {
+  UnitedStates: "US",
+  Afghanistan: "AF",
+  AlandIslands: "AX",
+  Albania: "AL",
+  Algeria: "DZ",
+  AmericanSamoa: "AS",
+  Andorra: "AD",
+  Angola: "AO",
+  Anguilla: "AI",
+  Antarctica: "AQ",
+  AntiguaAndBarbuda: "AG",
+  Argentina: "AR",
+  Armenia: "AM",
+  Aruba: "AW",
+  Australia: "AU",
+  Austria: "AT",
+  Azerbaijan: "AZ",
+  Bahamas: "BS",
+  Bahrain: "BH",
+  Bangladesh: "BD",
+  Barbados: "BB",
+  Belarus: "BY",
+  Belgium: "BE",
+  Belize: "BZ",
+  Benin: "BJ",
+  Bermuda: "BM",
+  Bhutan: "BT",
+  Bolivia: "BO",
+  BonaireSintEustatiusSaba: "BQ",
+  BosniaAndHerzegovina: "BA",
+  Botswana: "BW",
+  BouvetIsland: "BV",
+  Brazil: "BR",
+  BritishIndianOceanTerritory: "IO",
+  BruneiDarussalam: "BN",
+  Bulgaria: "BG",
+  BurkinaFaso: "BF",
+  Burundi: "BI",
+  Cambodia: "KH",
+  Cameroon: "CM",
+  Canada: "CA",
+  CapeVerde: "CV",
+  CaymanIslands: "KY",
+  CentralAfricanRepublic: "CF",
+  Chad: "TD",
+  Chile: "CL",
+  China: "CN",
+  ChristmasIsland: "CX",
+  CocosKeelingIslands: "CC",
+  Colombia: "CO",
+  Comoros: "KM",
+  Congo: "CG",
+  CongoDemocraticRepublic: "CD",
+  CookIslands: "CK",
+  CostaRica: "CR",
+  CoteDIvoire: "CI",
+  Croatia: "HR",
+  Cuba: "CU",
+  Curaçao: "CW",
+  Cyprus: "CY",
+  CzechRepublic: "CZ",
+  Denmark: "DK",
+  Djibouti: "DJ",
+  Dominica: "DM",
+  DominicanRepublic: "DO",
+  Ecuador: "EC",
+  Egypt: "EG",
+  ElSalvador: "SV",
+  EquatorialGuinea: "GQ",
+  Eritrea: "ER",
+  Estonia: "EE",
+  Ethiopia: "ET",
+  FalklandIslands: "FK",
+  FaroeIslands: "FO",
+  Fiji: "FJ",
+  Finland: "FI",
+  France: "FR",
+  FrenchGuiana: "GF",
+  FrenchPolynesia: "PF",
+  FrenchSouthernTerritories: "TF",
+  Gabon: "GA",
+  Gambia: "GM",
+  Georgia: "GE",
+  Germany: "DE",
+  Ghana: "GH",
+  Gibraltar: "GI",
+  Greece: "GR",
+  Greenland: "GL",
+  Grenada: "GD",
+  Guadeloupe: "GP",
+  Guam: "GU",
+  Guatemala: "GT",
+  Guernsey: "GG",
+  Guinea: "GN",
+  GuineaBissau: "GW",
+  Guyana: "GY",
+  Haiti: "HT",
+  HeardIslandMcdonaldIslands: "HM",
+  HolySeeVaticanCityState: "VA",
+  Honduras: "HN",
+  HongKong: "HK",
+  Hungary: "HU",
+  Iceland: "IS",
+  India: "IN",
+  Indonesia: "ID",
+  Iran: "IR",
+  Iraq: "IQ",
+  Ireland: "IE",
+  IsleOfMan: "IM",
+  Israel: "IL",
+  Italy: "IT",
+  Jamaica: "JM",
+  Japan: "JP",
+  Jersey: "JE",
+  Jordan: "JO",
+  Kazakhstan: "KZ",
+  Kenya: "KE",
+  Kiribati: "KI",
+  Korea: "KR",
+  KoreaDemocraticPeoplesRepublic: "KP",
+  Kuwait: "KW",
+  Kyrgyzstan: "KG",
+  LaoPeoplesDemocraticRepublic: "LA",
+  Latvia: "LV",
+  Lebanon: "LB",
+  Lesotho: "LS",
+  Liberia: "LR",
+  LibyanArabJamahiriya: "LY",
+  Liechtenstein: "LI",
+  Lithuania: "LT",
+  Luxembourg: "LU",
+  Macao: "MO",
+  Macedonia: "MK",
+  Madagascar: "MG",
+  Malawi: "MW",
+  Malaysia: "MY",
+  Maldives: "MV",
+  Mali: "ML",
+  Malta: "MT",
+  MarshallIslands: "MH",
+  Martinique: "MQ",
+  Mauritania: "MR",
+  Mauritius: "MU",
+  Mayotte: "YT",
+  Mexico: "MX",
+  Micronesia: "FM",
+  Moldova: "MD",
+  Monaco: "MC",
+  Mongolia: "MN",
+  Montenegro: "ME",
+  Montserrat: "MS",
+  Morocco: "MA",
+  Mozambique: "MZ",
+  Myanmar: "MM",
+  Namibia: "NA",
+  Nauru: "NR",
+  Nepal: "NP",
+  Netherlands: "NL",
+  NewCaledonia: "NC",
+  NewZealand: "NZ",
+  Nicaragua: "NI",
+  Niger: "NE",
+  Nigeria: "NG",
+  Niue: "NU",
+  NorfolkIsland: "NF",
+  NorthernMarianaIslands: "MP",
+  Norway: "NO",
+  Oman: "OM",
+  Pakistan: "PK",
+  Palau: "PW",
+  PalestinianTerritory: "PS",
+  Panama: "PA",
+  PapuaNewGuinea: "PG",
+  Paraguay: "PY",
+  Peru: "PE",
+  Philippines: "PH",
+  Pitcairn: "PN",
+  Poland: "PL",
+  Portugal: "PT",
+  PuertoRico: "PR",
+  Qatar: "QA",
+  Reunion: "RE",
+  Romania: "RO",
+  RussianFederation: "RU",
+  Rwanda: "RW",
+  SaintBarthelemy: "BL",
+  SaintHelena: "SH",
+  SaintKittsAndNevis: "KN",
+  SaintLucia: "LC",
+  SaintMartin: "MF",
+  SaintPierreAndMiquelon: "PM",
+  SaintVincentAndGrenadines: "VC",
+  Samoa: "WS",
+  SanMarino: "SM",
+  SaoTomeAndPrincipe: "ST",
+  SaudiArabia: "SA",
+  Senegal: "SN",
+  Serbia: "RS",
+  Seychelles: "SC",
+  SierraLeone: "SL",
+  Singapore: "SG",
+  SintMaarten: "SX",
+  Slovakia: "SK",
+  Slovenia: "SI",
+  SolomonIslands: "SB",
+  Somalia: "SO",
+  SouthAfrica: "ZA",
+  SouthGeorgiaAndSandwichIsl: "GS",
+  SouthSudan: "SS",
+  Spain: "ES",
+  SriLanka: "LK",
+  Sudan: "SD",
+  Suriname: "SR",
+  SvalbardAndJanMayen: "SJ",
+  Swaziland: "SZ",
+  Sweden: "SE",
+  Switzerland: "CH",
+  SyrianArabRepublic: "SY",
+  Taiwan: "TW",
+  Tajikistan: "TJ",
+  Tanzania: "TZ",
+  Thailand: "TH",
+  TimorLeste: "TL",
+  Togo: "TG",
+  Tokelau: "TK",
+  Tonga: "TO",
+  TrinidadAndTobago: "TT",
+  Tunisia: "TN",
+  Turkey: "TR",
+  Turkmenistan: "TM",
+  TurksAndCaicosIslands: "TC",
+  Tuvalu: "TV",
+  Uganda: "UG",
+  Ukraine: "UA",
+  UnitedArabEmirates: "AE",
+  UnitedKingdom: "GB",
+  UnitedStatesOutlyingIslands: "UM",
+  Uruguay: "UY",
+  Uzbekistan: "UZ",
+  Vanuatu: "VU",
+  Venezuela: "VE",
+  Vietnam: "VN",
+  VirginIslandsBritish: "VG",
+  VirginIslandsUS: "VI",
+  WallisAndFutuna: "WF",
+  WesternSahara: "EH",
+  Yemen: "YE",
+  Zambia: "ZM",
+  Zimbabwe: "ZW",
+} as const
+
+type CountriesType = typeof Countries
+
+export type CountryCode = typeof Countries[keyof CountriesType]
+
+export const isCountryCode = (value: string): value is CountryCode => {
+  return Countries[value as keyof CountriesType] !== undefined
+}
+</file>
+
+<file path="packages/core/src/helpers/languageHelpers.ts">
+// https://gist.github.com/joshuabaker/d2775b5ada7d1601bcd7b31cb4081981#file-languages-json
+export const languagesIso639_1 = [
+  {
+    code: "aa",
+    name: "Afar",
+    native: "Afar",
+  },
+  {
+    code: "ab",
+    name: "Abkhazian",
+    native: "Аҧсуа",
+  },
+  {
+    code: "af",
+    name: "Afrikaans",
+    native: "Afrikaans",
+  },
+  {
+    code: "ak",
+    name: "Akan",
+    native: "Akana",
+  },
+  {
+    code: "am",
+    name: "Amharic",
+    native: "አማርኛ",
+  },
+  {
+    code: "an",
+    name: "Aragonese",
+    native: "Aragonés",
+  },
+  {
+    code: "ar",
+    name: "Arabic",
+    native: "العربية",
+    rtl: 1,
+  },
+  {
+    code: "as",
+    name: "Assamese",
+    native: "অসমীয়া",
+  },
+  {
+    code: "av",
+    name: "Avar",
+    native: "Авар",
+  },
+  {
+    code: "ay",
+    name: "Aymara",
+    native: "Aymar",
+  },
+  {
+    code: "az",
+    name: "Azerbaijani",
+    native: "Azərbaycanca / آذربايجان",
+  },
+  {
+    code: "ba",
+    name: "Bashkir",
+    native: "Башҡорт",
+  },
+  {
+    code: "be",
+    name: "Belarusian",
+    native: "Беларуская",
+  },
+  {
+    code: "bg",
+    name: "Bulgarian",
+    native: "Български",
+  },
+  {
+    code: "bh",
+    name: "Bihari",
+    native: "भोजपुरी",
+  },
+  {
+    code: "bi",
+    name: "Bislama",
+    native: "Bislama",
+  },
+  {
+    code: "bm",
+    name: "Bambara",
+    native: "Bamanankan",
+  },
+  {
+    code: "bn",
+    name: "Bengali",
+    native: "বাংলা",
+  },
+  {
+    code: "bo",
+    name: "Tibetan",
+    native: "བོད་ཡིག / Bod skad",
+  },
+  {
+    code: "br",
+    name: "Breton",
+    native: "Brezhoneg",
+  },
+  {
+    code: "bs",
+    name: "Bosnian",
+    native: "Bosanski",
+  },
+  {
+    code: "ca",
+    name: "Catalan",
+    native: "Català",
+  },
+  {
+    code: "ce",
+    name: "Chechen",
+    native: "Нохчийн",
+  },
+  {
+    code: "ch",
+    name: "Chamorro",
+    native: "Chamoru",
+  },
+  {
+    code: "co",
+    name: "Corsican",
+    native: "Corsu",
+  },
+  {
+    code: "cr",
+    name: "Cree",
+    native: "Nehiyaw",
+  },
+  {
+    code: "cs",
+    name: "Czech",
+    native: "Česky",
+  },
+  {
+    code: "cu",
+    name: "Old Church Slavonic / Old Bulgarian",
+    native: "словѣньскъ / slověnĭskŭ",
+  },
+  {
+    code: "cv",
+    name: "Chuvash",
+    native: "Чăваш",
+  },
+  {
+    code: "cy",
+    name: "Welsh",
+    native: "Cymraeg",
+  },
+  {
+    code: "da",
+    name: "Danish",
+    native: "Dansk",
+  },
+  {
+    code: "de",
+    name: "German",
+    native: "Deutsch",
+  },
+  {
+    code: "dv",
+    name: "Divehi",
+    native: "ދިވެހިބަސް",
+    rtl: 1,
+  },
+  {
+    code: "dz",
+    name: "Dzongkha",
+    native: "ཇོང་ཁ",
+  },
+  {
+    code: "ee",
+    name: "Ewe",
+    native: "Ɛʋɛ",
+  },
+  {
+    code: "el",
+    name: "Greek",
+    native: "Ελληνικά",
+  },
+  {
+    code: "en",
+    name: "English",
+    native: "English",
+  },
+  {
+    code: "eo",
+    name: "Esperanto",
+    native: "Esperanto",
+  },
+  {
+    code: "es",
+    name: "Spanish",
+    native: "Español",
+  },
+  {
+    code: "et",
+    name: "Estonian",
+    native: "Eesti",
+  },
+  {
+    code: "eu",
+    name: "Basque",
+    native: "Euskara",
+  },
+  {
+    code: "fa",
+    name: "Persian",
+    native: "فارسی",
+    rtl: 1,
+  },
+  {
+    code: "ff",
+    name: "Peul",
+    native: "Fulfulde",
+  },
+  {
+    code: "fi",
+    name: "Finnish",
+    native: "Suomi",
+  },
+  {
+    code: "fj",
+    name: "Fijian",
+    native: "Na Vosa Vakaviti",
+  },
+  {
+    code: "fo",
+    name: "Faroese",
+    native: "Føroyskt",
+  },
+  {
+    code: "fr",
+    name: "French",
+    native: "Français",
+  },
+  {
+    code: "fy",
+    name: "West Frisian",
+    native: "Frysk",
+  },
+  {
+    code: "ga",
+    name: "Irish",
+    native: "Gaeilge",
+  },
+  {
+    code: "gd",
+    name: "Scottish Gaelic",
+    native: "Gàidhlig",
+  },
+  {
+    code: "gl",
+    name: "Galician",
+    native: "Galego",
+  },
+  {
+    code: "gn",
+    name: "Guarani",
+    native: "Avañe'ẽ",
+  },
+  {
+    code: "gu",
+    name: "Gujarati",
+    native: "ગુજરાતી",
+  },
+  {
+    code: "gv",
+    name: "Manx",
+    native: "Gaelg",
+  },
+  {
+    code: "ha",
+    name: "Hausa",
+    native: "هَوُسَ",
+    rtl: 1,
+  },
+  {
+    code: "he",
+    name: "Hebrew",
+    native: "עברית",
+    rtl: 1,
+  },
+  {
+    code: "hi",
+    name: "Hindi",
+    native: "हिन्दी",
+  },
+  {
+    code: "ho",
+    name: "Hiri Motu",
+    native: "Hiri Motu",
+  },
+  {
+    code: "hr",
+    name: "Croatian",
+    native: "Hrvatski",
+  },
+  {
+    code: "ht",
+    name: "Haitian",
+    native: "Krèyol ayisyen",
+  },
+  {
+    code: "hu",
+    name: "Hungarian",
+    native: "Magyar",
+  },
+  {
+    code: "hy",
+    name: "Armenian",
+    native: "Հայերեն",
+  },
+  {
+    code: "hz",
+    name: "Herero",
+    native: "Otsiherero",
+  },
+  {
+    code: "ia",
+    name: "Interlingua",
+    native: "Interlingua",
+  },
+  {
+    code: "id",
+    name: "Indonesian",
+    native: "Bahasa Indonesia",
+  },
+  {
+    code: "ie",
+    name: "Interlingue",
+    native: "Interlingue",
+  },
+  {
+    code: "ig",
+    name: "Igbo",
+    native: "Igbo",
+  },
+  {
+    code: "ii",
+    name: "Sichuan Yi",
+    native: "ꆇꉙ / 四川彝语",
+  },
+  {
+    code: "ik",
+    name: "Inupiak",
+    native: "Iñupiak",
+  },
+  {
+    code: "io",
+    name: "Ido",
+    native: "Ido",
+  },
+  {
+    code: "is",
+    name: "Icelandic",
+    native: "Íslenska",
+  },
+  {
+    code: "it",
+    name: "Italian",
+    native: "Italiano",
+  },
+  {
+    code: "iu",
+    name: "Inuktitut",
+    native: "ᐃᓄᒃᑎᑐᑦ",
+  },
+  {
+    code: "ja",
+    name: "Japanese",
+    native: "日本語",
+  },
+  {
+    code: "jv",
+    name: "Javanese",
+    native: "Basa Jawa",
+  },
+  {
+    code: "ka",
+    name: "Georgian",
+    native: "ქართული",
+  },
+  {
+    code: "kg",
+    name: "Kongo",
+    native: "KiKongo",
+  },
+  {
+    code: "ki",
+    name: "Kikuyu",
+    native: "Gĩkũyũ",
+  },
+  {
+    code: "kj",
+    name: "Kuanyama",
+    native: "Kuanyama",
+  },
+  {
+    code: "kk",
+    name: "Kazakh",
+    native: "Қазақша",
+  },
+  {
+    code: "kl",
+    name: "Greenlandic",
+    native: "Kalaallisut",
+  },
+  {
+    code: "km",
+    name: "Cambodian",
+    native: "ភាសាខ្មែរ",
+  },
+  {
+    code: "kn",
+    name: "Kannada",
+    native: "ಕನ್ನಡ",
+  },
+  {
+    code: "ko",
+    name: "Korean",
+    native: "한국어",
+  },
+  {
+    code: "kr",
+    name: "Kanuri",
+    native: "Kanuri",
+  },
+  {
+    code: "ks",
+    name: "Kashmiri",
+    native: "कश्मीरी / كشميري",
+    rtl: 1,
+  },
+  {
+    code: "ku",
+    name: "Kurdish",
+    native: "Kurdî / كوردی",
+    rtl: 1,
+  },
+  {
+    code: "kv",
+    name: "Komi",
+    native: "Коми",
+  },
+  {
+    code: "kw",
+    name: "Cornish",
+    native: "Kernewek",
+  },
+  {
+    code: "ky",
+    name: "Kirghiz",
+    native: "Kırgızca / Кыргызча",
+  },
+  {
+    code: "la",
+    name: "Latin",
+    native: "Latina",
+  },
+  {
+    code: "lb",
+    name: "Luxembourgish",
+    native: "Lëtzebuergesch",
+  },
+  {
+    code: "lg",
+    name: "Ganda",
+    native: "Luganda",
+  },
+  {
+    code: "li",
+    name: "Limburgian",
+    native: "Limburgs",
+  },
+  {
+    code: "ln",
+    name: "Lingala",
+    native: "Lingála",
+  },
+  {
+    code: "lo",
+    name: "Laotian",
+    native: "ລາວ / Pha xa lao",
+  },
+  {
+    code: "lt",
+    name: "Lithuanian",
+    native: "Lietuvių",
+  },
+  {
+    code: "lu",
+    name: "Luba-Katanga",
+    native: "Tshiluba",
+  },
+  {
+    code: "lv",
+    name: "Latvian",
+    native: "Latviešu",
+  },
+  {
+    code: "mg",
+    name: "Malagasy",
+    native: "Malagasy",
+  },
+  {
+    code: "mh",
+    name: "Marshallese",
+    native: "Kajin Majel / Ebon",
+  },
+  {
+    code: "mi",
+    name: "Maori",
+    native: "Māori",
+  },
+  {
+    code: "mk",
+    name: "Macedonian",
+    native: "Македонски",
+  },
+  {
+    code: "ml",
+    name: "Malayalam",
+    native: "മലയാളം",
+  },
+  {
+    code: "mn",
+    name: "Mongolian",
+    native: "Монгол",
+  },
+  {
+    code: "mo",
+    name: "Moldovan",
+    native: "Moldovenească",
+  },
+  {
+    code: "mr",
+    name: "Marathi",
+    native: "मराठी",
+  },
+  {
+    code: "ms",
+    name: "Malay",
+    native: "Bahasa Melayu",
+  },
+  {
+    code: "mt",
+    name: "Maltese",
+    native: "bil-Malti",
+  },
+  {
+    code: "my",
+    name: "Burmese",
+    native: "မြန်မာစာ",
+  },
+  {
+    code: "na",
+    name: "Nauruan",
+    native: "Dorerin Naoero",
+  },
+  {
+    code: "nb",
+    name: "Norwegian Bokmål",
+    native: "Norsk bokmål",
+  },
+  {
+    code: "nd",
+    name: "North Ndebele",
+    native: "Sindebele",
+  },
+  {
+    code: "ne",
+    name: "Nepali",
+    native: "नेपाली",
+  },
+  {
+    code: "ng",
+    name: "Ndonga",
+    native: "Oshiwambo",
+  },
+  {
+    code: "nl",
+    name: "Dutch",
+    native: "Nederlands",
+  },
+  {
+    code: "nn",
+    name: "Norwegian Nynorsk",
+    native: "Norsk nynorsk",
+  },
+  {
+    code: "no",
+    name: "Norwegian",
+    native: "Norsk",
+  },
+  {
+    code: "nr",
+    name: "South Ndebele",
+    native: "isiNdebele",
+  },
+  {
+    code: "nv",
+    name: "Navajo",
+    native: "Diné bizaad",
+  },
+  {
+    code: "ny",
+    name: "Chichewa",
+    native: "Chi-Chewa",
+  },
+  {
+    code: "oc",
+    name: "Occitan",
+    native: "Occitan",
+  },
+  {
+    code: "oj",
+    name: "Ojibwa",
+    native: "ᐊᓂᔑᓈᐯᒧᐎᓐ / Anishinaabemowin",
+  },
+  {
+    code: "om",
+    name: "Oromo",
+    native: "Oromoo",
+  },
+  {
+    code: "or",
+    name: "Oriya",
+    native: "ଓଡ଼ିଆ",
+  },
+  {
+    code: "os",
+    name: "Ossetian / Ossetic",
+    native: "Иронау",
+  },
+  {
+    code: "pa",
+    name: "Panjabi / Punjabi",
+    native: "ਪੰਜਾਬੀ / पंजाबी / پنجابي",
+  },
+  {
+    code: "pi",
+    name: "Pali",
+    native: "Pāli / पाऴि",
+  },
+  {
+    code: "pl",
+    name: "Polish",
+    native: "Polski",
+  },
+  {
+    code: "ps",
+    name: "Pashto",
+    native: "پښتو",
+    rtl: 1,
+  },
+  {
+    code: "pt",
+    name: "Portuguese",
+    native: "Português",
+  },
+  {
+    code: "qu",
+    name: "Quechua",
+    native: "Runa Simi",
+  },
+  {
+    code: "rm",
+    name: "Raeto Romance",
+    native: "Rumantsch",
+  },
+  {
+    code: "rn",
+    name: "Kirundi",
+    native: "Kirundi",
+  },
+  {
+    code: "ro",
+    name: "Romanian",
+    native: "Română",
+  },
+  {
+    code: "ru",
+    name: "Russian",
+    native: "Русский",
+  },
+  {
+    code: "rw",
+    name: "Rwandi",
+    native: "Kinyarwandi",
+  },
+  {
+    code: "sa",
+    name: "Sanskrit",
+    native: "संस्कृतम्",
+  },
+  {
+    code: "sc",
+    name: "Sardinian",
+    native: "Sardu",
+  },
+  {
+    code: "sd",
+    name: "Sindhi",
+    native: "सिनधि",
+  },
+  {
+    code: "se",
+    name: "Northern Sami",
+    native: "Sámegiella",
+  },
+  {
+    code: "sg",
+    name: "Sango",
+    native: "Sängö",
+  },
+  {
+    code: "sh",
+    name: "Serbo-Croatian",
+    native: "Srpskohrvatski / Српскохрватски",
+  },
+  {
+    code: "si",
+    name: "Sinhalese",
+    native: "සිංහල",
+  },
+  {
+    code: "sk",
+    name: "Slovak",
+    native: "Slovenčina",
+  },
+  {
+    code: "sl",
+    name: "Slovenian",
+    native: "Slovenščina",
+  },
+  {
+    code: "sm",
+    name: "Samoan",
+    native: "Gagana Samoa",
+  },
+  {
+    code: "sn",
+    name: "Shona",
+    native: "chiShona",
+  },
+  {
+    code: "so",
+    name: "Somalia",
+    native: "Soomaaliga",
+  },
+  {
+    code: "sq",
+    name: "Albanian",
+    native: "Shqip",
+  },
+  {
+    code: "sr",
+    name: "Serbian",
+    native: "Српски",
+  },
+  {
+    code: "ss",
+    name: "Swati",
+    native: "SiSwati",
+  },
+  {
+    code: "st",
+    name: "Southern Sotho",
+    native: "Sesotho",
+  },
+  {
+    code: "su",
+    name: "Sundanese",
+    native: "Basa Sunda",
+  },
+  {
+    code: "sv",
+    name: "Swedish",
+    native: "Svenska",
+  },
+  {
+    code: "sw",
+    name: "Swahili",
+    native: "Kiswahili",
+  },
+  {
+    code: "ta",
+    name: "Tamil",
+    native: "தமிழ்",
+  },
+  {
+    code: "te",
+    name: "Telugu",
+    native: "తెలుగు",
+  },
+  {
+    code: "tg",
+    name: "Tajik",
+    native: "Тоҷикӣ",
+  },
+  {
+    code: "th",
+    name: "Thai",
+    native: "ไทย / Phasa Thai",
+  },
+  {
+    code: "ti",
+    name: "Tigrinya",
+    native: "ትግርኛ",
+  },
+  {
+    code: "tk",
+    name: "Turkmen",
+    native: "Туркмен / تركمن",
+  },
+  {
+    code: "tl",
+    name: "Tagalog / Filipino",
+    native: "Tagalog",
+  },
+  {
+    code: "tn",
+    name: "Tswana",
+    native: "Setswana",
+  },
+  {
+    code: "to",
+    name: "Tonga",
+    native: "Lea Faka-Tonga",
+  },
+  {
+    code: "tr",
+    name: "Turkish",
+    native: "Türkçe",
+  },
+  {
+    code: "ts",
+    name: "Tsonga",
+    native: "Xitsonga",
+  },
+  {
+    code: "tt",
+    name: "Tatar",
+    native: "Tatarça",
+  },
+  {
+    code: "tw",
+    name: "Twi",
+    native: "Twi",
+  },
+  {
+    code: "ty",
+    name: "Tahitian",
+    native: "Reo Mā`ohi",
+  },
+  {
+    code: "ug",
+    name: "Uyghur",
+    native: "Uyƣurqə / ئۇيغۇرچە",
+  },
+  {
+    code: "uk",
+    name: "Ukrainian",
+    native: "Українська",
+  },
+  {
+    code: "ur",
+    name: "Urdu",
+    native: "اردو",
+    rtl: 1,
+  },
+  {
+    code: "uz",
+    name: "Uzbek",
+    native: "Ўзбек",
+  },
+  {
+    code: "ve",
+    name: "Venda",
+    native: "Tshivenḓa",
+  },
+  {
+    code: "vi",
+    name: "Vietnamese",
+    native: "Tiếng Việt",
+  },
+  {
+    code: "vo",
+    name: "Volapük",
+    native: "Volapük",
+  },
+  {
+    code: "wa",
+    name: "Walloon",
+    native: "Walon",
+  },
+  {
+    code: "wo",
+    name: "Wolof",
+    native: "Wollof",
+  },
+  {
+    code: "xh",
+    name: "Xhosa",
+    native: "isiXhosa",
+  },
+  {
+    code: "yi",
+    name: "Yiddish",
+    native: "ייִדיש",
+    rtl: 1,
+  },
+  {
+    code: "yo",
+    name: "Yoruba",
+    native: "Yorùbá",
+  },
+  {
+    code: "za",
+    name: "Zhuang",
+    native: "Cuengh / Tôô / 壮语",
+  },
+  {
+    code: "zh",
+    name: "Chinese",
+    native: "中文",
+  },
+  {
+    code: "zu",
+    name: "Zulu",
+    native: "isiZulu",
+  },
+]
+
+// Just ^ preprocessed
+export const languagesIso639_1Dict = new Map(
+  Object.entries({
+    aa: "Afar",
+    ab: "Abkhazian",
+    af: "Afrikaans",
+    ak: "Akan",
+    am: "Amharic",
+    an: "Aragonese",
+    ar: "Arabic",
+    as: "Assamese",
+    av: "Avar",
+    ay: "Aymara",
+    az: "Azerbaijani",
+    ba: "Bashkir",
+    be: "Belarusian",
+    bg: "Bulgarian",
+    bh: "Bihari",
+    bi: "Bislama",
+    bm: "Bambara",
+    bn: "Bengali",
+    bo: "Tibetan",
+    br: "Breton",
+    bs: "Bosnian",
+    ca: "Catalan",
+    ce: "Chechen",
+    ch: "Chamorro",
+    co: "Corsican",
+    cr: "Cree",
+    cs: "Czech",
+    cu: "Old Church Slavonic / Old Bulgarian",
+    cv: "Chuvash",
+    cy: "Welsh",
+    da: "Danish",
+    de: "German",
+    dv: "Divehi",
+    dz: "Dzongkha",
+    ee: "Ewe",
+    el: "Greek",
+    en: "English",
+    eo: "Esperanto",
+    es: "Spanish",
+    et: "Estonian",
+    eu: "Basque",
+    fa: "Persian",
+    ff: "Peul",
+    fi: "Finnish",
+    fj: "Fijian",
+    fo: "Faroese",
+    fr: "French",
+    fy: "West Frisian",
+    ga: "Irish",
+    gd: "Scottish Gaelic",
+    gl: "Galician",
+    gn: "Guarani",
+    gu: "Gujarati",
+    gv: "Manx",
+    ha: "Hausa",
+    he: "Hebrew",
+    hi: "Hindi",
+    ho: "Hiri Motu",
+    hr: "Croatian",
+    ht: "Haitian",
+    hu: "Hungarian",
+    hy: "Armenian",
+    hz: "Herero",
+    ia: "Interlingua",
+    id: "Indonesian",
+    ie: "Interlingue",
+    ig: "Igbo",
+    ii: "Sichuan Yi",
+    ik: "Inupiak",
+    io: "Ido",
+    is: "Icelandic",
+    it: "Italian",
+    iu: "Inuktitut",
+    ja: "Japanese",
+    jv: "Javanese",
+    ka: "Georgian",
+    kg: "Kongo",
+    ki: "Kikuyu",
+    kj: "Kuanyama",
+    kk: "Kazakh",
+    kl: "Greenlandic",
+    km: "Cambodian",
+    kn: "Kannada",
+    ko: "Korean",
+    kr: "Kanuri",
+    ks: "Kashmiri",
+    ku: "Kurdish",
+    kv: "Komi",
+    kw: "Cornish",
+    ky: "Kirghiz",
+    la: "Latin",
+    lb: "Luxembourgish",
+    lg: "Ganda",
+    li: "Limburgian",
+    ln: "Lingala",
+    lo: "Laotian",
+    lt: "Lithuanian",
+    lu: "Luba-Katanga",
+    lv: "Latvian",
+    mg: "Malagasy",
+    mh: "Marshallese",
+    mi: "Maori",
+    mk: "Macedonian",
+    ml: "Malayalam",
+    mn: "Mongolian",
+    mo: "Moldovan",
+    mr: "Marathi",
+    ms: "Malay",
+    mt: "Maltese",
+    my: "Burmese",
+    na: "Nauruan",
+    nb: "Norwegian Bokmål",
+    nd: "North Ndebele",
+    ne: "Nepali",
+    ng: "Ndonga",
+    nl: "Dutch",
+    nn: "Norwegian Nynorsk",
+    no: "Norwegian",
+    nr: "South Ndebele",
+    nv: "Navajo",
+    ny: "Chichewa",
+    oc: "Occitan",
+    oj: "Ojibwa",
+    om: "Oromo",
+    or: "Oriya",
+    os: "Ossetian / Ossetic",
+    pa: "Panjabi / Punjabi",
+    pi: "Pali",
+    pl: "Polish",
+    ps: "Pashto",
+    pt: "Portuguese",
+    qu: "Quechua",
+    rm: "Raeto Romance",
+    rn: "Kirundi",
+    ro: "Romanian",
+    ru: "Russian",
+    rw: "Rwandi",
+    sa: "Sanskrit",
+    sc: "Sardinian",
+    sd: "Sindhi",
+    se: "Northern Sami",
+    sg: "Sango",
+    sh: "Serbo-Croatian",
+    si: "Sinhalese",
+    sk: "Slovak",
+    sl: "Slovenian",
+    sm: "Samoan",
+    sn: "Shona",
+    so: "Somalia",
+    sq: "Albanian",
+    sr: "Serbian",
+    ss: "Swati",
+    st: "Southern Sotho",
+    su: "Sundanese",
+    sv: "Swedish",
+    sw: "Swahili",
+    ta: "Tamil",
+    te: "Telugu",
+    tg: "Tajik",
+    th: "Thai",
+    ti: "Tigrinya",
+    tk: "Turkmen",
+    tl: "Tagalog / Filipino",
+    tn: "Tswana",
+    to: "Tonga",
+    tr: "Turkish",
+    ts: "Tsonga",
+    tt: "Tatar",
+    tw: "Twi",
+    ty: "Tahitian",
+    ug: "Uyghur",
+    uk: "Ukrainian",
+    ur: "Urdu",
+    uz: "Uzbek",
+    ve: "Venda",
+    vi: "Vietnamese",
+    vo: "Volapük",
+    wa: "Walloon",
+    wo: "Wolof",
+    xh: "Xhosa",
+    yi: "Yiddish",
+    yo: "Yoruba",
+    za: "Zhuang",
+    zh: "Chinese",
+    zu: "Zulu",
+  })
+)
+</file>
+
+<file path="packages/core/src/lib/isMethodAllowedInPath.ts">
+export const isMethodAllowedInPath = (method?: string, path?: string) => {
+  if (!method || !path) return false
+
+  switch (path) {
+    case "/":
+      return method === "GET"
+    case "/collect":
+      return method === "POST"
+    case "/query":
+      return ["GET", "SEARCH"].includes(method)
+    case "/collect/event":
+      return method === "POST"
+    default:
+      return false
+  }
+}
+</file>
+
+<file path="packages/core/src/lib/parseLanguage.ts">
+import { parseAcceptLanguage } from "intl-parse-accept-language"
+import { languagesIso639_1Dict } from "../helpers/languageHelpers"
+
+export const getLanguage = (langHeader: string | null): string | null => {
+  if (!langHeader) {
+    return null
+  }
+
+  const acceptedLangs = parseAcceptLanguage(langHeader).map((languageWithMaybeLocale) => {
+    const rawLang = languageWithMaybeLocale.includes("-")
+      ? languageWithMaybeLocale.split("-")[0]
+      : languageWithMaybeLocale
+    return languagesIso639_1Dict.get(rawLang)
+  })
+
+  return acceptedLangs.at(0) ?? null
+}
+</file>
+
+<file path="packages/core/src/lib/parseUserAgentProps.ts">
+import { UAParser } from "ua-parser-js"
+
+export type Device = "Desktop" | "Mobile" | "Tablet" | "Unknown"
+
+type ParseUserAgentResponse = {
+  browser: string | null
+  device: string | null
+  os: string | null
+}
+
+export const parseUserAgent = (userAgent: string): ParseUserAgentResponse => {
+  if (!userAgent) {
+    return {
+      browser: null,
+      device: null,
+      os: null,
+    }
+  }
+
+  const parsed = UAParser(userAgent)
+
+  const mobileOSs = [
+    "Android",
+    "iOS",
+    "Windows Phone",
+    "Windows Mobile",
+    "Firefox OS",
+    "BlackBerry",
+  ]
+  const desktopOss = [
+    "Windows",
+    "Mac OS",
+    "Linux",
+    "Chrome OS",
+    "Ubuntu",
+    "Debian",
+    "Fedora",
+    "FreeBSD",
+    "OpenBSD",
+    "NetBSD",
+    "Solaris",
+    "SunOS",
+    "OS X",
+  ]
+  const tabletOss = ["iPad", "iPod", "Kindle", "Nook", "PlayBook", "Tablet"]
+
+  const OS = parsed.os.name ?? ""
+
+  const device =
+    parsed.device?.type ?? mobileOSs.includes(OS)
+      ? "Mobile"
+      : tabletOss.includes(OS)
+      ? "Tablet"
+      : desktopOss.includes(OS)
+      ? "Desktop"
+      : null
+
+  return {
+    browser: parsed.browser?.name ?? null,
+    os: OS ?? null,
+    device: device,
+  }
+}
+</file>
+
+<file path="packages/core/src/lib/utils.spec.ts">
+import { getPartitionIdentifier } from "./utils"
+
+describe("utils", () => {
+  describe("getPartitionIdentifier", () => {
+    const dateGetter = () => new Date("1992-11-16T13:22:33.444Z")
+
+    it("should return correct partition identifier when timePartition is HOURLY", () => {
+      const partitionIdentifier = getPartitionIdentifier("HOURLY", dateGetter)
+      expect(partitionIdentifier).toBe("1992-11-16-13")
+    })
+
+    it("should return correct partition identifier when timePartition is DAILY", () => {
+      const partitionIdentifier = getPartitionIdentifier("DAILY", dateGetter)
+      expect(partitionIdentifier).toBe("1992-11-16")
+    })
+
+    it("should return correct partition identifier when timePartition is fn", () => {
+      const partitionIdentifier = getPartitionIdentifier(() => "klk", dateGetter)
+      expect(partitionIdentifier).toBe("klk")
+    })
+  })
+})
+</file>
+
+<file path="packages/core/README.md">
+## @luchyio/core
+</file>
+
+<file path="packages/core/vitest.config.ts">
+/// <reference types="vitest" />
+import { defineConfig } from "vitest/config"
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+})
+</file>
+
+<file path="packages/middleware/vitest.config.ts">
+/// <reference types="vitest" />
+import { defineConfig } from "vitest/config"
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+})
+</file>
+
+<file path="packages/react/src/index.ts">
+export { collectEvent, collectView, getTracker, LuchyProvider } from "./react"
+export type { LuchyProviderProps } from "./react"
+</file>
+
+<file path="packages/react/src/reactUtils.ts">
+import { useEffect, useRef, useState } from "react"
+
+export const useHasMounted = () => {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  return mounted
+}
+
+export const useEffectOnlyOnce = (
+  callback: (deps: unknown[]) => void,
+  dependencies: unknown[] = [],
+  condition: (deps: unknown[]) => boolean = () => true
+) => {
+  const calledOnce = useRef(false)
+
+  useEffect(() => {
+    if (calledOnce.current) {
+      return
+    }
+
+    if (condition(dependencies)) {
+      calledOnce.current = true
+      return callback(dependencies)
+    }
+  }, [callback, condition, dependencies])
+}
+</file>
+
+<file path="packages/react/README.md">
+## @luchyio/tracker
+</file>
+
+<file path="packages/react/vitest.config.ts">
+/// <reference types="vitest" />
+import { defineConfig } from "vitest/config"
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+})
+</file>
+
+<file path="packages/tracker/src/browser/constants.ts">
+export const scriptAttibutes = {
+  baseUrl: "baseurl",
+  token: "token",
+  autoPageViews: "auto-page-views",
+  autoEvents: "auto-events",
+  isHashRouter: "hashrouter",
+}
+
+export const dataAttributes = {
+  event: "data-luchy-event",
+  eventValue: "data-luchy-event-data",
+}
+</file>
+
+<file path="packages/tracker/src/index.ts">
+export { attachClickEventsToLuchyElements } from "./browser/utils"
+export { createTracker } from "./tracker"
+export type { LuchyTracker } from "./tracker"
+export * from "./types"
+</file>
+
+<file path="packages/tracker/README.md">
+## @luchyio/tracker
+</file>
+
+<file path=".npmrc">
+//npm.pkg.github.com/:_authToken=${LUCHY_GH_TOKEN}
+@luchyio:registry=https://npm.pkg.github.com
+</file>
+
+<file path="vitest.workspace.ts">
+export default ["packages/*"]
+</file>
+
+<file path=".github/workflows/pr.yml">
+name: Test Pull Request
+
+on: [pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: "20"
+
+      - name: Install NPM packages
+        run: pnpm install
+
+      - name: Build project
+        run: pnpm build
+
+      - name: Test project
+        run: pnpm test
+</file>
+
+<file path="packages/adapter-kysely/src/migrations/sqlite/20230722_Initial_migration.ts">
+import { Kysely, sql } from "kysely"
+
+// TODO: expose a migration api
+
+export async function up(db: Kysely<any>): Promise<void> {
+  await db.schema
+    .createTable("sessions")
+    .addColumn("id", "uuid", (col) => col.primaryKey())
+    .addColumn("created_at", "timestamp", (col) =>
+      col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull()
+    )
+    .addColumn("browser", "varchar(20)")
+    .addColumn("os", "varchar(20)")
+    .addColumn("language", "varchar(35)")
+    .addColumn("country", "varchar(10)")
+    .addColumn("device", "varchar(20)")
+    .execute()
+
+  await db.schema
+    .createTable("pageviews")
+    .addColumn("id", "integer", (col) => col.primaryKey().autoIncrement())
+    .addColumn("session_id", "uuid", (col) =>
+      col.notNull().references("sessions.id")
+    )
+    .addColumn("created_at", "timestamp", (col) =>
+      col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull()
+    )
+    .addColumn("url", "varchar(500)", (col) => col.notNull()) // TODO: revisit
+    .addColumn("origin", "varchar(30)")
+    .addColumn("referrer", "varchar(500)")
+    .execute()
+
+  await db.schema
+    .createTable("events")
+    .addColumn("id", "integer", (col) => col.primaryKey().autoIncrement())
+    .addColumn("session_id", "uuid", (col) =>
+      col.notNull().references("sessions.id")
+    )
+    .addColumn("created_at", "timestamp", (col) =>
+      col.defaultTo(sql`CURRENT_TIMESTAMP`).notNull()
+    )
+    .addColumn("url", "varchar(500)", (col) => col.notNull())
+    .addColumn("type", "varchar(50)", (col) => col.notNull())
+    .addColumn("origin", "varchar(30)")
+    .execute()
+
+  // TODO: maybe include in the events table?
+  await db.schema
+    .createTable("event_data")
+    .addColumn("id", "integer", (col) => col.primaryKey().autoIncrement())
+    .addColumn("event_id", "integer", (col) =>
+      col.notNull().unique().references("events.id")
+    )
+    .addColumn("event_data", "jsonb", (col) => col.notNull())
+    .execute()
+
+  // created_at indexes
+  await db.schema
+    .createIndex("session_created_at")
+    .on("sessions")
+    .column("created_at")
+    .execute()
+  await db.schema
+    .createIndex("event_created_at")
+    .on("events")
+    .column("created_at")
+    .execute()
+  await db.schema
+    .createIndex("pageview_created_at")
+    .on("pageviews")
+    .column("created_at")
+    .execute()
+
+  // session indexes
+  await db.schema
+    .createIndex("pageview_session")
+    .on("pageviews")
+    .column("session_id")
+    .execute()
+  await db.schema
+    .createIndex("event_session")
+    .on("events")
+    .column("session_id")
+    .execute()
+}
+
+export async function down(db: Kysely<any>): Promise<void> {
+  await db.schema.dropTable("event_data").execute()
+  await db.schema.dropTable("events").execute()
+  await db.schema.dropTable("pageviews").execute()
+  await db.schema.dropTable("sessions").execute()
+}
+</file>
+
+<file path="packages/adapter-kysely/src/test/runMigrations.ts">
+import { promises as fs } from "fs"
+import { FileMigrationProvider, Kysely, Migrator } from "kysely"
+import * as path from "path"
+
+export async function runMigrations(
+  db: Kysely<any>,
+  migrationFolder: string,
+  command: "up" | "down" = "up"
+) {
+  const migrator = new Migrator({
+    db,
+    provider: new FileMigrationProvider({
+      fs,
+      path,
+      migrationFolder,
+    }),
+  })
+
+  const migrations = await migrator.getMigrations()
+
+  console.log(
+    "Migrations run: ",
+    migrations.map((m) => m.name)
+  )
+
+  const executeCommand = (command: string) => {
+    switch (command) {
+      case "up":
+        return migrator.migrateToLatest()
+      case "down":
+        return migrator.migrateDown()
+      default:
+        throw new Error(`Unknown command: ${command}`)
+    }
+  }
+
+  const { error, results } = await executeCommand(command)
+
+  if (error) {
+    return { error }
+  }
+
+  return { results }
+}
+</file>
+
+<file path="packages/adapter-kysely/src/index.ts">
+export * from "./adapter"
+export * from "./types"
+</file>
+
+<file path="packages/common/src/lib/timeUnit.spec.ts">
+import { vi } from "vitest"
+import { getDateFromTimeUnit, tu } from "./timeUnit"
+
+describe("TimeUnit", () => {
+  describe("When a time unit string is evaluated", () => {
+    // prettier-ignore
+    const cases = [
+      ["1w", { type: "relative", value: "1w", quantity: 1, period: "week" }],
+      ["8days", { type: "relative", value: "8days", quantity: 8, period: "day" }],
+      [ "30m", { type: "relative", value: "30m", quantity: 30, period: "month" }],
+      [ "88years", { type: "relative", value: "88years", quantity: 88, period: "year" }],
+      [ "166661mi", {   type: "relative",   value: "166661mi", quantity: 166661, period: "minute" }],
+      [ "69h", { type: "relative", value: "69h", quantity: 69, period: "hour" }],
+      [ "420s", { type: "relative", value: "420s", quantity: 420, period: "second" }],
+      ["n", { type: "relative", value: "n", quantity: 0, period: "now" }],
+      [ "2022-11-13T21:38:55.203Z", { type: "absolute", value: "2022-11-13T21:38:55.203Z" }],
+      ["2022-11-13", { type: "absolute", value: "2022-11-13" }],
+    ] as const
+
+    it.each(cases)("should parse: %s", (timeUnit, expected) => {
+      expect(tu(timeUnit)).toEqual(expected)
+    })
+
+    it("should throw if invalid iso date", () => {
+      expect(() => tu("matanga")).toThrow("Invalid Date")
+    })
+  })
+
+  describe("getDateFromTimeUnit", () => {
+    beforeAll(() => {
+      vi.useFakeTimers({
+        now: new Date("1992-11-16T00:00:00.000Z"),
+      })
+    })
+
+    afterAll(() => {
+      vi.useRealTimers()
+    })
+
+    it("should parse relative time units", () => {
+      const date = getDateFromTimeUnit(tu("1w"))
+
+      expect(date.toISOString()).toEqual("1992-11-09T00:00:00.000Z")
+    })
+
+    it("should parse absolute time units", () => {
+      const date = getDateFromTimeUnit(tu("2022-11-13T21:38:55.203Z"))
+
+      expect(date.toISOString()).toEqual("2022-11-13T21:38:55.203Z")
+    })
+  })
+})
+</file>
+
+<file path="packages/common/src/query/where/comparators/common.ts">
+import { Output, enumType, safeParse, union } from "valibot"
+
+export const UnarySimpleComparators = ["gt", "gte", "lt", "lte", "eq"] as const
+
+export const UnaryTimeUnitComparators = ["since"] as const
+
+export const BinaryComparators = ["between"] as const
+
+export const UnarySimpleComparatorSchema = enumType(UnarySimpleComparators)
+export const UnaryTimeUnitComparatorSchema = enumType(UnaryTimeUnitComparators)
+export const UnaryComparatorSchema = union([
+  UnarySimpleComparatorSchema,
+  UnaryTimeUnitComparatorSchema,
+])
+
+export const BinaryComparatorSchema = enumType(BinaryComparators)
+export const ComparatorSchema = union([
+  UnaryComparatorSchema,
+  BinaryComparatorSchema,
+])
+
+export type Comparator = Output<typeof ComparatorSchema>
+
+export type UnarySimpleComparator = Output<typeof UnarySimpleComparatorSchema>
+export type UnaryTimeUnitComparator = Output<
+  typeof UnaryTimeUnitComparatorSchema
+>
+export type UnaryComparator = Output<typeof UnaryComparatorSchema>
+export type BinaryComparator = Output<typeof BinaryComparatorSchema>
+
+export const isUnarySimpleComparator = (
+  c: unknown
+): c is UnarySimpleComparator => {
+  return safeParse(UnarySimpleComparatorSchema, c).success
+}
+
+export const isUnaryTimeUnitComparator = (
+  c: unknown
+): c is UnaryTimeUnitComparator => {
+  return safeParse(UnaryTimeUnitComparatorSchema, c).success
+}
+
+export const isUnaryComparator = (c: unknown): c is UnaryComparator => {
+  return isUnarySimpleComparator(c) || isUnaryTimeUnitComparator(c)
+}
+
+export const isBinaryComparator = (c: unknown): c is UnaryComparator => {
+  return safeParse(BinaryComparatorSchema, c).success
+}
+
+export const isComparator = (c: unknown): c is Comparator => {
+  return isUnaryComparator(c) || isBinaryComparator(c)
+}
+</file>
+
+<file path="packages/common/src/query/where/comparators/nodeValues.ts">
+import {
+  Output,
+  boolean,
+  literal,
+  number,
+  object,
+  string,
+  tuple,
+  union,
+} from "valibot"
+import { timeUnit } from "../../../validators"
+
+export const StringLiteralNodeSchema = object({
+  kind: literal("StringLiteral"),
+  value: string(),
+})
+
+export const NumberLiteralNodeSchema = object({
+  kind: literal("NumberLiteral"),
+  value: number(),
+})
+
+export const BooleanLiteralNodeSchema = object({
+  kind: literal("BooleanLiteral"),
+  value: boolean(),
+})
+
+export const TimeUnitNodeSchema = object({
+  kind: literal("TimeUnit"),
+  value: timeUnit(),
+})
+
+export const UnaryTypeNodeSchema = union([
+  StringLiteralNodeSchema,
+  NumberLiteralNodeSchema,
+  BooleanLiteralNodeSchema,
+  TimeUnitNodeSchema,
+])
+
+export const TimeUnitRangeNodeSchema = object({
+  kind: literal("TimeUnitRange"),
+  value: tuple([timeUnit(), timeUnit()]),
+})
+
+export const BinaryTypeNodeSchema = TimeUnitRangeNodeSchema
+
+export const ValueNodeSchema = union([
+  UnaryTypeNodeSchema,
+  BinaryTypeNodeSchema,
+])
+
+export type StringLiteralNode = Output<typeof StringLiteralNodeSchema>
+export type NumberLiteralNode = Output<typeof NumberLiteralNodeSchema>
+export type BooleanLiteralNode = Output<typeof BooleanLiteralNodeSchema>
+export type TimeUnitNode = Output<typeof TimeUnitNodeSchema>
+
+export type TimeUnitRangeNode = Output<typeof TimeUnitRangeNodeSchema>
+
+export type UnaryValueNode = Output<typeof UnaryTypeNodeSchema>
+export type BinaryValueNode = Output<typeof BinaryTypeNodeSchema>
+
+export type ValueNode = Output<typeof ValueNodeSchema>
+
+export type ExtractValueFromValueNode<T extends ValueNode> = T["value"]
+</file>
+
+<file path="packages/common/src/query/where/comparators/unary.spec.ts">
+import { tu } from "../../../lib/timeUnit"
+import { since } from "./unary"
+
+describe("unary", () => {
+  describe.todo("gt", () => {})
+  describe.todo("gte", () => {})
+  describe.todo("lt", () => {})
+  describe.todo("lte", () => {})
+  describe.todo("eq", () => {})
+
+  describe("since", () => {
+    const cases = [
+      ["1w", { quantity: 1, period: "week" }],
+      ["9years", { quantity: 9, period: "year" }],
+      ["2022-01-01", "2022-01-01"],
+      ["2022-01-01T21:38:55.203Z", "2022-01-01T21:38:55.203Z"],
+    ] as const
+
+    it.each(cases)("should parse since: %p", (c, _e) => {
+      expect(since(tu(c))).toEqual({
+        kind: "TimeUnit",
+        value: tu(c),
+      })
+    })
+  })
+})
+</file>
+
+<file path="packages/common/src/query/where/where.spec.ts">
+import { Entities } from "../../constants"
+import { parseTimeUnit } from "../../lib/timeUnit"
+import { between, since } from "./comparators"
+import { parseWhere } from "./where"
+
+describe("where", () => {
+  it("should throw if invalid comparator", () => {
+    expect(() => parseWhere<Entities>("events", "foo(bar, baz)")).toThrowError(
+      "Invalid comparator in where clause: foo"
+    )
+  })
+
+  it("should throw if invalid field", () => {
+    expect(() => parseWhere<Entities>("events", "gt(bar, baz)")).toThrowError(
+      "Invalid column: bar"
+    )
+  })
+
+  describe("should parse comparators", () => {
+    const cases = [
+      [
+        "between(id, 1w, now)",
+        {
+          type: "comparator",
+          lhs: "id",
+          op: "between",
+          rhs: between(parseTimeUnit("1w"), parseTimeUnit("now")),
+        },
+      ],
+      [
+        "since(id, 1m)",
+        {
+          type: "comparator",
+          lhs: "id",
+          op: "since",
+          rhs: since(parseTimeUnit("1m")),
+        },
+      ],
+      [
+        "gt(id,420d)",
+        {
+          type: "comparator",
+          lhs: "id",
+          op: "gt",
+          rhs: { kind: "TimeUnit", value: parseTimeUnit("420d") },
+        },
+      ],
+      [
+        "eq(id, 'var')",
+        {
+          type: "comparator",
+          lhs: "id",
+          op: "eq",
+          rhs: { kind: "StringLiteral", value: "var" },
+        },
+      ],
+      [
+        "eq(id, 1)",
+        {
+          type: "comparator",
+          lhs: "id",
+          op: "eq",
+          rhs: { kind: "NumberLiteral", value: 1 },
+        },
+      ],
+    ] as const
+
+    it.each(cases)("Should parse %p", (c, expected) => {
+      const actual = parseWhere<Entities>("events", c)
+
+      expect(actual).toEqual(expected)
+    })
+  })
+
+  it.todo("should support ands")
+  it.todo("should support ors")
+})
+</file>
+
+<file path="packages/common/src/query/aggregators.spec.ts">
+describe.todo("aggregators", () => {
+  describe("delta", () => {})
+  describe("count", () => {
+    it.todo("should throw if no count")
+    it.todo("should throw if count contains invalid fields")
+    it.todo("should parse simple count with one field")
+    it.todo("should parse simple count with many fields")
+    it.todo("should parse simple count with all fields")
+  })
+})
+</file>
+
+<file path="packages/common/src/query/aggregators.ts">
+import { ValidTimeUnit } from "../lib/timeUnit"
+
+// TOOD: is delta an aggregator?
+// Makes more sense to support multiple queries in the same request
+// and implement delta in userspace
+export const delta = (from: ValidTimeUnit) => {
+  return {
+    kind: "delta",
+    from,
+  }
+}
+</file>
+
+<file path="packages/common/src/query/experiment.ts">
+// @ts-nocheck
+import { Entities } from "../constants"
+
+import { SelectExpression } from "./select"
+import { TypedWhereClause } from "./where"
+
+export type Simplify<T> = { [K in keyof T]: T[K] } & {}
+
+type ExtractStringSE<SE> = SE extends string ? SE : never
+
+type ExtractTypeFromSE<
+  ValidEntities,
+  EK extends keyof ValidEntities,
+  SE,
+  A extends keyof any
+> = SE extends `${string}(${infer C})`
+  ? C extends keyof ValidEntities[EK]
+    ? number // ValidEntities[EK][C]
+    : never
+  : A extends keyof ValidEntities[EK]
+  ? ValidEntities[EK][A]
+  : never
+
+type Selection<ValidEntities, EK extends keyof ValidEntities, SE> = {
+  [A in ExtractStringSE<SE>]: ExtractTypeFromSE<ValidEntities, EK, SE, A>
+}
+
+const AA: SelectExpression<Entities, "pageviews">[] = ["count(id)"]
+const BB: SelectExpression<Entities, "pageviews"> = "id"
+
+type FooAA = Selection<Entities, "pageviews", typeof AA>
+//    ^?
+type FooBB = Selection<Entities, "pageviews", typeof BB>
+//   ^?
+
+class SelectBuilder<ValidEntities, EK extends keyof ValidEntities, O> {
+  select<SE extends SelectExpression<ValidEntities, EK>[]>(columns: SE) {
+    return new SelectBuilder<
+      ValidEntities,
+      EK,
+      // O & SE
+      O & Selection<ValidEntities, EK, SE>
+    >()
+  }
+
+  where<W extends TypedWhereClause<ValidEntities, EK>>(clause: W) {
+    return new SelectBuilder<ValidEntities, EK, O>()
+  }
+
+  build(): O {
+    return {} as any
+  }
+}
+
+class Builder<ValidEntities extends Record<string, unknown>> {
+  from = <EK extends keyof ValidEntities>(entity: EK) => {
+    return new SelectBuilder<ValidEntities, EK, {}>()
+  }
+}
+
+const builder = new Builder<Entities>()
+
+const foo = builder.from("pageviews")
+//     ^?
+
+const foo2 = builder.from("pageviews").select(["id", "url", "avg(createdAt)"])
+//     ^?
+
+const foo3 = builder.from("events").select(["id"]).where("eq(id,1)")
+//     ^?
+
+const foo4 = builder
+  //     ^?
+  .from("events")
+  .select(["id", "url"])
+  .where("eq(id,1)")
+  .build()
+</file>
+
+<file path="packages/common/src/query/from.spec.ts">
+import { isValidFrom } from "./from"
+
+describe("from", () => {
+  describe("isValidFrom", () => {
+    it("should parse simple table", () => {
+      expect(isValidFrom("pageviews")).toEqual(true)
+    })
+
+    it("should return false for invalid tables", () => {
+      expect(isValidFrom("invalid")).toEqual(false)
+    })
+  })
+})
+</file>
+
+<file path="packages/common/src/query/pagination.ts">
+import { Output, number, object } from "valibot"
+
+export const PaginationSchema = object({
+  limit: number(),
+  page: number(),
+})
+
+export const defaultPagination: Output<typeof PaginationSchema> = {
+  limit: 10,
+  page: 0,
+}
+
+export const parsePagination = (
+  query: Record<string, unknown>
+): Output<typeof PaginationSchema> => {
+  const { limit, page } = query
+
+  return {
+    limit: typeof limit === "number" ? limit : defaultPagination.limit,
+    page: typeof page === "number" ? page : defaultPagination.page,
+  }
+}
+</file>
+
+<file path="packages/common/src/validators/utilityTypes.ts">
+// Returns a union of all of the string keys in an object
+export type ExtractStringKeys<T> = {
+  [P in keyof T]: P extends string ? P : never
+}[keyof T]
+</file>
+
+<file path="packages/core/src/lib/fromQueryParams.ts">
+export const fromQueryParams = (input: Record<string, unknown>) => {
+  return {
+    ...input,
+    select: input.select ? input.select.toString().split(",") : undefined,
+  }
+}
+</file>
+
+<file path="packages/core/src/lib/utils.ts">
+import type { IncomingHttpHeaders } from "node:http"
+import type { TimePartition } from "../types"
+
+export const extractFirstHeaderValue = (
+  header: IncomingHttpHeaders[number]
+): string | undefined => {
+  return Array.isArray(header) ? header[0] : header
+}
+
+export const getPartitionIdentifier = (
+  timePartition: TimePartition,
+  dateGetter: () => Date = () => new Date()
+): string => {
+  const date = dateGetter()
+
+  const [year, month, day, hour] = [
+    date.getUTCFullYear(),
+    date.getUTCMonth() + 1,
+    date.getUTCDate(),
+    date.getUTCHours(),
+  ]
+
+  switch (timePartition) {
+    case "HOURLY":
+      return `${year}-${month}-${day}-${hour}`
+    case "DAILY":
+      return `${year}-${month}-${day}`
+    default:
+      return timePartition()
+  }
+}
+
+/**
+ * Normalizes a given file path string by removing leading and trailing slashes.
+ *
+ * @param str - The file path string to normalize. Defaults to an empty string.
+ * @returns The normalized file path string without leading and trailing slashes.
+ */
+export const normalizePath = (str = "") => {
+  let final = str
+  final = final.startsWith("/") ? final.slice(1) : final
+  final = final.endsWith("/") ? final.slice(0, -1) : final
+  return final
+}
+</file>
+
+<file path="packages/core/src/forwardLuchyMessage.ts">
+import { type LuchyMessage } from "@luchyio/common"
+
+import { normalizePath } from "./lib/utils"
+import type { LuchyCoreInitOptions } from "./types"
+
+export const forwardLuchyMessage = async (opts: {
+  message: LuchyMessage
+  params: Omit<LuchyCoreInitOptions, "adapter" | "timePartition"> & {
+    origin?: string
+    basePath?: string
+  }
+}) => {
+  const isQuery = opts.message.operation === "query"
+  const method = isQuery ? "GET" : "POST"
+  const apiBase = `${normalizePath(
+    opts.params.origin ?? "api.luchy.io"
+  )}/${normalizePath(opts.params.basePath)}`
+  const operation = opts.message.operation
+  const logger = opts.params.logger
+
+  const subPath = (() => {
+    switch (operation) {
+      case "query":
+        return "/query"
+      case "event":
+        return "/collect/event"
+      case "pageview":
+        return "/collect/pageview"
+      default:
+        throw new Error(`Unknown operation: ${operation}`)
+    }
+  })()
+
+  const fullUrl = `${normalizePath(apiBase)}${subPath}`
+
+  const body =
+    opts.message.operation === "query" ? opts.message.query : opts.message
+
+  return fetch(fullUrl, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "x-luchy-token": opts.params.token ?? "",
+    },
+    body: JSON.stringify(body),
+  })
+    .then(async (res) => {
+      try {
+        return res.json()
+      } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : "Unknown error"
+
+        logger?.error(
+          JSON.stringify({
+            message: "Error deserializing response",
+            errorMessage,
+            error: e,
+          })
+        )
+      }
+    })
+    .catch((e) => {
+      const errorMessage = e instanceof Error ? e.message : "Unknown error"
+
+      logger?.error(
+        JSON.stringify({
+          message: "Error forwarding message",
+          errorMessage,
+          error: e,
+        })
+      )
+    })
+}
+</file>
+
+<file path="packages/core/src/parseLuchyMessage.ts">
+import {
+  EventMessageSchema,
+  LuchyMessageSchema,
+  PageViewMessageSchema,
+  QueryMessageSchema,
+  SafeParseResult,
+  safeParse,
+} from "@luchyio/common"
+
+export const parseLuchyMessage = (
+  body: Record<string, unknown>
+): SafeParseResult<typeof LuchyMessageSchema> => {
+  if (!("operation" in body) || typeof body.operation !== "string") {
+    throw new Error("Luchy message does not have a valid operation")
+  }
+
+  switch (body.operation) {
+    case "query":
+      return safeParse(QueryMessageSchema, body)
+    case "pageview":
+      return safeParse(PageViewMessageSchema, body)
+    case "event":
+      return safeParse(EventMessageSchema, body)
+    default:
+      throw new Error(`Unknown operation type: ${body.operation}`)
+  }
+}
+</file>
+
+<file path="packages/core/src/processLuchyMessage.ts">
+import type { LuchyMessage } from "@luchyio/common"
+import { luchyCoreFactory } from "./core"
+import type { LuchyCoreInitOptions } from "./types"
+
+export const processLuchyMessage = async (opts: {
+  message: LuchyMessage
+  params: LuchyCoreInitOptions
+}) => {
+  const { message, params } = opts
+  const luchyCore = luchyCoreFactory(params)
+
+  switch (message.operation) {
+    case "event": {
+      const { sessionId, eventId } = await luchyCore.collectEvent({
+        operation: "event",
+        type: message.type,
+        url: message.url,
+        userAgent: message.userAgent,
+        acceptLanguage: message.acceptLanguage,
+        personalIdentifier: message.personalIdentifier,
+        country: message.country,
+        city: message.city,
+        data: message.data,
+        origin: message.origin,
+      })
+      return { sessionId, eventId }
+    }
+
+    case "pageview": {
+      const { sessionId, pageViewId } = await luchyCore.collectPageView({
+        operation: "pageview",
+        url: message.url,
+        userAgent: message.userAgent,
+        acceptLanguage: message.acceptLanguage,
+        referrer: message.referrer,
+        personalIdentifier: message.personalIdentifier,
+        country: message.country,
+        city: message.city,
+        origin: message.origin,
+      })
+
+      return { sessionId, pageViewId }
+    }
+
+    case "query": {
+      const response = await luchyCore.customQuery(message.query)
+
+      return response
+    }
+  }
+}
+</file>
+
+<file path="packages/middleware/README.md">
+## @luchyio/middleware
+
+- If is a normal request, log the pageview
+- If is a luchy request, verify token and execute action
+</file>
+
+<file path="packages/tracker/src/browser/utils.ts">
+import { dataAttributes } from "./constants"
+
+type AttachEventListenerOptions = {
+  elemQuery: string
+  eventType: string
+  callback: EventListener
+  document: Document
+}
+
+const attachEventListener = (options: AttachEventListenerOptions) => {
+  const elements = options.document.querySelectorAll(options.elemQuery)
+
+  elements.forEach((e) =>
+    e.addEventListener(options.eventType, options.callback)
+  )
+}
+
+export const attachClickEventsToLuchyElements = (
+  document: Document,
+  cb: (eventType: string, eventData: unknown) => void | Promise<void>
+) => {
+  attachEventListener({
+    elemQuery: `[${dataAttributes.event}]:not([${dataAttributes.event}=""])`,
+    eventType: "click",
+    document,
+    callback: (e) => {
+      const target = e.currentTarget as HTMLInputElement | null
+
+      const eventTypeAttribute = target?.getAttribute(dataAttributes.event)
+      const eventDataAttribute = target?.getAttribute(dataAttributes.eventValue)
+
+      const eventType =
+        eventTypeAttribute === "true"
+          ? (e.currentTarget as any)?.textContent
+          : eventTypeAttribute
+      const eventData =
+        eventTypeAttribute === "true"
+          ? undefined
+          : eventDataAttribute ?? undefined
+
+      if (!eventType) {
+        return
+      }
+
+      // TODO: subscribe to dom changes and attach new events, if the dom changes
+      // after this runs, new elements won't have appropiate handlers
+      // TODO: unsubscribe listeners
+
+      return cb(eventType, eventData)
+    },
+  })
+}
+</file>
+
+<file path="packages/tracker/webpack.config.js">
+const path = require("path")
+
+const webpackConf = (_, args) => {
+  const isProd = args.mode === "production"
+
+  /** @type {import('webpack').Configuration} */
+  const config = {
+    entry: ["./src/browser/index.ts"],
+    resolve: {
+      extensions: [".js", ".ts"],
+    },
+    output: {
+      filename: "luchy.js",
+      path: path.resolve(__dirname, "umd"),
+    },
+    devtool: isProd ? "source-map" : "inline-source-map",
+    optimization: {
+      minimize: false,
+    },
+    module: {
+      rules: [
+        {
+          test: /\.ts$/,
+          exclude: /(node_modules)/,
+          use: {
+            loader: "swc-loader",
+            /** @type {import("@swc/core").Config;} */
+            options: {
+              jsc: {
+                target: "es2016",
+                parser: {
+                  syntax: "typescript",
+                  tsx: false,
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+  }
+
+  return config
+}
+
+module.exports = webpackConf
+</file>
+
+<file path="packages/adapter-kysely/src/types.ts">
+import { Generated } from "kysely"
+
+// TODO: maybe zod interfaces + { generated }?
+
+export interface Session {
+  id: string
+  created_at: Generated<string>
+  browser?: string
+  os?: string
+  language?: string
+  country?: string
+  device?: string
+  referrer?: string
+}
+
+export interface Pageview {
+  id: Generated<number>
+  session_id: string
+  created_at: Generated<string>
+  url: string
+  origin: string | null
+}
+
+export interface Event {
+  id: Generated<number>
+  session_id: string
+  created_at: Generated<string>
+  url: string
+  type: string
+  origin: string | null
+}
+
+export interface EventData {
+  id: Generated<number>
+  event_id: number
+  event_data: string
+}
+
+export interface DefaultKyselyDb {
+  sessions: Session
+  pageviews: Pageview
+  events: Event
+  event_data: EventData
+}
+
+export type FieldTransformer<T, R> = (value: T) => R
+</file>
+
+<file path="packages/common/src/query/from.ts">
+import { Output, enumType, safeParse } from "valibot"
+import { entityValidators } from "../constants"
+
+// TODO: figure out how to make this work
+const validEntities = Object.keys(entityValidators) as ["events", "pageviews"]
+
+export const FromSchema = enumType(validEntities)
+
+export type From = Output<typeof FromSchema>
+
+export const isValidFrom = (from: string): from is From =>
+  safeParse(FromSchema, from).success
+</file>
+
+<file path="packages/common/src/query/query.spec.ts">
+import { defaultPagination } from "./pagination"
+import { parseQueryFromObject } from "./query"
+
+describe("query", () => {
+  describe("parseQuery", () => {
+    it("should parse simple query with literal columns", () => {
+      const query = {
+        from: "pageviews",
+        select: ["id"],
+      }
+
+      expect(parseQueryFromObject(query)).toEqual({
+        from: "pageviews",
+        select: [{ type: "literal", name: "id", __entity: "pageviews" }],
+        pagination: defaultPagination,
+        where: undefined,
+      })
+    })
+
+    it("should simple query with mixed columns", () => {
+      const query = {
+        from: "pageviews",
+        select: ["id", "sum(createdAt)"],
+      }
+
+      expect(parseQueryFromObject(query)).toEqual({
+        from: "pageviews",
+        select: [
+          { type: "literal", name: "id", __entity: "pageviews" },
+          {
+            type: "aggregate",
+            name: "createdAt",
+            fn: "sum",
+            __entity: "pageviews",
+          },
+        ],
+        pagination: defaultPagination,
+        where: undefined,
+      })
+    })
+
+    it("should simple query with unary where", () => {
+      const query = {
+        from: "pageviews",
+        select: ["id"],
+        where: "eq(id, 1)",
+      }
+
+      expect(parseQueryFromObject(query)).toEqual({
+        from: "pageviews",
+        select: [{ type: "literal", name: "id", __entity: "pageviews" }],
+        pagination: defaultPagination,
+        where: {
+          type: "comparator",
+          lhs: "id",
+          op: "eq",
+          rhs: { kind: "NumberLiteral", value: 1 },
+        },
+      })
+    })
+
+    it("should simple query with binary where", () => {
+      const query = {
+        from: "pageviews",
+        select: ["id", "avg(id)"],
+        where: "between(id,1w,1m)",
+      }
+
+      expect(parseQueryFromObject(query)).toEqual({
+        from: "pageviews",
+        select: [
+          { type: "literal", name: "id", __entity: "pageviews" },
+          { type: "aggregate", name: "id", fn: "avg", __entity: "pageviews" },
+        ],
+        pagination: defaultPagination,
+        where: {
+          type: "comparator",
+          lhs: "id",
+          op: "between",
+          rhs: {
+            kind: "TimeUnitRange",
+            value: [
+              { type: "relative", value: "1w", period: "week", quantity: 1 },
+              { type: "relative", value: "1m", period: "month", quantity: 1 },
+            ],
+          },
+        },
+      })
+    })
+  })
+  describe.todo("builder", () => {})
+})
+</file>
+
+<file path="packages/common/src/query/select.spec.ts">
+import { Entities } from "../constants"
+import {
+  parseSelect,
+  toValidAggregateColumn,
+  toValidLiteralColumn,
+} from "./select"
+
+describe("select", () => {
+  describe("parseSelect", () => {
+    it.todo("should throw if select contains invalid fields")
+    it("should parse select with literal and aggregate columns", () => {
+      expect(
+        parseSelect<Entities>("events", ["id", "count(createdAt)"])
+      ).toEqual([
+        toValidLiteralColumn<Entities>("events", "id"),
+        toValidAggregateColumn<Entities>("events", "count", "createdAt"),
+      ])
+    })
+
+    describe("group", () => {
+      it.todo("should support aggregation functions")
+      it.todo("should throw when using aggregation functions when not grouped")
+      it.todo(
+        "should throw if any field (not in the groupBy) is not using aggregation"
+      )
+    })
+
+    describe("aggregation functions", () => {
+      const fns = ["avg", "count", "sum", "max", "min"]
+
+      describe.each(fns)("should support %p", (_fn) => {
+        it.todo("should throw if invalid field")
+        it.todo("should parse fn with field")
+      })
+
+      it.todo("should parse count with all fields")
+      it.todo("should throw if invalid function")
+      it.todo("should throw if invalid parenthesis")
+    })
+  })
+})
+</file>
+
+<file path="packages/common/src/validators/index.ts">
+export * from "../query/query"
+export * from "./entity"
+export * from "./message"
+</file>
+
+<file path="packages/common/src/validators/message.ts">
+import {
+  Output,
+  array,
+  boolean,
+  literal,
+  merge,
+  nullable,
+  number,
+  object,
+  optional,
+  record,
+  string,
+  union,
+} from "valibot"
+
+export const LuchyOperation = union([
+  literal("pageview"),
+  literal("event"),
+  literal("query"),
+])
+
+export const BaseMessageSchema = object({
+  operation: union([literal("pageview"), literal("event"), literal("query")]),
+  url: string(),
+  userAgent: string(),
+  acceptLanguage: string(),
+  personalIdentifier: string(),
+  country: string(),
+  city: string(),
+  origin: string(),
+})
+
+export const PageViewMessageSchema = merge([
+  BaseMessageSchema,
+  object({
+    referrer: nullable(string()),
+    operation: literal("pageview"),
+  }),
+])
+
+export const EventMessageSchema = merge([
+  BaseMessageSchema,
+  object({
+    operation: literal("event"),
+    type: string(),
+    data: optional(record(string(), union([string(), number(), boolean()]))),
+  }),
+])
+
+const QueryInputSchema = object({
+  from: string(),
+  select: array(string()),
+  where: optional(string()),
+  limit: optional(number()),
+  page: optional(number()),
+})
+
+export type QueryInput = Output<typeof QueryInputSchema>
+
+export const QueryMessageSchema = object({
+  operation: literal("query"),
+  query: QueryInputSchema,
+})
+
+export const LuchyMessageSchema = union([
+  PageViewMessageSchema,
+  EventMessageSchema,
+  QueryMessageSchema,
+])
+</file>
+
+<file path="packages/common/src/entityTypes.ts">
+import {
+  BaseMessageSchema,
+  EventMessageSchema,
+  LuchyMessageSchema,
+  PageViewMessageSchema,
+  QueryMessageSchema,
+} from "./validators"
+import {
+  EventDataSchema,
+  EventSchema,
+  PageviewSchema,
+  SessionSchema,
+} from "./validators/entity"
+
+import { Output } from "valibot"
+
+export type Session = Output<typeof SessionSchema>
+
+export type Event = Output<typeof EventSchema>
+
+export type EventData = Output<typeof EventDataSchema>
+
+export type Pageview = Output<typeof PageviewSchema>
+
+export type BaseMessage = Output<typeof BaseMessageSchema>
+export type PageViewMessage = Output<typeof PageViewMessageSchema>
+export type EventMessage = Output<typeof EventMessageSchema>
+export type QueryMessage = Output<typeof QueryMessageSchema>
+
+export type LuchyMessage = Output<typeof LuchyMessageSchema>
+</file>
+
+<file path="packages/core/src/parseLuchyMessage.spec.ts">
+import { parseLuchyMessage } from "./parseLuchyMessage"
+
+describe("parseLuchyMessage", () => {
+  describe.todo("when is called with a valid pageview message", () => {})
+  describe.todo("when is called with a valid pageview event", () => {})
+  describe("when is called with a valid pageview query", () => {
+    const queryMessage = {
+      personalIdentifier: "127.0.0.1",
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+      referrer: "about:client",
+      acceptLanguage: "en-US,en;q=0.9,es;q=0.8,sv;q=0.7",
+      country: "DO",
+      city: "Santo Domingo",
+      url: "http://localhost:3000/api/luchy-kysely/query?from=pageviews&select=id",
+      operation: "query",
+      origin: "next-middleware",
+      query: { from: "pageviews", select: ["id"], limit: 10, page: 0 },
+    }
+
+    it("should return a valid query message", () => {
+      const result = parseLuchyMessage(queryMessage)
+
+      expect(result).toEqual({
+        success: true,
+        data: {
+          operation: "query",
+          query: queryMessage.query,
+        },
+      })
+    })
+  })
+})
+</file>
+
+<file path="packages/tracker/src/browser/index.ts">
+import { createTracker } from "../tracker"
+import { scriptAttibutes } from "./constants"
+import { attachClickEventsToLuchyElements } from "./utils"
+
+// TODO: extract this into units
+declare global {
+  interface Window {
+    luchy: any
+  }
+}
+
+const iife = async () => {
+  const getAttribute = document.currentScript?.getAttribute.bind(
+    document.currentScript
+  )
+
+  const baseUrl = getAttribute?.(scriptAttibutes.baseUrl) ?? location.origin
+
+  const token = getAttribute?.(scriptAttibutes.token) ?? ""
+  const autoPageViews = getAttribute?.(scriptAttibutes.autoPageViews) ?? false
+  const autoEvents = getAttribute?.(scriptAttibutes.autoEvents) ?? true
+  const isHashRouter = getAttribute?.(scriptAttibutes.isHashRouter) ?? false
+
+  if (!token) {
+    console.warn("[luchy-initialization] Luchy token was not provided")
+  }
+
+  const currentUrl = location.href
+
+  const luchyTracker = createTracker({ baseUrl, token })
+
+  if (!window.luchy) {
+    window.luchy = luchyTracker
+  }
+
+  const onRouteChange = (nextUrl: string) => {
+    console.warn("TODO: handle onRouteChange", {
+      nextUrl,
+      previousUrl: location.pathname,
+    })
+  }
+
+  if (autoPageViews) {
+    // Track initial pageview
+    luchyTracker.collectView(currentUrl)
+
+    if (isHashRouter) {
+      window.addEventListener("hashchange", () => {
+        onRouteChange(location.href)
+      })
+    } else {
+      const history = window.history
+
+      if (history.pushState) {
+        const originalPushState = history.pushState
+
+        history.pushState = function (
+          data: unknown,
+          unused: string,
+          url?: string | URL | null
+        ) {
+          onRouteChange(url instanceof URL ? url.href : url ?? "")
+          originalPushState.apply(this, [data, unused, url])
+        }
+
+        // TODO: is this needed?
+        window.addEventListener("popstate", () => {
+          onRouteChange(location.href)
+        })
+      }
+    }
+  }
+
+  if (autoEvents) {
+    attachClickEventsToLuchyElements(document, (eventType, eventData) =>
+      luchyTracker.collectEvent(eventType, eventData)
+    )
+  }
+}
+
+// prettier is behaving weirdly
+iife()
+</file>
+
+<file path=".gitignore">
+node_modules
+.cache
+dist
+umd
+.env
+</file>
+
+<file path=".github/workflows/release.yml">
+name: Release Package
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Use Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: "20"
+
+      - name: Install NPM packages
+        run: pnpm install
+
+      - name: Build project
+        run: pnpm build
+
+      - name: Test project
+        run: pnpm test
+
+      - name: Release package
+        run: pnpm release
+        env:
+          GH_TOKEN: ${{ secrets.LUCHY_GH_TOKEN }}
+          LUCHY_GH_TOKEN: ${{ secrets.LUCHY_GH_TOKEN }}
+          NPM_TOKEN: ${{ secrets.LUCHY_GH_TOKEN }}
+</file>
+
+<file path="packages/common/src/query/where/where.ts">
+import { literal, object, Output, string, union } from "valibot"
+
+import { ParsingError } from "../../lib/ParsingError"
+import { TimeUnit } from "../../lib/timeUnit"
+import { ExtractStringKeys } from "../../validators/utilityTypes"
+import { assertValidColumn } from "../utils"
+import {
+  BinaryComparator,
+  BinaryComparatorSchema,
+  BinaryTypeNodeSchema,
+  isBinaryComparator,
+  isComparator,
+  isUnaryComparator,
+  isUnarySimpleComparator,
+  isUnaryTimeUnitComparator,
+  TimeUnitNodeSchema,
+  UnarySimpleComparator,
+  UnarySimpleComparatorSchema,
+  UnaryTimeUnitComparator,
+  UnaryTimeUnitComparatorSchema,
+  UnaryTypeNodeSchema,
+} from "./comparators"
+import { binaryTimeUnitComparatorParser } from "./comparators/binaryParamsParser"
+import {
+  unaryComparatorParser,
+  unaryTimeUnitComparatorParser,
+} from "./comparators/unaryParamsParser"
+
+const WhereNodeTypeSchema = literal("comparator")
+
+export const UnarySimpleWhereSchema = object({
+  type: WhereNodeTypeSchema,
+  lhs: string(),
+  op: UnarySimpleComparatorSchema,
+  rhs: UnaryTypeNodeSchema,
+})
+
+export const UnaryTimeUnitWhereSchema = object({
+  type: WhereNodeTypeSchema,
+  lhs: string(),
+  op: UnaryTimeUnitComparatorSchema,
+  rhs: TimeUnitNodeSchema,
+})
+
+export const BinaryWhereSchema = object({
+  type: WhereNodeTypeSchema,
+  lhs: string(),
+  op: BinaryComparatorSchema,
+  rhs: BinaryTypeNodeSchema,
+})
+
+export const WhereSchema = union([
+  UnarySimpleWhereSchema,
+  UnaryTimeUnitWhereSchema,
+  BinaryWhereSchema,
+])
+
+export type UnarySimpleWhere = Output<typeof UnarySimpleWhereSchema>
+export type UnaryTimeUnitWhere = Output<typeof UnaryTimeUnitWhereSchema>
+export type UnaryWhere = UnarySimpleWhere | UnaryTimeUnitWhere
+export type BinaryWhere = Output<typeof BinaryWhereSchema>
+export type Where = UnaryWhere | BinaryWhere
+
+export const parseWhere = <
+  ValidEntities,
+  Key extends keyof ValidEntities = keyof ValidEntities
+>(
+  entityKey: Key,
+  clause: string
+): Output<typeof WhereSchema> => {
+  // foo(bar, baz) => ["foo(bar, baz)", "foo", "bar,baz"] => [clause, operator, params]
+  const regResult = /(\w+)\((.*)\)/.exec(clause)
+
+  if (!regResult) {
+    throw new ParsingError("Invalid where clause", { clause })
+  }
+
+  const maybeComparator = regResult?.at(1)
+  const fieldAndParamsArr = regResult?.at(2)?.split(",")
+
+  if (!isComparator(maybeComparator)) {
+    throw new ParsingError(
+      "Invalid comparator in where clause: " + maybeComparator,
+      {
+        clause,
+      }
+    )
+  }
+
+  if (!fieldAndParamsArr || fieldAndParamsArr.length === 0) {
+    throw new ParsingError("Invalid params in where clause", {
+      clause,
+    })
+  }
+
+  const [field, ...paramsArr] = fieldAndParamsArr
+
+  assertValidColumn(entityKey, field)
+
+  if (isUnarySimpleComparator(maybeComparator)) {
+    return {
+      type: "comparator",
+      lhs: field,
+      op: maybeComparator,
+      rhs: unaryComparatorParser(paramsArr),
+    }
+  } else if (isUnaryTimeUnitComparator(maybeComparator)) {
+    return {
+      type: "comparator",
+      lhs: field,
+      op: maybeComparator,
+      rhs: unaryTimeUnitComparatorParser(paramsArr),
+    }
+  } else if (isBinaryComparator(maybeComparator)) {
+    return {
+      type: "comparator",
+      lhs: field,
+      op: maybeComparator,
+      rhs: binaryTimeUnitComparatorParser(paramsArr),
+    }
+  }
+
+  throw new ParsingError("Unknown error Parsing where clause", { clause })
+}
+
+type AllValidRHS = TimeUnit | number | boolean | `'${string}'`
+
+type TypedUnarySimpleComparatorClause<
+  ValidEntities,
+  K extends keyof ValidEntities
+> = `${UnarySimpleComparator}(${ExtractStringKeys<
+  ValidEntities[K]
+>},${AllValidRHS})`
+
+type TypedUnaryTimeUnitComparatorClause<
+  ValidEntities,
+  K extends keyof ValidEntities
+> = `${UnaryTimeUnitComparator}(${ExtractStringKeys<
+  ValidEntities[K]
+>},${TimeUnit})`
+
+type TypedBinaryComparatorClause<
+  ValidEntities,
+  K extends keyof ValidEntities
+> = `${BinaryComparator}(${ExtractStringKeys<
+  ValidEntities[K]
+>},${TimeUnit},${TimeUnit})`
+
+export type TypedWhereClause<ValidEntities, K extends keyof ValidEntities> =
+  | TypedUnarySimpleComparatorClause<ValidEntities, K>
+  | TypedUnaryTimeUnitComparatorClause<ValidEntities, K>
+  | TypedBinaryComparatorClause<ValidEntities, K>
+
+export const isUnaryWhere = (w: Where): w is UnaryWhere => {
+  return isUnaryComparator(w.op)
+}
+
+export const isBinaryWhere = (w: Where): w is BinaryWhere => {
+  return isBinaryComparator(w.op)
+}
+</file>
+
+<file path="packages/common/src/query/utils.ts">
+import { Entities, entityValidators, QueryEntityKey } from "../constants"
+import { ParsingError } from "../lib/ParsingError"
+
+export const assertValidEntity = (key: unknown): key is QueryEntityKey => {
+  if (typeof key !== "string" || !(key in entityValidators)) {
+    throw new ParsingError(`Invalid entity: ${key}`)
+  }
+
+  return true
+}
+
+export const assertValidColumn = <T extends QueryEntityKey>(
+  entityKey: unknown,
+  column: unknown
+): column is keyof Entities[T] => {
+  assertValidEntity(entityKey)
+  // dont know why ^ doesn't typecheck entityKey as QueryEntityKey
+
+  const key = entityKey as QueryEntityKey
+  const entity = entityValidators[key]
+
+  if (typeof column !== "string" || !(column in entity.object)) {
+    throw new ParsingError(`Invalid column: ${column}`)
+  }
+
+  return true
+}
+</file>
+
+<file path="packages/common/src/utils/index.ts">
+export * from "./assertUnreachable"
+export * from "./withOverrides"
+</file>
+
+<file path="packages/common/src/validators/entity.ts">
+import { ValidTimeUnit, tryParseTimeUnit } from "../lib/timeUnit"
+
+import {
+  BaseSchema,
+  ValiError,
+  boolean,
+  nullable,
+  number,
+  object,
+  record,
+  string,
+  union,
+} from "valibot"
+
+// TODO: create a generic fnToValidator that takes a function that return a boolean and returns Validator<T>
+
+export type TimeUnitSchema<TOutput = ValidTimeUnit> = BaseSchema<
+  ValidTimeUnit,
+  TOutput
+> & {
+  schema: "timeUnit"
+}
+
+export function timeUnit(): TimeUnitSchema {
+  // Create and return timeUnit schema
+  return {
+    /**
+     * The schema type.
+     */
+    schema: "timeUnit",
+
+    /**
+     * Whether it's async.
+     */
+    async: false,
+
+    /**
+     * Parses unknown input based on its schema.
+     *
+     * @param input The input to be parsed.
+     * @param info The parse info.
+     *
+     * @returns The parsed output.
+     */
+    parse(input, info) {
+      const result = tryParseTimeUnit(input)
+
+      if (!result.valid) {
+        throw new ValiError([
+          {
+            reason: "type",
+            validation: "timeUnit",
+            origin: "value",
+            message: result.error,
+            input,
+            ...info,
+          },
+        ])
+      }
+
+      return result.val
+    },
+  }
+}
+
+export const SessionSchema = object({
+  id: string(),
+  createdAt: string(), // todo: date
+  browser: nullable(string()),
+  os: nullable(string()),
+  language: nullable(string()),
+  country: nullable(string()),
+  device: nullable(string()),
+})
+
+export const EventSchema = object({
+  id: string(),
+  type: string(),
+  url: string(),
+  sessionId: string(),
+  createdAt: string(),
+  origin: nullable(string()),
+})
+
+export const EventDataSchema = object({
+  id: string(),
+  eventId: string(),
+  data: record(string(), union([string(), number(), boolean()])),
+})
+
+export const PageviewSchema = object({
+  id: string(),
+  url: string(),
+  sessionId: string(),
+  createdAt: string(),
+  referrer: nullable(string()),
+  origin: nullable(string()),
+})
+</file>
+
+<file path="packages/common/src/constants.ts">
+import { Event, Pageview, Session } from "./entityTypes"
+import { EventSchema, PageviewSchema, SessionSchema } from "./validators/entity"
+
+export const entityValidators = {
+  pageviews: PageviewSchema,
+  events: EventSchema,
+  sessions: SessionSchema,
+} as const
+
+export type Entities = {
+  pageviews: Pageview
+  events: Event
+  sessions: Session
+}
+
+export type QueryEntityKey = keyof Entities
+</file>
+
+<file path="packages/core/src/lib/getBaseMessageFromHeaders.ts">
+type BaseInfo = {
+  personalIdentifier: string | undefined
+  userAgent: string | undefined
+  referrer: string | undefined
+  acceptLanguage: string | undefined
+  country: string | undefined
+  city: string | undefined
+}
+
+// X-Client-IP
+// X-Forwarded-For
+// Fly-Client-IP
+// CF-Connecting-IP
+// Fastly-Client-Ip
+// True-Client-Ip
+// X-Real-IP
+// X-Cluster-Client-IP
+// X-Forwarded
+// Forwarded-For
+// Forwarded
+// DO-Connecting-IP
+// oxygen-buyer-ip
+
+export const getBaseInfoFromReqAndHeaders = (
+  headers: Map<string, string>,
+  extra: Record<string, string | undefined> = {}
+): BaseInfo & Record<string, string | undefined> => {
+  // TODO: separate headers by providers (vercel, cf...)
+
+  return Object.assign(
+    {},
+    {
+      personalIdentifier:
+        extra.ip ??
+        headers.get("x-real-ip") ??
+        headers.get("cf-connecting-ip") ??
+        headers.get("x-forwarded-for"),
+      userAgent: headers.get("user-agent"),
+      referrer: extra.referrer ?? headers.get("referer"),
+      acceptLanguage: headers.get("accept-language"),
+      country:
+        extra.country ??
+        headers.get("x-vercel-ip-country") ??
+        headers.get("cf-ipcountry"),
+      city: extra.city ?? headers.get("x-vercel-ip-city"),
+    },
+    extra
+  )
+}
+</file>
+
+<file path="packages/tracker/src/types.ts">
+export type LuchyTrackerOptions = {
+  baseUrl?: string
+  basePath?: string
+  token?: string
+  origin?: string
+}
+</file>
+
+<file path="pnpm-workspace.yaml">
+packages:
+  - packages/**
+  - examples/**
+</file>
+
+<file path="README.md">
+# Luchy
+
+## To create a new package
+
+- Copy boilerplate from test-package
+- Create an initial git tag `git tag -m "Initial <PackageName>" @luchyio/<packagename>-v0.0.0 e1b057fa8e0fdc7b4f5ec3740da3fe9bf8166cd7
+- Push `git push --tags`
+
+## TODO:
+
+### all
+
+- move to vitest
+
+### core
+
+- make ignoreRules part of the core and generalize it
+- Move important types to common
+
+### middleware
+
+- collect pageviews from all paths, right now only checking script paths
+- implement ignore rules after generalized in core
+- type LuchyParamsMiddleware.ignoreRules as IgnoreRules[]
+- implement basePath
+
+### next
+
+- forward messages to api route
+- move middleware code to luchyio/middleware
+
+### query builder
+
+- [ ] separate operator tests
+- [ ] separate select tests
+- [ ] complete where tests
+- [ ] create from tests
+- [ ] create select tests
+- [ ] create aggregator tests
+- [ ] create group tests
+- [ ] define join
+</file>
+
+<file path="packages/common/src/query/query.ts">
+import { object, optional, Output } from "valibot"
+import { Entities } from "../constants"
+import { ParsingError } from "../lib/ParsingError"
+import { FromSchema } from "./from"
+import { PaginationSchema, parsePagination } from "./pagination"
+import { parseSelect, SelectSchema, ValidColumn } from "./select"
+import { assertValidEntity } from "./utils"
+import { parseWhere, WhereSchema } from "./where"
+
+// TODO: this shape doesn't contain the generics, it should only be used to guarantee
+// runtime safety but not to type the query object
+export const QuerySchema = object({
+  from: FromSchema,
+  select: SelectSchema,
+  where: optional(WhereSchema),
+  pagination: optional(PaginationSchema),
+})
+
+export type Query = Output<typeof QuerySchema>
+
+export type ValidQueryObject<ValidEntities = Entities> = {
+  from: keyof ValidEntities
+  select: ValidColumn<ValidEntities, keyof ValidEntities>[]
+} & Omit<Query, "from" | "select">
+
+type Input<Entities> = {
+  from: keyof Entities
+} & Record<string, unknown>
+
+export const parseQuery = (
+  query: Input<Entities>
+): ValidQueryObject<Entities> => {
+  const { from } = query
+
+  if (!query.select) throw new ParsingError("Missing select in query")
+  if (!Array.isArray(query.select))
+    throw new ParsingError("Select must be an array")
+
+  // TODO: remove these type parameters
+  const select = parseSelect<Entities, keyof Entities>(from, query.select)
+
+  if (typeof query.where !== "string" && query.where !== undefined) {
+    throw new ParsingError("Where must be a string")
+  }
+
+  // TODO: remove these type parameters
+  const where = query.where
+    ? parseWhere<Entities, keyof Entities>(from, query.where)
+    : undefined
+
+  const pagination = parsePagination(query)
+
+  return {
+    from,
+    select,
+    where,
+    pagination,
+  }
+}
+
+export const parseQueryFromObject = (query: Record<string, unknown>) => {
+  const fromQuery = query.from
+  if (!fromQuery) throw new ParsingError("Missing from in query")
+  if (typeof fromQuery !== "string")
+    throw new ParsingError("From must be a string")
+
+  assertValidEntity(fromQuery)
+  // TODO: don't know why assertValidEntity doesnt assert this
+  const from = fromQuery as keyof Entities
+
+  return parseQuery({ ...query, from })
+}
+
+export type CustomQueryResult = {
+  results: unknown
+  meta?: {
+    count: number
+    page: number
+  }
+}
+</file>
+
+<file path="packages/common/src/query/select.ts">
+import {
+  array,
+  enumType,
+  literal,
+  object,
+  Output,
+  safeParse,
+  string,
+  union,
+} from "valibot"
+import { ParsingError } from "../lib/ParsingError"
+
+import { assertValidColumn, assertValidEntity } from "./utils"
+
+export const AggregationFunctions = [
+  "avg",
+  "count",
+  "sum",
+  "max",
+  "min",
+] as const
+
+const AggregateFunctionSchema = enumType(AggregationFunctions)
+
+export type AggregationFunction = (typeof AggregationFunctions)[number]
+
+const LiteralColumnSchema = object({
+  type: literal("literal"),
+  name: string(),
+})
+
+const AggregateColumnSchema = object({
+  type: literal("aggregate"),
+  fn: AggregateFunctionSchema,
+  name: string(),
+})
+
+export const SelectSchema = array(
+  union([LiteralColumnSchema, AggregateColumnSchema])
+)
+
+export type LiteralColumn = Output<typeof LiteralColumnSchema>
+export type AggregateColumn = Output<typeof AggregateColumnSchema>
+export type Column = LiteralColumn | AggregateColumn
+
+export type ValidLiteralColumn<
+  ValidEntities,
+  T extends keyof ValidEntities = keyof ValidEntities,
+  Name extends keyof ValidEntities[T] = keyof ValidEntities[T]
+> = Omit<LiteralColumn, "name"> & {
+  name: Name
+  __entity: T
+}
+
+export type ValidAggregateColumn<
+  ValidEntities,
+  T extends keyof ValidEntities
+> = Omit<AggregateColumn, "name"> & {
+  name: keyof ValidEntities[T]
+  __entity: T
+}
+export type ValidColumn<ValidEntities, T extends keyof ValidEntities> =
+  | ValidLiteralColumn<ValidEntities, T>
+  | ValidAggregateColumn<ValidEntities, T>
+
+// Builder
+export type AnyColumn<Entities, E extends keyof Entities> = [Entities] extends [
+  unknown
+]
+  ? {
+      [T in E]: keyof Entities[T]
+    }[E] &
+      string
+  : never
+
+export type AnyAggregatedColumn<Entities, E extends keyof Entities> = {
+  [EK in E]: EK extends string
+    ? keyof Entities[EK] extends string
+      ? `${AggregationFunction}(${keyof Entities[EK]})`
+      : never
+    : never
+}[E]
+
+export type SelectExpression<ValidEntities, TB extends keyof ValidEntities> =
+  | AnyColumn<ValidEntities, TB>
+  | AnyAggregatedColumn<ValidEntities, TB>
+
+// End Builder
+const isValidAggregationFunction = (fn: string): fn is AggregationFunction =>
+  safeParse(AggregateFunctionSchema, fn).success
+
+export const toValidLiteralColumn = <
+  ValidEntities,
+  T extends keyof ValidEntities = keyof ValidEntities,
+  Name extends keyof ValidEntities[T] = keyof ValidEntities[T]
+>(
+  entity: T,
+  name: Name
+): ValidLiteralColumn<ValidEntities, T> => ({
+  type: "literal",
+  name,
+  __entity: entity,
+})
+
+export const toValidAggregateColumn = <
+  ValidEntities,
+  T extends keyof ValidEntities = keyof ValidEntities,
+  Name extends keyof ValidEntities[T] = keyof ValidEntities[T]
+>(
+  entity: T,
+  fn: AggregationFunction,
+  name: Name
+): ValidAggregateColumn<ValidEntities, T> => ({
+  type: "aggregate",
+  fn,
+  name,
+  __entity: entity,
+})
+
+const parseValidLiteralColumn = <
+  ValidEntities,
+  Key extends keyof ValidEntities
+>(
+  entityKey: Key,
+  column: unknown
+): ValidLiteralColumn<ValidEntities, Key> => {
+  assertValidEntity(entityKey)
+
+  assertValidColumn(entityKey, column)
+
+  return {
+    type: "literal",
+    name: column as keyof ValidEntities[Key],
+    __entity: entityKey,
+  }
+}
+
+const parseValidAggregationColumn = <
+  ValidEntities,
+  Key extends keyof ValidEntities
+>(
+  entityKey: Key,
+  column: string,
+  aggregationFn: string
+): ValidAggregateColumn<ValidEntities, Key> => {
+  const literal = parseValidLiteralColumn<ValidEntities, Key>(entityKey, column)
+
+  if (!isValidAggregationFunction(aggregationFn)) {
+    throw new ParsingError(`Invalid aggregation function: ${aggregationFn}`)
+  }
+
+  return {
+    ...literal,
+    type: "aggregate",
+    fn: aggregationFn,
+  }
+}
+
+export function parseSelect<
+  ValidEntities,
+  Key extends keyof ValidEntities = keyof ValidEntities
+>(entityKey: Key, inputs: string[]): ValidColumn<ValidEntities, Key>[] {
+  return inputs.map((column) => {
+    const hasParenthesis = column.includes("(") || column.includes(")")
+    const hasBothParenthesis = column.includes("(") && column.includes(")")
+
+    if (hasParenthesis && !hasBothParenthesis) {
+      throw new ParsingError("Invalid parenthesis in select: " + column)
+    }
+
+    if (!hasParenthesis) {
+      return parseValidLiteralColumn<ValidEntities, Key>(entityKey, column)
+    }
+
+    // Split by parenthesis
+    const [fn, name] = column.split(/\(|\)/)
+
+    return parseValidAggregationColumn<ValidEntities, Key>(entityKey, name, fn)
+  })
+}
+</file>
+
+<file path="packages/common/src/index.ts">
+export * from "./constants"
+export * from "./entityTypes"
+export * from "./lib/ParsingError"
+export * from "./lib/timeUnit"
+export * from "./query"
+export * from "./utils"
+export * from "./validators"
+export { SafeParseResult, safeParse }
+import { BaseSchema, safeParse } from "valibot"
+
+type SafeParseResult<S extends BaseSchema> = ReturnType<typeof safeParse<S>>
+</file>
+
+<file path="packages/core/src/lib/session.ts">
+import { v5, validate as validateUUID } from "uuid"
+import type {
+  CollectParams,
+  LuchyCoreInitOptions,
+  UpsertSessionInput,
+  UpsertSessionInputWithId,
+} from "../types"
+import { getLanguage } from "./parseLanguage"
+import { parseUserAgent } from "./parseUserAgentProps"
+import { getPartitionIdentifier } from "./utils"
+
+const getUuidFromSession = (
+  timePartition: string,
+  personalIdentifier = "",
+  deviceIdentifier = "",
+  namespace = "f100ded0-0000-4000-a000-000000000000"
+): string => {
+  if (!validateUUID(namespace)) {
+    throw new Error("Salt/namespace is not a valid uuid")
+  }
+
+  return v5(
+    `${timePartition}${personalIdentifier}${deviceIdentifier}`,
+    namespace
+  )
+}
+
+export const parseSession = (
+  initOptions: LuchyCoreInitOptions,
+  collectParams: CollectParams
+): UpsertSessionInputWithId => {
+  const { device, os, browser } = parseUserAgent(collectParams.userAgent)
+  const language = getLanguage(collectParams.acceptLanguage)
+
+  const session: UpsertSessionInput = {
+    browser,
+    os,
+    language,
+    country: collectParams.country,
+    device,
+  }
+
+  const partitionIdentifier = getPartitionIdentifier(
+    initOptions.timePartition ?? "HOURLY"
+  )
+
+  const sessionId = getUuidFromSession(
+    partitionIdentifier,
+    collectParams.personalIdentifier,
+    collectParams.userAgent,
+    initOptions.salt
+  )
+
+  return {
+    ...session,
+    id: sessionId,
+  }
+}
+</file>
+
+<file path="packages/middleware/src/index.test.ts">
+import {
+  type BackendAdapter,
+  type BaseMessage,
+  type EventMessage,
+  type ILogger,
+  type PageViewMessage,
+  withOverrides,
+} from "@luchyio/core"
+import { http, HttpResponse } from "msw"
+import { setupServer } from "msw/node"
+import { vi } from "vitest"
+import { mock } from "vitest-mock-extended"
+import {
+  type LuchyMiddlewareInitOptions,
+  type RequestLike,
+  type ResponseLike,
+  luchyMiddleware,
+} from "./index"
+
+const restHandlers = [
+  http.post("https://foobar.com/luchy/collect/event", () => {
+    return HttpResponse.json({ intercepted: true })
+  }),
+]
+
+const server = setupServer(...restHandlers)
+
+const getUrl = (path = "/") => `https://foo.com${path}`
+
+// TODO: copied from nextApiHandler, generalize
+const httpMethods = [
+  "GET",
+  "HEAD",
+  "POST",
+  "PUT",
+  "DELETE",
+  "CONNECT",
+  "OPTIONS",
+  "TRACE",
+  "PATCH",
+]
+
+type GetMiddlewareMockOpts = {
+  request: Partial<RequestLike>
+  initOptions: Partial<LuchyMiddlewareInitOptions>
+}
+
+const getMiddlewareMock = (opts?: GetMiddlewareMockOpts) => {
+  const requestLike = mock<RequestLike>(opts?.request ?? {})
+  const responseLike = mock<ResponseLike>()
+  const adapter = mock<BackendAdapter>()
+  const initOptions: LuchyMiddlewareInitOptions = {
+    ...opts?.initOptions,
+    adapter,
+    logger: mock<ILogger>(),
+    salt: undefined, // In case salt is not passed, we need it to be undefined
+    basePath: undefined,
+    token: opts?.initOptions?.token ?? "",
+  }
+
+  return {
+    initOptions,
+    requestLike,
+    responseHandler: vi.fn(),
+    responseLike,
+    adapter,
+  }
+}
+
+const getHostedMiddlewareMock = (opts?: GetMiddlewareMockOpts) => {
+  const requestLike = mock<RequestLike>(opts?.request ?? {})
+  const responseLike = mock<ResponseLike>()
+  const initOptions: LuchyMiddlewareInitOptions = {
+    ...opts?.initOptions,
+    origin: "https://foobar.com",
+    logger: mock<ILogger>(),
+    salt: undefined, // In case salt is not passed, we need it to be undefined
+    token: opts?.initOptions?.token ?? "",
+  }
+
+  return {
+    initOptions,
+    requestLike,
+    responseHandler: vi.fn(),
+    responseLike,
+  }
+}
+
+const assertInvalidHttpMethods = (
+  validMethod: (typeof httpMethods)[number],
+  opts: GetMiddlewareMockOpts = {
+    request: {},
+    initOptions: {},
+  }
+) => {
+  return describe.each(httpMethods.filter((m) => m !== validMethod))(
+    "and request method is %s",
+    (method) => {
+      it("should return 405", async () => {
+        const { requestLike, initOptions } = getMiddlewareMock(
+          withOverrides(opts, {
+            request: {
+              method,
+            },
+          })
+        )
+
+        const response = await luchyMiddleware(
+          "unit-tests",
+          initOptions,
+          requestLike
+        )
+
+        expect(response).toEqual({
+          reason: "invalid-method",
+          action: {
+            status: 405,
+            type: "response",
+            json: {
+              message: "Method Not Allowed",
+            },
+          },
+        })
+      })
+    }
+  )
+}
+
+const baseOpts: GetMiddlewareMockOpts = {
+  initOptions: {
+    token: "test",
+    basePath: "/luchy",
+  },
+
+  request: {
+    method: "GET",
+    url: getUrl("/about/me"),
+    token: "test",
+    params: {
+      acceptLanguage: "en-US,en;q=0.9,es;q=0.8,sv;q=0.7",
+      city: "Santo Domingo",
+      country: "DO",
+      personalIdentifier: "foobar",
+      referrer: "https://google.com",
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+    },
+  },
+}
+
+describe("luchyExpressMiddleware", () => {
+  // Start server before all tests
+  beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+
+  //  Close server after all tests
+  afterAll(() => server.close())
+
+  // Reset handlers after each test `important for test isolation`
+  afterEach(() => server.resetHandlers())
+
+  const baseMessage: BaseMessage = {
+    operation: "pageview",
+    origin: "test",
+    personalIdentifier: "127.0.0.1",
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+    acceptLanguage: "en-US,en;q=0.9,es;q=0.8,sv;q=0.7",
+    country: "DO",
+    city: "Santo Domingo",
+    url: getUrl("/about/me"),
+  }
+
+  const basePageviewMessage: PageViewMessage = {
+    ...baseMessage,
+    referrer: "https://foobar.com",
+    operation: "pageview",
+  }
+
+  const baseEventMessage: EventMessage = {
+    ...baseMessage,
+    operation: "event",
+    type: "event1",
+    data: {
+      foo: "bar",
+    },
+  }
+
+  describe("when we receive a luchy request", () => {
+    const middlewareOpts = withOverrides(baseOpts, {
+      request: {
+        method: "POST",
+        url: getUrl("/luchy/"),
+      },
+    })
+
+    describe("and luchy token is invalid", () => {
+      describe("because request has no token", () => {
+        it("should return 401", async () => {
+          const { requestLike, initOptions } = getMiddlewareMock(
+            withOverrides(middlewareOpts, {
+              request: {
+                token: undefined,
+              },
+            })
+          )
+
+          const response = await luchyMiddleware(
+            "test",
+            initOptions,
+            requestLike
+          )
+
+          expect(response).toEqual({
+            reason: "invalid-token",
+            action: {
+              json: {
+                message: "Unauthorized",
+              },
+              status: 401,
+              type: "response",
+            },
+          })
+        })
+      })
+
+      describe("because request has invalid token", () => {
+        it("should return 401", async () => {
+          const { requestLike, initOptions } = getMiddlewareMock(
+            withOverrides(middlewareOpts, {
+              request: {
+                token: "invalid",
+              },
+            })
+          )
+
+          const response = await luchyMiddleware(
+            "test",
+            initOptions,
+            requestLike
+          )
+
+          expect(response).toEqual({
+            reason: "invalid-token",
+            action: {
+              json: {
+                message: "Unauthorized",
+              },
+              status: 401,
+              type: "response",
+            },
+          })
+        })
+      })
+    })
+
+    describe("and request path is /", () => {
+      const basePageviewOpts = withOverrides(middlewareOpts, {
+        request: {
+          method: "GET",
+          url: getUrl("/luchy/"),
+        },
+      })
+
+      describe("and request method is GET", () => {
+        it("should return 200", async () => {
+          const { requestLike, initOptions } =
+            getMiddlewareMock(basePageviewOpts)
+
+          const response = await luchyMiddleware(
+            "test",
+            initOptions,
+            requestLike
+          )
+
+          expect(response).toEqual({
+            reason: "default-route",
+            action: {
+              json: {
+                ok: true,
+              },
+              status: 200,
+              type: "response",
+            },
+          })
+        })
+      })
+
+      assertInvalidHttpMethods("GET", middlewareOpts)
+    })
+
+    describe("and request path is /collect", () => {
+      const basePageviewOpts = withOverrides(middlewareOpts, {
+        request: {
+          method: "POST",
+          url: getUrl("/luchy/collect"),
+          body: basePageviewMessage,
+        },
+      })
+
+      describe("and request method is POST", () => {
+        it("should return 200", async () => {
+          const { requestLike, initOptions, adapter } =
+            getMiddlewareMock(basePageviewOpts)
+
+          adapter.upsertSession.mockResolvedValueOnce("sessionId")
+          adapter.savePageView.mockResolvedValueOnce("pageViewId")
+
+          const response = await luchyMiddleware(
+            "test",
+            initOptions,
+            requestLike
+          )
+
+          expect(adapter.upsertSession).toHaveBeenNthCalledWith(1, {
+            browser: "Chrome",
+            country: "DO",
+            device: "Desktop",
+            id: expect.any(String),
+            language: "English",
+            os: "Mac OS",
+          })
+
+          expect(adapter.savePageView).toHaveBeenNthCalledWith(1, {
+            origin: "test",
+            referrer: "https://foobar.com",
+            sessionId: expect.any(String),
+            url: "/about/me",
+          })
+
+          expect(response).toEqual({
+            reason: "return-response",
+            action: {
+              type: "response",
+              status: 200,
+              json: {
+                ok: true,
+                result: {
+                  pageViewId: "pageViewId",
+                  sessionId: "sessionId",
+                },
+              },
+            },
+          })
+        })
+      })
+
+      // assertInvalidHttpMethods("POST", basePageviewOpts)
+    })
+
+    describe("and request path is /collect/event", () => {
+      const eventMessage = withOverrides<EventMessage>(baseEventMessage, {
+        type: "event1",
+        data: {
+          foo: "bar",
+        },
+      })
+
+      const baseEventOpts = withOverrides(baseOpts, {
+        request: {
+          method: "POST",
+          url: getUrl("/luchy/collect/event"),
+          body: eventMessage,
+        },
+      })
+
+      describe("and request method is POST", () => {
+        describe("and event contains data", () => {
+          it("should return 200", async () => {
+            const { requestLike, initOptions, adapter } =
+              getMiddlewareMock(baseEventOpts)
+
+            adapter.upsertSession.mockResolvedValue("sessionId")
+            adapter.saveEvent.mockResolvedValue("eventId")
+            adapter.saveEventData.mockResolvedValue("eventDataId")
+
+            const response = await luchyMiddleware(
+              "test",
+              initOptions,
+              requestLike
+            )
+
+            expect(adapter.upsertSession).toHaveBeenNthCalledWith(1, {
+              browser: "Chrome",
+              country: "DO",
+              device: "Desktop",
+              id: expect.any(String),
+              language: "English",
+              os: "Mac OS",
+            })
+
+            expect(adapter.saveEvent).toHaveBeenNthCalledWith(1, {
+              origin: "test",
+              sessionId: expect.any(String),
+              type: "event1",
+              url: "/about/me",
+            })
+
+            expect(adapter.saveEventData).toHaveBeenNthCalledWith(1, {
+              data: {
+                foo: "bar",
+              },
+              eventId: "eventId",
+            })
+
+            expect(response).toEqual({
+              reason: "return-response",
+              action: {
+                type: "response",
+                status: 200,
+                json: {
+                  ok: true,
+                  result: {
+                    sessionId: "sessionId",
+                    eventId: "eventId",
+                  },
+                },
+              },
+            })
+          })
+
+          assertInvalidHttpMethods("POST", baseEventOpts)
+        })
+      })
+    })
+
+    describe("and we are using hosted mode", () => {
+      const eventMessage = withOverrides<EventMessage>(baseEventMessage, {
+        type: "event1",
+        data: {
+          foo: "bar",
+        },
+      })
+
+      const baseEventOpts = withOverrides(baseOpts, {
+        request: {
+          method: "POST",
+          url: getUrl("/luchy/collect/event"),
+          body: eventMessage,
+        },
+      })
+
+      describe("and request method is POST", () => {
+        describe("and event contains data", () => {
+          it("should return 200", async () => {
+            const { requestLike, initOptions } =
+              getHostedMiddlewareMock(baseEventOpts)
+
+            const response = await luchyMiddleware(
+              "test",
+              initOptions,
+              requestLike
+            )
+
+            expect(response).toEqual({
+              reason: "return-response",
+              action: {
+                type: "response",
+                status: 200,
+                json: {
+                  ok: true,
+                  result: {
+                    intercepted: true,
+                  },
+                },
+              },
+            })
+          })
+
+          assertInvalidHttpMethods("POST", baseEventOpts)
+        })
+      })
+    })
+  })
+
+  describe("when we receive a normal request", () => {
+    const baseEventOpts = withOverrides(baseOpts, {
+      request: {
+        method: "GET",
+        url: getUrl("/about/me"),
+      },
+    })
+
+    describe("we should register the pageview", () => {
+      it("should return next", async () => {
+        const { requestLike, initOptions, adapter } =
+          getMiddlewareMock(baseEventOpts)
+
+        adapter.upsertSession.mockResolvedValue("sessionId")
+        adapter.savePageView.mockResolvedValue("pageViewId")
+
+        const response = await luchyMiddleware("test", initOptions, requestLike)
+
+        expect(adapter.upsertSession).toHaveBeenNthCalledWith(1, {
+          browser: "Chrome",
+          country: "DO",
+          device: "Desktop",
+          id: expect.any(String),
+          language: "English",
+          os: "Mac OS",
+        })
+
+        expect(adapter.savePageView).toHaveBeenNthCalledWith(1, {
+          origin: "test",
+          referrer: "https://google.com",
+          sessionId: expect.any(String),
+          url: "/about/me",
+        })
+
+        expect(response).toEqual({
+          reason: "pageview-processed",
+          action: {
+            type: "next",
+          },
+        })
+      })
+    })
+  })
+})
+</file>
+
+<file path="packages/adapter-kysely/src/adapter.ts">
+import {
+  BackendAdapter,
+  SaveCustomEventDataInput,
+  SaveCustomEventInput,
+  SavePageViewInput,
+  Session,
+} from "@luchyio/core"
+import { Kysely, sql } from "kysely"
+import { parseCustomQuery } from "./parseCustomQuery"
+import { DefaultKyselyDb, FieldTransformer } from "./types"
+
+// TODO: API to execute multiple operations in one transaction
+export const getKyselyAdapter = (
+  db: Kysely<DefaultKyselyDb>,
+  opts?: {
+    toBackendFieldTransformer?: FieldTransformer<string, string>
+  }
+): BackendAdapter => ({
+  upsertSession: async (
+    session: Omit<Session, "createdAt">
+  ): Promise<string> => {
+    await db
+      .insertInto("sessions")
+      .values({
+        id: session.id,
+        browser: session.browser ?? undefined,
+        os: session.os ?? undefined,
+        language: session.language ?? undefined,
+        country: session.country ?? undefined,
+        device: session.device ?? undefined,
+      })
+      .onConflict((oc) => oc.column("id").doNothing())
+      .returning("id")
+      .executeTakeFirst()
+
+    return session.id
+  },
+  savePageView: async (
+    pageViewInputParams: SavePageViewInput
+  ): Promise<string> => {
+    const view = await db
+      .insertInto("pageviews")
+      .values({
+        session_id: pageViewInputParams.sessionId,
+        url: pageViewInputParams.url,
+        origin: pageViewInputParams.origin,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow()
+
+    if (!view) {
+      throw new Error("Failed to save pageview")
+    }
+
+    return view.id.toString()
+  },
+  saveEvent: async (eventInput: SaveCustomEventInput): Promise<string> => {
+    const event = await db
+      .insertInto("events")
+      .values({
+        type: eventInput.type,
+        url: eventInput.url,
+        session_id: eventInput.sessionId,
+        origin: eventInput.origin,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow()
+
+    return event.id.toString()
+  },
+  saveEventData: async (
+    eventDataInput: SaveCustomEventDataInput
+  ): Promise<string> => {
+    const eventData = await db
+      .insertInto("event_data")
+      .values({
+        event_id: parseInt(eventDataInput.eventId),
+        event_data: JSON.stringify(eventDataInput.data ?? {}),
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow()
+
+    return eventData.id.toString()
+  },
+  customQuery: async (query) => {
+    const toDbTransformer = opts?.toBackendFieldTransformer ?? ((f) => f)
+    const parsed = parseCustomQuery({ query, toDbTransformer })
+
+    const statement = sql`
+      select ${
+        parsed.fields.length > 0 ? sql.join(parsed.fields) : parsed.fields.at(0)
+      }
+      from ${parsed.table}
+      ${parsed.where ? sql`where ${parsed.where}` : sql``}
+      limit ${parsed.limit}
+      `
+
+    const resultsRaw = await statement.execute(db)
+
+    // TODO: here's a big problem. We're returning db results
+    // which are slightly different from core results,
+    // we need to parse those results into core results
+    return {
+      meta: {
+        count: resultsRaw.rows.length,
+        page: parsed.page ?? 0,
+      },
+      results: resultsRaw.rows,
+    }
+  },
+})
+</file>
+
+<file path="packages/middleware/src/index.ts">
+import {
+  type ILogger,
+  type LuchyCoreInitOptions,
+  type LuchyMessage,
+  ParsingError,
+  baseLogger,
+  forwardLuchyMessage,
+  isMethodAllowedInPath,
+  parseLuchyMessage,
+  processLuchyMessage,
+} from "@luchyio/core"
+
+export * from "@luchyio/core"
+
+type LuchyCoreInitOptionsWithAdapter = LuchyCoreInitOptions & {
+  logger?: ILogger
+  ignoreRules?: string[]
+  basePath?: string
+  environment?: "development" | "production"
+  token: string
+}
+
+type LuchyCoreInitOptionsHosted = Omit<LuchyCoreInitOptions, "adapter"> & {
+  logger?: ILogger
+  ignoreRules?: string[]
+  origin?: string
+  basePath?: string
+  environment?: "development" | "production"
+  token: string
+}
+
+export type LuchyMiddlewareInitOptions =
+  | LuchyCoreInitOptionsWithAdapter
+  | LuchyCoreInitOptionsHosted
+
+export type RequestLike = {
+  url: string
+  method: "GET" | "POST" | string
+  token: string | null
+  body: Record<string, unknown> | null
+  query: Record<string, string | string[] | undefined>
+  isLuchyRequest: boolean
+  params: {
+    country: string | null
+    city: string | null
+    referrer: string | null
+    personalIdentifier: string | null
+    userAgent: string | null
+    acceptLanguage: string | null
+  }
+}
+
+export type ResponseLike =
+  | {
+      type: "response"
+      status: number
+      json: Record<string, unknown>
+    }
+  | {
+      type: "next"
+    }
+
+const fromQueryParams = (input: Record<string, unknown>) => {
+  return {
+    ...input,
+    select: input.select ? input.select.toString().split(",") : undefined,
+  }
+}
+
+// TODO: implement core's ignoreRules
+export const luchyMiddleware = async (
+  origin: string,
+  initOptions: LuchyMiddlewareInitOptions,
+  reqLike: RequestLike
+): Promise<{
+  reason: string
+  action: ResponseLike
+}> => {
+  const tokenFromHeader = reqLike.token
+  const { logger = baseLogger, token } = initOptions
+
+  if (!URL.canParse(reqLike.url)) {
+    initOptions.logger?.error("Invalid URL", reqLike.url)
+
+    if (reqLike.isLuchyRequest) {
+      return {
+        reason: "invalid-url",
+        action: {
+          type: "response",
+          status: 400,
+          json: { message: "Invalid URL" },
+        },
+      }
+    }
+
+    return {
+      reason: "invalid-url",
+      action: {
+        type: "next",
+      },
+    }
+  }
+
+  const path = new URL(reqLike.url).pathname
+  // match path with basePath or default to "/luchy"
+  const relativePath = path.replace(initOptions.basePath ?? "/luchy", "")
+  const isLuchyRequest = path.startsWith(initOptions.basePath ?? "/luchy")
+
+  if (!isLuchyRequest) {
+    const pageviewMessage = parseLuchyMessage({
+      origin,
+      country: reqLike.params.country,
+      city: reqLike.params.city,
+      referrer: reqLike.params.referrer,
+      url: reqLike.url,
+      personalIdentifier: reqLike.params.personalIdentifier,
+      userAgent: reqLike.params.userAgent,
+      operation: "pageview",
+      acceptLanguage: reqLike.params.acceptLanguage,
+    })
+
+    if (!pageviewMessage.success) {
+      logger.error(
+        "Error parsing luchy pageviewMessage",
+        JSON.stringify(pageviewMessage.error, null, 2)
+      )
+
+      return {
+        reason: "error-parsing-luchy-pageviewMessage",
+        action: {
+          type: "next",
+        },
+      }
+    }
+
+    await processOrForwardLuchyMessage({
+      message: pageviewMessage.data,
+      params: initOptions,
+    }).catch((e) => {
+      if (e instanceof ParsingError) {
+        logger.error("Error parsing luchy message", e.toString())
+      }
+
+      logger.error("Error processing pageview", e.toString())
+
+      return { reason: "error-processing-pageview", action: { type: "next" } }
+    })
+
+    return { reason: "pageview-processed", action: { type: "next" } }
+  }
+
+  if (!tokenFromHeader || tokenFromHeader !== token) {
+    return {
+      reason: "invalid-token",
+      action: {
+        type: "response",
+        status: 401,
+        json: { message: "Unauthorized" },
+      },
+    }
+  }
+
+  if (!isMethodAllowedInPath(reqLike.method, relativePath)) {
+    return {
+      reason: "invalid-method",
+      action: {
+        type: "response",
+        status: 405,
+        json: { message: "Method Not Allowed" },
+      },
+    }
+  }
+
+  if (relativePath === "/") {
+    return {
+      reason: "default-route",
+      action: {
+        type: "response",
+        status: 200,
+        json: { ok: true },
+      },
+    }
+  }
+
+  const messageBody =
+    reqLike.method === "GET"
+      ? { operation: "query", query: fromQueryParams(reqLike.query) }
+      : { ...reqLike.body, origin }
+
+  // TODO: use getBaseInfoFromReqAndHeaders
+  const baseMessage = {
+    country: reqLike.params.country,
+    city: reqLike.params.city,
+    referrer: reqLike.params.referrer ?? null,
+    url: reqLike.url,
+    personalIdentifier: reqLike.params.personalIdentifier,
+    origin,
+    userAgent: reqLike.params.userAgent,
+    // TODO: standardize acceptLanguage
+    acceptLanguage: reqLike.params.acceptLanguage,
+    ...messageBody,
+  }
+
+  if (!["/collect", "/query", "/collect/event"].includes(relativePath)) {
+    return {
+      reason: "invalid-luchy-path",
+      action: {
+        type: "response",
+        status: 400,
+        json: {
+          ok: false,
+          error: "Invalid Luchy path",
+        },
+      },
+    }
+  }
+
+  const operation =
+    relativePath === "/query"
+      ? "query"
+      : relativePath === "/collect/event"
+      ? "event"
+      : "pageview"
+
+  logger.debug("raw", "middleware", "baseMessage", baseMessage)
+  logger.debug("raw", "middleware", "messageBody", messageBody)
+
+  const luchyMessage = parseLuchyMessage({ ...baseMessage, operation })
+
+  if (!luchyMessage.success) {
+    logger.error(
+      "Error parsing luchy message",
+      JSON.stringify(luchyMessage.error, null, 2)
+    )
+
+    return {
+      reason: "error-parsing-luchy-message",
+      action: {
+        type: "response",
+        status: 400,
+        json: {
+          ok: false,
+          type: "ValidationError",
+          result: luchyMessage.error.issues,
+        },
+      },
+    }
+  }
+
+  const result = await processOrForwardLuchyMessage({
+    message: luchyMessage.data,
+    params: initOptions,
+  }).catch((e) => {
+    if (e instanceof ParsingError) {
+      return {
+        reason: "error-processing-luchy-message",
+        action: {
+          type: "response",
+          status: 400,
+          json: { ok: false, error: e.toString() },
+        },
+      }
+    }
+
+    return {
+      reason: "error-processing-luchy-message",
+      action: {
+        type: "response",
+        status: 500,
+        json: { ok: false, error: e.toString() },
+      },
+    }
+  })
+
+  return {
+    reason: "return-response",
+    action: {
+      type: "response",
+      status: 200,
+      json: { result, ok: true },
+    },
+  }
+}
+
+const processOrForwardLuchyMessage = async (opts: {
+  message: LuchyMessage
+  params: LuchyMiddlewareInitOptions
+}): Promise<Record<string, unknown>> => {
+  const { message, params } = opts
+
+  if ("adapter" in params) {
+    return await processLuchyMessage({ message, params })
+  }
+
+  return await forwardLuchyMessage({ message, params })
+}
+</file>
+
+<file path="packages/react/src/react.tsx">
+import { attachClickEventsToLuchyElements } from "@luchyio/tracker"
+import React, { createContext, ReactNode, useContext } from "react"
+
+import {
+  createTracker,
+  LuchyTracker,
+  LuchyTrackerOptions,
+} from "@luchyio/tracker"
+import { useEffectOnlyOnce, useHasMounted } from "./reactUtils"
+
+const LuchyContext = createContext<{ tracker: LuchyTracker } | undefined>(
+  undefined
+)
+
+export type LuchyProviderProps = LuchyTrackerOptions & {
+  children: ReactNode
+  autoTrackEvents?: boolean
+  autoTrackPageViews?: boolean
+}
+
+export const LuchyProvider: React.FC<LuchyProviderProps> = ({
+  children,
+  baseUrl,
+  basePath,
+  token,
+  autoTrackEvents = true,
+  autoTrackPageViews,
+}) => {
+  // We want to attach the events to the browser so we have to chech if we have mounted
+  // to ensure this won't run in the server
+  const hasMounted = useHasMounted()
+
+  const tracker = createTracker({
+    baseUrl,
+    basePath,
+    token,
+    origin: "react-tracker",
+  })
+
+  useEffectOnlyOnce(
+    () => {
+      if (autoTrackEvents) {
+        attachClickEventsToLuchyElements(document, (eventType, eventData) => {
+          tracker.collectEvent(eventType, eventData)
+        })
+      }
+
+      if (autoTrackPageViews) {
+        console.error("TODO: handle autoTrackPageViews in @luchyio/react")
+      }
+
+      // TODO: unsubscribe on unmount
+    },
+    [hasMounted],
+    () => hasMounted
+  )
+
+  return (
+    <LuchyContext.Provider value={{ tracker }}>
+      {children}
+    </LuchyContext.Provider>
+  )
+}
+
+export const getTracker = () => {
+  const ctx = useContext(LuchyContext)
+
+  if (!ctx) {
+    throw new Error(
+      "[luchy]: `useTracker` must be wrapped in a <LuchyProvider />"
+    )
+  }
+
+  if (!ctx?.tracker) {
+    throw new Error("[luchy]: `context` has not been initialized")
+  }
+
+  return ctx.tracker
+}
+
+export const collectEvent = () => {
+  const tracker = getTracker()
+
+  return tracker.collectEvent
+}
+
+export const collectView = () => {
+  const tracker = getTracker()
+
+  return tracker.collectView
+}
+</file>
+
+<file path="packages/adapter-kysely/src/parseCustomQuery.ts">
+import {
+  assertUnreachable,
+  BinaryValueNode,
+  BinaryWhere,
+  getDateFromTimeUnit,
+  isBinaryWhere,
+  ISODate,
+  isUnaryWhere,
+  UnaryValueNode,
+  UnaryWhere,
+  ValidQueryObject,
+  ValidTimeUnit,
+} from "@luchyio/common"
+import { RawBuilder, sql } from "kysely"
+import { FieldTransformer } from "./types"
+
+const parseIsoDateToDbDate = (d: ISODate | Date): string => {
+  const date = typeof d === "string" ? new Date(d) : d
+
+  // sqlite and postgres format: YYYY-MM-DD HH:MM:SS.SSS
+  return date.toISOString().slice(0, 19).replace("T", " ")
+}
+
+// TODO: I didn't put any special attention to timezone support
+const parseTimeUnitToDbDate = (tu: ValidTimeUnit) => {
+  switch (tu.type) {
+    case "absolute": {
+      return parseIsoDateToDbDate(tu.value)
+    }
+    case "relative": {
+      const date = getDateFromTimeUnit(tu)
+      return parseIsoDateToDbDate(date)
+    }
+
+    default:
+      return assertUnreachable(tu)
+  }
+}
+
+const getUnaryValueForQuery = (n: UnaryValueNode) => {
+  switch (n.kind) {
+    case "BooleanLiteral":
+    case "StringLiteral":
+    case "NumberLiteral":
+      return n.value
+
+    case "TimeUnit":
+      return parseTimeUnitToDbDate(n.value)
+
+    default:
+      throw new Error("Invalid value")
+  }
+}
+
+const getBinaryValueForQuery = (n: BinaryValueNode) => {
+  switch (n.kind) {
+    case "TimeUnitRange": {
+      return [
+        parseTimeUnitToDbDate(n.value[0]),
+        parseTimeUnitToDbDate(n.value[1]),
+      ] as const
+    }
+
+    default:
+      throw new Error("Invalid value")
+  }
+}
+
+const getSqlUnaryComparator = (
+  where: UnaryWhere,
+  transformer: FieldTransformer<string, string>
+) => {
+  const value = getUnaryValueForQuery(where.rhs)
+  const field = transformer(where.lhs)
+
+  switch (where.op) {
+    case "eq":
+      return sql`${sql.id(field)} = ${value}`
+
+    case "gt":
+      return sql`${sql.id(field)} > ${value}`
+
+    case "gte":
+      return sql`${sql.id(field)} >= ${value}`
+
+    case "lt":
+      return sql`${sql.id(field)} < ${value}`
+
+    case "lte":
+      return sql`${sql.id(field)} <= ${value}`
+
+    case "since":
+      return sql`${sql.id(field)} <= ${value}`
+
+    default: {
+      assertUnreachable(where, "Invalid Unary Op")
+    }
+  }
+}
+
+const getSqlBinaryComparator = (
+  where: BinaryWhere,
+  transformer: FieldTransformer<string, string>
+) => {
+  const value = getBinaryValueForQuery(where.rhs)
+  const field = transformer(where.lhs)
+
+  switch (where.op) {
+    case "between":
+      return sql`${sql.id(field)} BETWEEN ${value[0]} AND ${value[1]}`
+
+    default: {
+      return assertUnreachable(where.op, "Invalid Unary Op")
+    }
+  }
+}
+
+export const parseCustomQuery = (opts: {
+  query: ValidQueryObject
+  toDbTransformer: FieldTransformer<string, string>
+}) => {
+  const { from, select, where: whereRaw } = opts.query
+  const table = sql.table(from)
+
+  const fields = select.map((f) => {
+    const columnName = opts.toDbTransformer(f.name)
+
+    switch (f.type) {
+      case "literal":
+        return sql.ref(columnName)
+
+      case "aggregate":
+        return sql.raw(`${f.fn}(${columnName})`)
+
+      default:
+        throw new Error("Invalid field: ", f)
+    }
+  })
+
+  let where: RawBuilder<unknown> | undefined = undefined
+
+  if (whereRaw) {
+    if (isUnaryWhere(whereRaw)) {
+      where = getSqlUnaryComparator(whereRaw, opts.toDbTransformer)
+    } else if (isBinaryWhere(whereRaw)) {
+      where = getSqlBinaryComparator(whereRaw, opts.toDbTransformer)
+    } else {
+      assertUnreachable(whereRaw, "Invalid where clause")
+    }
+  }
+
+  return {
+    fields,
+    table,
+    where,
+    limit: opts.query.pagination?.limit,
+    page: opts.query.pagination?.page,
+  }
+}
+</file>
+
+<file path="packages/core/src/lib/session.spec.ts">
+vi.mock("./utils")
+vi.mock("uuid")
+
+import type { PageViewMessage } from "@luchyio/common/dist"
+import { v5, validate } from "uuid"
+import { mock } from "vitest-mock-extended"
+import type { LuchyCoreInitOptions } from "../types"
+import { parseSession } from "./session"
+
+describe("parseSession", () => {
+  describe("when params are passed", () => {
+    it("should return a session with id", () => {
+      const collectParams = mock<PageViewMessage>({
+        url: "https://example.com/mypage",
+        referrer: "https://example.app",
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15",
+        acceptLanguage: "en-US,en;q=0.9",
+        personalIdentifier: "192.168.0.1",
+        country: "US",
+        city: "New York",
+      })
+      vi.mocked(v5).mockReturnValue("uuid")
+      vi.mocked(validate).mockReturnValue(true)
+
+      const initOptions = mock<LuchyCoreInitOptions>()
+
+      const session = parseSession(initOptions, collectParams)
+
+      expect(session).toEqual({
+        id: "uuid",
+        browser: "Safari",
+        country: "US",
+        device: "Desktop",
+        language: "English",
+        os: "Mac OS",
+      })
+    })
+  })
+})
+</file>
+
+<file path="packages/core/src/core.spec.ts">
+import type { EventMessage, PageViewMessage } from "@luchyio/common"
+import { mock, mockReset } from "vitest-mock-extended"
+
+import { luchyCoreFactory } from "./core"
+import type { BackendAdapter } from "./types"
+
+vitest.mock("./lib/parseLanguage")
+
+describe("luchyCore", () => {
+  const mockBackendAdapter = mock<BackendAdapter>()
+
+  const luchyCore = luchyCoreFactory({
+    adapter: mockBackendAdapter,
+    timePartition: () => "HOURLY",
+    salt: "f100ded0-0000-4000-a000-000000000000",
+  })
+
+  beforeEach(() => {
+    mockReset(mockBackendAdapter) // or mockClear(mock)
+  })
+
+  describe("when collect type is PageView", () => {
+    it("should should store session and page view", async () => {
+      vi.mocked(mockBackendAdapter.upsertSession).mockResolvedValue(
+        "session-id"
+      )
+      vi.mocked(mockBackendAdapter.savePageView).mockResolvedValue(
+        "page-view-id"
+      )
+
+      const collectParams = mock<PageViewMessage>({
+        url: "http://example.com",
+      })
+      const { sessionId, pageViewId } = await luchyCore.collectPageView(
+        collectParams
+      )
+
+      expect(sessionId).toBe("session-id")
+      expect(pageViewId).toBe("page-view-id")
+      expect(mockBackendAdapter.savePageView).toHaveBeenCalled()
+      expect(mockBackendAdapter.upsertSession).toHaveBeenCalled()
+    })
+  })
+
+  describe("when collect type is CustomEvent", () => {
+    describe("and event data is not defined", () => {
+      describe.skip("and BackendAdapter supports createEventData", () => {})
+
+      describe("and BackendAdapter does not support createEventData", () => {
+        it("should should store session and event", async () => {
+          vi.mocked(mockBackendAdapter.upsertSession).mockResolvedValue(
+            "session-id"
+          )
+          vi.mocked(mockBackendAdapter.saveEvent).mockResolvedValue("event-id")
+
+          const collectParams = mock<EventMessage>({
+            url: "http://example.com",
+          })
+          const { sessionId, eventId } = await luchyCore.collectEvent(
+            collectParams
+          )
+
+          expect(sessionId).toBe("session-id")
+          expect(eventId).toBe("event-id")
+        })
+      })
+    })
+
+    describe("and event data is defined", () => {
+      describe.skip("and BackendAdapter supports createEventData", () => {})
+
+      describe("and BackendAdapter does not support createEventData", () => {
+        it("should should store session and event", async () => {
+          vi.mocked(mockBackendAdapter.upsertSession).mockResolvedValue(
+            "session-id"
+          )
+          vi.mocked(mockBackendAdapter.saveEvent).mockResolvedValue("event-id")
+          vi.mocked(mockBackendAdapter.saveEventData).mockResolvedValue(
+            "event-data-id"
+          )
+
+          const collectParams = mock<EventMessage>({
+            url: "http://example.com",
+            data: { foo: true },
+          })
+          const { sessionId, eventId } = await luchyCore.collectEvent(
+            collectParams
+          )
+
+          expect(sessionId).toBe("session-id")
+          expect(eventId).toBe("event-id")
+
+          expect(mockBackendAdapter.upsertSession).toHaveBeenCalled()
+          expect(mockBackendAdapter.saveEvent).toHaveBeenCalled()
+          expect(mockBackendAdapter.saveEventData).toHaveBeenCalled()
+        })
+      })
+    })
+  })
+})
+</file>
+
+<file path="packages/adapter-kysely/src/adapter.spec.ts">
+import { parseQuery, UpsertSessionInputWithId } from "@luchyio/core"
+import * as crypto from "crypto"
+import { Selectable, sql } from "kysely"
+import path from "path"
+import { getKyselyAdapter } from "./adapter"
+import { getMemoryDb } from "./test/memory-db"
+import { runMigrations } from "./test/runMigrations"
+import { clearDb } from "./test/utils"
+import { Pageview, Session } from "./types"
+
+const camelToSnakeCase = (str: string) =>
+  str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+
+describe("Kysely Adapter", () => {
+  let adapter: ReturnType<typeof getKyselyAdapter>
+  const memoryDb = getMemoryDb()
+
+  const migrationFolderPath = path.join(
+    __dirname,
+    "..",
+    "dist",
+    "migrations",
+    "sqlite"
+  )
+
+  beforeAll(async () => {
+    await runMigrations(memoryDb, migrationFolderPath, "up")
+
+    adapter = getKyselyAdapter(memoryDb, {
+      toBackendFieldTransformer: camelToSnakeCase,
+    })
+  })
+
+  beforeEach(async () => {
+    await clearDb(memoryDb)
+  })
+
+  describe("should have a db", () => {
+    it("asda", async () => {
+      const result = await sql`select * from pageviews`.execute(memoryDb)
+      expect(result).toEqual({ rows: [] })
+    })
+  })
+
+  describe("should insert entities", () => {
+    let sessionId: string
+    let session: UpsertSessionInputWithId
+
+    beforeEach(async () => {
+      session = {
+        id: crypto.randomUUID(),
+        browser: "foo-browser",
+        os: "foo-os",
+        language: "foo-lang",
+        country: "foo-country",
+        device: "foo-device",
+      }
+
+      const result = await adapter.upsertSession(session)
+
+      sessionId = result
+    })
+
+    describe("insert sessions", () => {
+      it("should insert sessions", async () => {
+        const sessions = await sql`select * from sessions`.execute(memoryDb)
+
+        expect(sessions.rows.length).toEqual(1)
+        expect(sessions.rows[0]).toEqual({
+          ...session,
+          created_at: expect.any(String),
+        })
+      })
+    })
+
+    describe("insert pageviews", () => {
+      it("should insert pageviews", async () => {
+        const pageview = {
+          url: "http://foo.com",
+          referrer: null,
+          origin: "test",
+        }
+
+        const result = await adapter.savePageView({ sessionId, ...pageview })
+        expect(result).toBe("1")
+
+        const sessions = await sql`select * from pageviews`.execute(memoryDb)
+
+        expect(sessions.rows.length).toEqual(1)
+        expect(sessions.rows[0]).toEqual({
+          ...pageview,
+          session_id: sessionId,
+          created_at: expect.any(String),
+          id: 1,
+        })
+      })
+    })
+
+    describe("insert events", () => {
+      it("should insert events", async () => {
+        const event = {
+          url: "http://foo.com",
+          type: "foo",
+          origin: "test",
+        }
+
+        const result = await adapter.saveEvent({ sessionId, ...event })
+        expect(result).toBe("1")
+
+        const sessions = await sql`select * from events`.execute(memoryDb)
+
+        expect(sessions.rows.length).toEqual(1)
+        expect(sessions.rows[0]).toEqual({
+          ...event,
+          session_id: sessionId,
+          created_at: expect.any(String),
+          id: 1,
+        })
+      })
+
+      it("should insert event data", async () => {
+        const eventId = await adapter.saveEvent({
+          sessionId,
+          url: "http://foo.com",
+          type: "foo",
+          origin: "test",
+        })
+
+        const eventData = {
+          eventId,
+          data: {
+            foo: "bar",
+          },
+        }
+
+        const result = await adapter.saveEventData(eventData)
+        expect(result).toBe("1")
+
+        const rows = await sql`select * from event_data`.execute(memoryDb)
+
+        expect(rows.rows.length).toEqual(1)
+        expect(rows.rows[0]).toEqual({
+          event_id: parseInt(eventData.eventId),
+          event_data: JSON.stringify(eventData.data),
+          id: parseInt(result),
+        })
+      })
+    })
+  })
+
+  describe("should run custom queries", () => {
+    let session: Selectable<Session>
+    let pageview: Selectable<Pageview>
+
+    beforeAll(() => {
+      vitest.useFakeTimers({
+        now: new Date("2020-01-01T00:00:00.000Z"),
+      })
+    })
+
+    afterAll(() => {
+      vitest.useRealTimers()
+    })
+
+    beforeEach(async () => {
+      const sessionRaw = await memoryDb
+        .insertInto("sessions")
+        .values({
+          id: "1",
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow()
+
+      await memoryDb
+        .insertInto("pageviews")
+        .values({
+          session_id: "1",
+          url: "http://foo.com",
+          origin: "test",
+          created_at: "2019-01-01 00:00:00",
+        })
+        .returning("id")
+        .execute()
+
+      await memoryDb
+        .insertInto("pageviews")
+        .values({
+          session_id: "1",
+          url: "http://bar.com",
+          origin: "test",
+          created_at: "2020-01-01 00:00:00",
+        })
+        .returning("id")
+        .execute()
+
+      session = await memoryDb
+        .selectFrom("sessions")
+        .selectAll()
+        .where("id", "=", sessionRaw.id)
+        .executeTakeFirstOrThrow()
+
+      pageview = await memoryDb
+        .selectFrom("pageviews")
+        .selectAll()
+        .where("session_id", "=", session.id)
+        .executeTakeFirstOrThrow()
+    })
+
+    it("should run simple queries with unary where", async () => {
+      const query = parseQuery({
+        from: "pageviews",
+        select: ["id", "url", "createdAt"],
+        where: "eq(url,'http://foo.com')",
+      })
+
+      const result = await adapter.customQuery(query)
+
+      expect(result.results).toEqual([
+        {
+          id: pageview.id,
+          url: pageview.url,
+          created_at: pageview.created_at,
+        },
+      ])
+    })
+
+    it("should run simple queries with binary where", async () => {
+      const query = parseQuery({
+        from: "pageviews",
+        select: ["id", "url", "createdAt"],
+        where: "between(createdAt,1w,now)",
+      })
+
+      const result = await adapter.customQuery(query)
+
+      const actualPageView = await memoryDb
+        .selectFrom("pageviews")
+        .selectAll()
+        .where("pageviews.created_at", "=", "2020-01-01 00:00:00")
+        .executeTakeFirstOrThrow()
+
+      expect(result.results).toEqual([
+        {
+          id: actualPageView.id,
+          url: actualPageView.url,
+          created_at: actualPageView.created_at,
+        },
+      ])
+    })
+
+    it("should run simple queries with aggregation functions", async () => {
+      const query = parseQuery({
+        from: "pageviews",
+        select: ["count(id)"],
+        where: "eq(url,'http://foo.com')",
+      })
+
+      const result = await adapter.customQuery(query)
+
+      expect(result.results).toEqual([{ "count(id)": 1 }])
+    })
+  })
+})
+</file>
+
+<file path="packages/core/src/index.ts">
+export * from "@luchyio/common"
+export { luchyCoreFactory } from "./core"
+export { forwardLuchyMessage } from "./forwardLuchyMessage"
+export * from "./lib/fromQueryParams"
+export * from "./lib/getBaseMessageFromHeaders"
+export * from "./lib/isMethodAllowedInPath"
+export * from "./parseLuchyMessage"
+export { processLuchyMessage } from "./processLuchyMessage"
+export * from "./types"
+
+export type ILogger = {
+  info: (...args: unknown[]) => void
+  debug: (...args: unknown[]) => void
+  warn: (...args: unknown[]) => void
+  error: (...args: unknown[]) => void
+}
+
+export const baseLogger: ILogger = {
+  info: () => {},
+  debug: () => {},
+  warn: () => {},
+  error: () => {},
+}
+</file>
+
+<file path="packages/core/src/core.ts">
+import {
+  type EventMessage,
+  type PageViewMessage,
+  type QueryInput,
+  parseQueryFromObject,
+} from "@luchyio/common"
+import { parseSession } from "./lib/session"
+import type { LuchyCoreInitOptions } from "./types"
+
+export const luchyCoreFactory = (initOptions: LuchyCoreInitOptions) => ({
+  collectPageView: async (params: PageViewMessage) => {
+    const session = parseSession(initOptions, params)
+    const url = new URL(params.url)
+
+    const sessionId = await initOptions.adapter.upsertSession(session)
+    const pageViewId = await initOptions.adapter.savePageView({
+      sessionId: session.id,
+      url: url.pathname,
+      referrer: params.referrer,
+      origin: params.origin,
+    })
+
+    return { sessionId, pageViewId }
+  },
+
+  collectEvent: async (params: EventMessage) => {
+    const session = parseSession(initOptions, params)
+    const url = new URL(params.url)
+
+    const sessionId = await initOptions.adapter.upsertSession(session)
+
+    const eventId = await initOptions.adapter.saveEvent({
+      sessionId: session.id,
+      url: url.pathname,
+      type: params.type,
+      origin: params.origin,
+    })
+
+    if (params.data) {
+      await initOptions.adapter.saveEventData({
+        eventId: eventId,
+        data: params.data,
+      })
+    }
+
+    return { sessionId, eventId }
+  },
+
+  customQuery: async (query: QueryInput) => {
+    // TODO: handle parsing errors
+    const validatedQuery = parseQueryFromObject(query)
+    return initOptions.adapter.customQuery(validatedQuery)
+  },
+})
+</file>
+
+<file path="packages/tracker/src/tracker.ts">
+import { LuchyTrackerOptions } from "./types"
+
+// TODO: deduplicate
+const normalizePath = (str: string) => {
+  let final = str
+  final = final.startsWith("/") ? final.slice(1) : final
+  final = final.endsWith("/") ? final.slice(0, -1) : final
+  return final
+}
+
+export type LuchyTracker = {
+  collect: (
+    type: "pageview" | "event",
+    payload: Record<string, unknown>
+  ) => Promise<void>
+  collectView: (url?: string, referrer?: string) => Promise<void>
+  collectEvent: (eventType: string, maybePayload?: unknown) => Promise<void>
+  // TODO: TypedQuery<T>, TypedResult<T, U>
+  query: (query: Record<string, string>) => Promise<Record<string, string>>
+}
+
+export const getBaseBody = () => {
+  return {
+    url: location.href,
+    referrer: document.referrer,
+    userAgent: navigator.userAgent,
+    acceptLanguage: navigator.languages[0],
+  }
+}
+
+// TODO: ValidateOptions (LuchyTrackerOptions)
+const createTracker = (options: LuchyTrackerOptions): LuchyTracker => {
+  const baseUrl = options.baseUrl ? normalizePath(options.baseUrl) : ""
+  const basePath = normalizePath(options.basePath ?? "/luchy")
+
+  const token = options.token ?? ""
+
+  if (!token) {
+    console.warn("[luchy-initialization] Luchy token was not provided")
+  }
+
+  const collect = async (
+    operation: "pageview" | "event",
+    payload: Record<string, unknown>
+  ) => {
+    const path = operation === "pageview" ? "collect" : "collect/event"
+    const fetchUrl = `${baseUrl}/${basePath}/${path}`
+    const baseBody = getBaseBody()
+
+    await fetch(fetchUrl, {
+      redirect: "follow",
+      method: "POST",
+      body: JSON.stringify({ ...baseBody, operation, ...payload }),
+      headers: {
+        "x-luchy-token": token,
+        "x-luchy-collect-origin": options.origin ?? "tracker",
+        "Content-Type": "application/json",
+      },
+    })
+  }
+
+  const collectView = (url?: string, referrer?: string) =>
+    collect("pageview", {
+      url: url ?? location.href,
+      referrer: referrer ?? document.referrer,
+    })
+
+  const collectEvent = (eventType: string, maybePayload?: unknown) =>
+    collect("event", {
+      type: eventType,
+      data:
+        typeof maybePayload === "string"
+          ? { $data: maybePayload } // TODO: handle this in backend
+          : maybePayload,
+    })
+
+  // TODO: eventually type payload
+  const query = async (payload: Record<string, string>) => {
+    const searchParams = new URLSearchParams(payload)
+    const fetchUrl = `${baseUrl}/${basePath}/query?${searchParams.toString()}`
+
+    return fetch(fetchUrl, {
+      redirect: "follow",
+      method: "GET",
+      headers: {
+        "x-luchy-token": token,
+        "x-luchy-collect-origin": options.origin ?? "tracker",
+        "Content-Type": "application/json",
+      },
+    })
+      .then((res) => res.json())
+      .then((res) => res as Record<string, string>)
+  }
+
+  return { collect, collectEvent, collectView, query }
+}
+
+export { createTracker }
+</file>
+
+<file path="packages/core/src/types.ts">
+import type {
+  CustomQueryResult,
+  Entities,
+  Event,
+  EventData,
+  EventMessage,
+  PageViewMessage,
+  Pageview,
+  Session,
+  ValidQueryObject,
+} from "@luchyio/common"
+
+export type ILogger = {
+  info: (message: string) => void
+  debug: (message: string) => void
+  error: (message: string) => void
+}
+
+export type CollectParams = PageViewMessage | EventMessage
+
+// Core
+export type TimePartition = "HOURLY" | "DAILY" | (() => string)
+
+export type LuchyCoreInitOptions = {
+  adapter: BackendAdapter
+  token?: string
+  timePartition?: TimePartition
+  salt?: string
+  logger?: ILogger
+}
+
+// <>--------- Backend Stuff ---------<>  ///
+type EntityInput<T extends { id: string; createdAt: string }> = Omit<
+  T,
+  "id" | "createdAt"
+>
+
+export type UpsertSessionInput = EntityInput<Session>
+
+export type UpsertSessionInputWithId = UpsertSessionInput & {
+  id: Pageview["id"]
+}
+
+export type SavePageViewInput = EntityInput<Pageview>
+
+export type SaveCustomEventInput = EntityInput<Event>
+
+export type SaveCustomEventDataInput = Omit<EventData, "id">
+
+export interface BackendAdapter {
+  upsertSession: (session: UpsertSessionInputWithId) => Promise<string>
+  savePageView: (pageView: SavePageViewInput) => Promise<string>
+  saveEvent: (event: SaveCustomEventInput) => Promise<string>
+  saveEventData: (eventData: SaveCustomEventDataInput) => Promise<string>
+  customQuery: (query: ValidQueryObject<Entities>) => Promise<CustomQueryResult> // TODO: typesafe
+}
+</file>
+
+</files>
