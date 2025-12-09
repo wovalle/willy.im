@@ -141,7 +141,7 @@ export default function AxsPage(_: Route.ComponentProps) {
           <h1 className="invitation-axs__title">VENGAN PA' MI CUMPLEAÑOS</h1>
         </div>
         <div className="invitation-axs__image-wrapper">
-          <img src="/axs/comic.png" alt="Julio Alexis Birthday Invitation" />
+          <img src="/axs/comic.jpg" alt="Julio Alexis Birthday Invitation" />
         </div>
       </div>
 
