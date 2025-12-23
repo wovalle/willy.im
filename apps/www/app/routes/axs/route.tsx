@@ -5,24 +5,21 @@ import stylesHref from "./34.css?url"
 
 const faqItems: Array<{ question: string; answer: ReactNode }> = [
   {
-    question: "klk",
-    answer: "klk manin",
+    question: "cuándo e' la vaina?",
+    answer:
+      "papi pero lee el flyer, dice 27 de febrero clarito. Y nos vamos el 27 temprano que vamos ese día pa Miches a hacer cuatrimotos ",
   },
   {
-    question: "pregunta 2",
-    answer: "respuesta 2",
+    question: "cuánto e' que hay que pagar?",
+    answer: "Son U$35 por persona. Cada quién puede llevar su +1 así que 70 por pareja",
   },
   {
-    question: "pregunta 3",
-    answer: "respuesta 3",
+    question: "qué llevo?",
+    answer: "traéte par de potes, vuélvete loco",
   },
   {
-    question: "pregunta 4",
-    answer: "respuesta 4",
-  },
-  {
-    question: "pregunta 5",
-    answer: "respuesta 5",
+    question: "ROMO GRATIS",
+    answer: "mentira del diablo, ahora que tengo tu atención CONFIRMA ANTES DEL 20 DE ENERO",
   },
 ]
 
