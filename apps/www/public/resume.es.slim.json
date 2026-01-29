@@ -6,7 +6,7 @@
     "email": "hey@willy.im",
     "url": "willy.im",
     "website": "willy.im",
-    "summary": "Willy ha estado involucrado en el desarrollo de software durante los últimos 12 años. Enfocado en el trabajo en equipo, proactivo, siempre estoy buscando aprender cosas nuevas.",
+    "summary": "Ingeniero de software con más de 12 años de experiencia. Enfocado en trabajo en equipo, ejecución técnica y mejora continua.",
     "location": {
       "address": "Santo Domingo, Rep. Dom.",
       "postalCode": "11102",
@@ -31,119 +31,129 @@
     {
       "institution": "Rochester Institute of Technology",
       "area": "Computer Science",
-      "studyType": "Master in Science of Networking and System Administration",
+      "studyType": "Science of Networking and System Administration",
       "startDate": "2014-01-09",
       "endDate": "2016-12-14",
-      "location": "Nueva York, EE.UU."
+      "location": "Nueva York, EE. UU."
     },
     {
       "institution": "Pontificia Universidad Católica Madre y Maestra",
-      "area": "Ingeniería telemática",
+      "area": "Ingeniería Telemática",
+      "studyType": "Ingeniero Telemático",
       "startDate": "2009-09-22",
       "endDate": "2013-12-20",
-      "location": "Santo Domingo, Rep. Dominicana"
+      "location": "Santo Domingo, Rep. Dom."
     }
   ],
   "work": [
     {
-      "name": "Smartly",
-      "position": "Ingeniero de Software Senior",
-      "startDate": "2021-07-19",
+      "name": "Safary",
+      "position": "Founding Engineer",
+      "startDate": "2023-10-02",
       "endDate": "",
+      "url": "https://safary.club",
+      "company": "Safary",
+      "location": "Remoto",
+      "highlights": []
+    },
+    {
+      "name": "Smartly",
+      "position": "Senior Software Engineer",
+      "startDate": "2021-07-19",
+      "endDate": "2023-09-08",
       "url": "https://smartly.io",
       "company": "Smartly",
       "location": "Berlín, Alemania",
       "highlights": [
-        "Lideré la expansión de la solución de TikTok, desde su inicio hasta gestionar millones en presupuestos de marketing de clientes.",
-        "Lancé múltiples nuevas funcionalidades del producto y brindé liderazgo técnico en dos grandes proyectos que envolvían múltiples equipos (Shopping Ads y Smartly Automation).",
-        "Colaboré con ingenieros de TikTok para optimizar el gasto publicitario, gestionando exitosamente campañas de gran presupuesto.",
+        "Lideré la expansión de la solución de TikTok desde su inicio hasta la gestión de millones en presupuestos publicitarios.",
+        "Lanzamiento de múltiples funcionalidades y liderazgo técnico en proyectos multi-equipo (Shopping Ads, Smartly Automation).",
+        "Colaboración directa con ingenieros de TikTok para optimización de campañas de alto presupuesto.",
         "Tecnologías: Typescript, React, Docker, GitHub, NodeJS"
       ]
     },
     {
       "name": "Klarna",
-      "endDate": "2021-07-02",
-      "highlights": [
-        "Mantener nuestro proyecto \"Payment Selector\" que sirve a millones de usuarios mensuales en 9 mercados principales y más de 150 países.",
-        "Trabajé en el diseño e implementación de docenas de pruebas A/B, aumentando la tasa de conversión hasta un 15% en varios mercados.",
-        "Equilibré la priorización del desarrollo de nuevas funcionalidades con la gestión de la deuda técnica del producto.",
-        "Tecnologías: Typescript, Java, React, Docker, Jenkins, NodeJS"
-      ],
-      "position": "Ingeniero de Software",
+      "position": "Software Engineer",
       "startDate": "2018-11-12",
-      "summary": "Trabajé en el diseño e implementación de docenas de pruebas A/B, aumentando la tasa de conversión hasta un 15% en varios mercados.\n\nMantener nuestro proyecto Payment Selector que sirve a millones de usuarios mensuales en 9 mercados principales y más de 150+ países.\n\nTecnologías: React, NodeJS, Typescript\n\nContribuí al diseño y al cambio de paradigma interno de los servicios de la empresa que involucraba a más de 10 equipos.\n\nEquilibré la priorización del desarrollo de nuevas funcionalidades con la gestión de la deuda técnica del producto.",
+      "endDate": "2021-07-02",
       "url": "https://klarna.com",
       "company": "Klarna",
-      "location": "Estocolmo, Suecia"
+      "location": "Estocolmo, Suecia",
+      "highlights": [
+        "Mantenimiento de Payment Selector, usado por millones de usuarios mensuales en 9 mercados y más de 150 países.",
+        "Diseño e implementación de pruebas A/B con incrementos de conversión de hasta 15%.",
+        "Contribución a cambios estructurales internos involucrando más de 10 equipos.",
+        "Balance entre desarrollo de nuevas funcionalidades y reducción de deuda técnica.",
+        "Tecnologías: Typescript, Java, React, Docker, Jenkins, NodeJS"
+      ]
     },
     {
       "name": "Instacarro.com",
-      "endDate": "2018-10-31",
-      "highlights": [
-        "Desarrollé APIs robustas para una de las startups más calientes de América Latina con NodeJS y se desplegaron en Amazon ECS (Docker).",
-        "Trabajé en la creación de una plataforma personalizada de subastas con React/Redux.",
-        "Colaboré constantemente con mis compañeros para definir el alcance y los tiempos de desarrollo de las nuevas funcionalidades.",
-        "Tecnologías: Node.js, Docker, AWS, ReactJS, Angular, MongoDB"
-      ],
-      "position": "Ingeniero de Software Senior",
+      "position": "Senior Software Engineer",
       "startDate": "2016-12-31",
-      "summary": "- Escribiendo APIs robustas para una de las startups más calientes de América Latina.\n- Desarrollando microservicios personalizados impulsados por Node.js.\n- Gestión de contenedores (gestión de Docker).\n- Escribiendo nuestra plataforma de subastas personalizada con React/Redux.\n- Colaboración constante con mi equipo para definir el alcance y los tiempos de desarrollo de las nuevas funcionalidades.\nTecnologías: Node.js, Docker, Angular, MongoDB, ReactJS.",
+      "endDate": "2018-10-31",
       "url": "https://instacarro.com",
       "company": "Instacarro",
-      "location": "Santo Domingo, Rep. Dom."
+      "location": "Santo Domingo, Rep. Dom.",
+      "highlights": [
+        "Desarrollo de APIs robustas con NodeJS desplegadas en Amazon ECS.",
+        "Implementación de plataforma de subastas personalizada con React/Redux.",
+        "Trabajo continuo con equipos de producto para definición de alcance y tiempos.",
+        "Tecnologías: Node.js, Docker, AWS, ReactJS, Angular, MongoDB"
+      ]
     },
     {
-      "name": "AIME: Inteligencia Artificial en Epidemiología Médica",
-      "endDate": "2017-01-31",
-      "highlights": [
-        "Ayudé a desarrollar el software responsable de analizar y predecir brotes de dengue en países en desarrollo.",
-        "Desarrollé integraciones con la API de geolocalización de Google Maps, la API JS de Google Maps y Forecast.IO.",
-        "Diseñé e implementé la API utilizada por nuestras aplicaciones iOS/Android.",
-        "Tecnologías: .NET, NUnit, Github, waffle.io, SQL Server, Análisis de Datos GeoEspaciales."
-      ],
-      "position": "Ingeniero de Software",
+      "name": "AIME: Artificial Intelligence in Medical Epidemiology",
+      "position": "Software Engineer",
       "startDate": "2016-06-30",
-      "summary": "- Ingeniero Full Stack utilizando tecnologías avanzadas de backend con .NET y Razor/jQuery en el frontend.\n- Ayudé a desarrollar el software responsable de analizar y predecir brotes de dengue en países en desarrollo.\n- Desarrollé integraciones con la API de geolocalización de Google Maps, la API JS de Google Maps y Forecast.IO.\n- Diseñé e implementé la API utilizada por nuestras aplicaciones iOS/Android.\nHerramientas utilizadas diariamente: Visual Studio, NUnit, Github, Slack, waffle.io, SQL Server, Análisis de Datos GeoEspaciales, Bootstrap, jQuery.",
+      "endDate": "2017-01-31",
       "url": "http://aime.life",
-      "company": "AIME: Inteligencia Artificial en Epidemiología Médica",
-      "location": "Remoto"
+      "company": "AIME: Artificial Intelligence in Medical Epidemiology",
+      "location": "Remoto",
+      "highlights": [
+        "Desarrollo de sistemas para análisis y predicción de brotes de dengue, con integraciones a Google Maps APIs y Forecast.IO.",
+        "Diseño e implementación de APIs para aplicaciones móviles. Tecnologías: .NET, SQL Server, GeoSpatial Data Analysis."
+      ]
     },
     {
       "name": "Tenfold",
-      "endDate": "2016-06-30",
-      "highlights": [
-        "Ayudé a la empresa a crecer un 2000% en ingresos en un año.",
-        "Desarrollé cinco nuevas integraciones con CRM de terceros (Zendesk, Microsoft Dynamics CRM, SmartOffice CRM para asesores financieros, Oracle CRM On Demand, Netsuite CRM).",
-        "Tecnologías: NodeJS, MongoDB, AngularJS, ExpressJS, Git, Github, Slack, Gulp."
-      ],
-      "position": "Ingeniero de Software",
+      "position": "Software Engineer",
       "startDate": "2015-11-30",
-      "summary": "Tenfold (anteriormente Callinize) conecta tu CRM y sistema telefónico en 5 minutos para resolver problemas comunes de ventas. Ayudamos a cumplir tus objetivos mensuales de ventas aplicando las mejores prácticas en todo tu equipo. Como ingeniero de software remoto en Tenfold, tuve la oportunidad de trabajar en muchos proyectos interesantes.\n\n- Ayudé a la empresa a crecer un 2000% en ingresos en un año.\n- Desarrollé cinco nuevas integraciones con CRM de terceros (Zendesk, Microsoft Dynamics CRM, SmartOffice CRM para asesores financieros, Oracle CRM On Demand, Netsuite CRM).\n- Hice muchas personalizaciones a nuestro producto para cumplir con los requisitos de nuestros clientes pequeños y grandes.\n- Implementé un servidor API escrito en C# usando ASP.NET MVC5 y otras tecnologías de Microsoft.\n- Tecnologías utilizadas diariamente: NodeJS, MongoDB, AngularJS, ExpressJS, Git, Github, Slack, Gulp, Grunt, entre otras.",
+      "endDate": "2016-06-30",
       "url": "https://www.tenfold.com",
+      "company": "Tenfold",
       "location": "Remoto",
-      "company": "Tenfold"
+      "highlights": [
+        "Contribución a un crecimiento de más del 2000% en ingresos anuales.",
+        "Desarrollo de integraciones con múltiples CRMs empresariales.",
+        "Tecnologías: NodeJS, MongoDB, AngularJS, ExpressJS"
+      ]
     },
     {
       "name": "SISALRIL: Superintendencia de Salud y Riesgos Laborales",
-      "endDate": "2016-01-31",
-      "highlights": [],
       "position": "Subgerente de Producción",
       "startDate": "2014-10-31",
-      "summary": "- Asegurar el cumplimiento de medidas de seguridad, sistemas de información y acceso a los sistemas bajo mi responsabilidad.\n- Recibir y evaluar los requisitos de mejora del sistema.\n- Asegurar la calidad, monitoreo y mantenimiento del desarrollo de sistemas y su publicación en el entorno de producción.\n- Implementé el proyecto \"Subsidios Extraordinarios\" que ayuda a las madres dominicanas de escasos recursos a recibir ayuda gubernamental si, por alguna razón, no pueden completar el proceso para recibir beneficios por maternidad o lactancia.\n- Creé una nueva plataforma de evaluación de subsidios que aumentó la productividad de los evaluadores en un 27% en un período de tres meses.\n- Tecnologías utilizadas diariamente: SQL Server, ASP.Net MVC, C#, Bootstrap, jQuery, Microsoft Dynamics CRM, Microsoft Dynamics GP, Reporting Services, Integration Services.",
+      "endDate": "2016-01-31",
       "url": "http://www.sisalril.gov.do/",
-      "company": "SISALRIL: Superintendencia de Salud y Riesgos Laborales",
-      "location": "Santo Domingo, Rep. Dom."
+      "company": "SISALRIL",
+      "location": "Santo Domingo, Rep. Dom.",
+      "highlights": [
+        "Gestión de sistemas críticos y liderazgo en la implementación de Subsidios Extraordinarios.",
+        "Implementación de nueva plataforma que incrementó la productividad en 27%. Tecnologías: SQL Server, ASP.NET MVC, C#."
+      ]
     },
     {
       "name": "TeKnowLogic Dominicana",
-      "endDate": "2014-10-31",
-      "highlights": [],
-      "position": "Desarrollador de Software / Desarrollador Senior en Dynamics",
+      "position": "Software Developer / Dynamics Senior Developer",
       "startDate": "2012-01-13",
-      "summary": "Preparación, desarrollo e implementación de procesos de negocio (Dynamics CRM, Dynamics GP). Coordinación de tareas dentro del equipo de desarrollo de Dynamics: Gestión de bases de datos SQL Server.",
+      "endDate": "2014-10-31",
       "url": "https://www.teknowlogic.com",
       "company": "Teknowlogic Dominicana",
-      "location": "Santo Domingo, Rep. Dom."
+      "location": "Santo Domingo, Rep. Dom.",
+      "highlights": [
+        "Desarrollo e implementación de procesos de negocio con Dynamics CRM y GP.",
+        "Gestión y mantenimiento de bases de datos SQL Server."
+      ]
     }
   ],
   "skills": [],
