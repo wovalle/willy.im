@@ -12,7 +12,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:watch": "vitest --watch",
-    "typecheck": "npm run cf-typegen && react-router typegen && tsc -b",
+    "typecheck": "npm run cf-typegen && npx react-router typegen && npx tsc -b",
     "db:studio": "LOCAL_DB_PATH=$(find .wrangler/state/v3/d1/miniflare-D1DatabaseObject -type f -name '*.sqlite' -print -quit) drizzle-kit studio",
     "db:studio:prod": "dotenv -- drizzle-kit studio",
     "db:generate": "dotenv -- drizzle-kit generate",

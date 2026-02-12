@@ -41,6 +41,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body className="flex h-screen w-full flex-col bg-stone-100 text-gray-700 dark:dark-bg dark:text-gray-200">
+        <a
+          href="#main-content"
+          className="absolute left-0 top-0 z-[-1] m-[-1px] h-px w-px overflow-hidden whitespace-nowrap border-0 p-0 focus:static focus:z-[9999] focus:m-4 focus:block focus:h-auto focus:w-auto focus:overflow-visible focus:whitespace-normal focus:rounded focus:bg-stone-600 focus:px-4 focus:py-2 focus:text-white focus:outline-none focus:ring-2 focus:ring-stone-800"
+        >
+          Skip to main content
+        </a>
         {children}
         <ScrollRestoration />
         <script

@@ -88,11 +88,13 @@ export const Footer = (opts: {
   const socialMediaIcons = socialMedia.map(({ name, tooltip, link, icon: Icon }) => (
     <li key={name}>
       <a
-        data-tooltip={tooltip}
         href={link}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={tooltip}
         className="text-gray-600 dark:text-gray-400 hover:text-prim-700 dark:hover:text-prim-300 transition-colors"
       >
-        <Icon size="1.5em" />
+        <Icon size="1.5em" aria-hidden />
       </a>
     </li>
   ))

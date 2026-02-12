@@ -35,7 +35,19 @@ export default async function handleRequest(
     await body.allReady;
   }
 
-  responseHeaders.set("Content-Type", "text/html");
+  responseHeaders.set("Content-Type", "text/html; charset=utf-8");
+
+  // Security headers (SEO & security audit)
+  responseHeaders.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  responseHeaders.set("X-Frame-Options", "DENY");
+  responseHeaders.set("X-Content-Type-Options", "nosniff");
+  responseHeaders.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  responseHeaders.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+  );
+  responseHeaders.set("Content-Security-Policy", "frame-ancestors 'none';");
+
   return new Response(body, {
     headers: responseHeaders,
     status: responseStatusCode,

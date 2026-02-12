@@ -9,7 +9,7 @@ export default function Layout() {
   return (
     <>
       <Header />
-      <main className="flex w-full max-w-4xl flex-grow self-center">
+      <main id="main-content" className="flex w-full max-w-4xl flex-grow self-center" tabIndex={-1}>
         <Outlet />
       </main>
       <Footer nowPlaying={rootLoaderData?.nowPlaying} />

@@ -5,16 +5,29 @@ import type { Route } from "./+types/index.page"
 
 import { PageSection } from "~/components/layout/page-section"
 import type { SimpleRepository } from "~/modules/github/github.types"
-import { siteConfig } from "~/static"
+import { createPageMeta, siteConfig } from "~/static"
 import { PostCard } from "./post-card"
 import { RepositoryCard } from "./repository-card"
 
 export const meta: Route.MetaFunction = () => {
   return [
-    { title: siteConfig.title },
+    ...createPageMeta({
+      title: siteConfig.title,
+      description: siteConfig.description,
+      path: "/",
+    }),
     {
-      name: "description",
-      content: siteConfig.description,
+      "script:ld+json": {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: siteConfig.title,
+        description: siteConfig.description,
+        url: siteConfig.url,
+        author: {
+          "@type": "Person",
+          name: siteConfig.author,
+        },
+      },
     },
   ]
 }
@@ -55,10 +68,16 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           <h1 className="text-gray-800 dark:text-gray-50 text-4xl">I'm Willy!</h1>
           <p className="text-xl">
             Dominican Software Developer who loves <Link to="/about#songs">music</Link>, videogames
-            and spends too much time watching youtube videos. Say hello at
-            <Link to="https://twitter.com/wovalle" className="ml-2 inline-flex items-center gap-1">
-              @wovalle
-              <IconBrandTwitter size="1em" />
+            and spends too much time watching youtube videos. I build web applications with React,
+            TypeScript, and Cloudflare Workers. Say hello at
+            <Link
+              to="https://twitter.com/wovalle"
+              className="ml-2 inline-flex items-center gap-1"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Twitter (wovalle)
+              <IconBrandTwitter size="1em" aria-hidden />
             </Link>
             !
           </p>
@@ -68,7 +87,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
               className="flex items-center justify-center gap-1 rounded-xl border-0 bg-stone-600 px-4 py-3 font-bold text-white decoration-transparent hover:bg-stone-700 hover:text-gray-50 hover:decoration-transparent dark:bg-stone-700 dark:hover:bg-stone-600"
               data-luchy-event="cta-click"
             >
-              about me <IconArrowUpRight size="1em" />
+              Learn more about me <IconArrowUpRight size="1em" aria-hidden />
             </Link>
           </p>
         </div>
@@ -78,6 +97,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
             src="/profile.png"
             width={296}
             height={296}
+            fetchPriority="high"
             className="rounded-full object-cover opacity-85 dark:contrast-75"
           />
         </div>

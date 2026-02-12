@@ -79,17 +79,62 @@ export const siteConfig = {
     "Cloudflare",
     "Cloudflare Workers",
   ],
-  title: "Willy Ovalle's Site",
-  titleAlt: "Willy Ovalle | Site",
-  description: "Willy Ovalle's home on the internet",
+  title: "Willy Ovalle | Software Developer & Engineer",
+  titleAlt: "Willy Ovalle | Software Developer & Engineer",
+  description:
+    "Willy Ovalle is a Dominican software developer and engineer. Explore projects, blog posts about React, TypeScript, Cloudflare Workers, and more.",
   url: "https://willy.im",
   siteLanguage: "en",
   logo: "public/logo.png",
-  imageUrl: "https://willy.im/public/og/og-twitter.png",
+  imageUrl: "https://willy.im/og/twitter.png",
   favicon: "public/favicon.png",
   shortName: "wovalle",
   author: "Willy Ovalle",
   twitter: "@wovalle",
   twitterDesc:
     "Willy Ovalle is a software engineer and bad jokes enthusiast currently based in Santo Domingo, Dominican Republic.",
+}
+
+export type PageMetaOptions = {
+  title: string
+  description: string
+  path?: string
+  image?: string
+  type?: "website" | "article"
+  publishedTime?: string
+  modifiedTime?: string
+}
+
+export function createPageMeta({
+  title,
+  description,
+  path = "/",
+  image = siteConfig.imageUrl,
+  type = "website",
+  publishedTime,
+  modifiedTime,
+}: PageMetaOptions) {
+  const url = `${siteConfig.url}${path === "/" ? "" : path}`
+  const meta: Array<{ title?: string } | { name: string; content: string } | { property: string; content: string } | { tagName: "link"; rel: string; href: string }> = [
+    { title },
+    { name: "description", content: description },
+    { tagName: "link", rel: "canonical", href: url },
+    { property: "og:title", content: title },
+    { property: "og:description", content: description },
+    { property: "og:image", content: image },
+    { property: "og:url", content: url },
+    { property: "og:type", content: type },
+    { property: "og:site_name", content: siteConfig.title },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:title", content: title },
+    { name: "twitter:description", content: description },
+    { name: "twitter:image", content: image },
+  ]
+  if (publishedTime && type === "article") {
+    meta.push({ property: "article:published_time", content: publishedTime })
+  }
+  if (modifiedTime && type === "article") {
+    meta.push({ property: "article:modified_time", content: modifiedTime })
+  }
+  return meta
 }

@@ -1,3 +1,6 @@
 # Allow all user agents.
 User-agent: *
 Allow: /
+
+# Sitemap
+Sitemap: https://willy.im/sitemap.xml

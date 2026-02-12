@@ -1,9 +1,17 @@
 import { allSingletons } from "content-collections"
 import invariant from "tiny-invariant"
 import type { Route } from "./+types/about"
+import { createPageMeta, siteConfig } from "~/static"
 import { BooksSection } from "./about/books-section"
 import { TopTracksAndArtistsSection } from "./about/top-tracks-and-artists-section"
 import { VideosSection } from "./about/videos-section"
+
+export const meta: Route.MetaFunction = () =>
+  createPageMeta({
+    title: `About | ${siteConfig.author}`,
+    description: `Learn more about Willy Ovalle - software developer, music lover, and open source enthusiast based in Santo Domingo.`,
+    path: "/about",
+  })
 
 export const loader = async ({ context }: Route.LoaderArgs) => {
   const bio = allSingletons.find((singleton) => singleton.name === "bio")

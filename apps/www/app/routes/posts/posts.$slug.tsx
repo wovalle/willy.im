@@ -3,7 +3,38 @@ import { allPosts } from "content-collections"
 import { Link } from "react-router"
 
 import { Time } from "~/components/time"
+import { createPageMeta, siteConfig } from "~/static"
 import type { Route } from "./+types/posts.$slug"
+
+export const meta: Route.MetaFunction = ({ loaderData }: Route.MetaArgs) => {
+  if (!loaderData?.post) return []
+
+  const post = loaderData.post
+  const path = `/posts/${post._meta.path}`
+
+  return [
+    ...createPageMeta({
+      title: `${post.title} | ${siteConfig.author}`,
+      description: post.summary,
+      path,
+      type: "article",
+      publishedTime: post.publishedAt,
+      modifiedTime: post.updatedAt,
+    }),
+    {
+      "script:ld+json": {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        headline: post.title,
+        description: post.summary,
+        datePublished: post.publishedAt,
+        dateModified: post.updatedAt ?? post.publishedAt,
+        author: { "@type": "Person", name: siteConfig.author },
+        url: `${siteConfig.url}${path}`,
+      },
+    },
+  ]
+}
 
 export const loader = async ({ params }: Route.LoaderArgs) => {
   const post = allPosts.find((post) => post._meta.path === params.slug)
@@ -43,8 +74,12 @@ export default function Component({ loaderData }: Route.ComponentProps) {
           <p className="text-gray-500 flex text-sm md:text-base">
             {PublishedAt} <Divider />
             {tags} <Divider /> {views} views
-            <Link to="/rss.xml" className="self-center border-0 no-underline">
-              <IconRss size="1em" className="ml-2 self-center" />
+            <Link
+              to="/rss.xml"
+              className="self-center border-0 no-underline"
+              aria-label="Subscribe to RSS feed"
+            >
+              <IconRss size="1em" className="ml-2 self-center" aria-hidden />
             </Link>
           </p>
 

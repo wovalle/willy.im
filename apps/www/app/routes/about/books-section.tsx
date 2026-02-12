@@ -75,7 +75,7 @@ export const BooksSection = ({
                 className="text-subtitle text-sm"
                 href="https://twitter.com/intent/tweet?text=hey @wovalle, you should read: "
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
               >
                 recommend something
               </a>

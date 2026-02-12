@@ -1,7 +1,15 @@
 import { allPosts } from "content-collections"
 
+import { createPageMeta, siteConfig } from "~/static"
 import type { Route } from "./+types/route"
 import { Post } from "./post"
+
+export const meta: Route.MetaFunction = () =>
+  createPageMeta({
+    title: `Posts | ${siteConfig.author}`,
+    description: `Blog posts and articles by ${siteConfig.author} about software development, React, TypeScript, and more.`,
+    path: "/posts",
+  })
 
 export const loader = () => {
   return {

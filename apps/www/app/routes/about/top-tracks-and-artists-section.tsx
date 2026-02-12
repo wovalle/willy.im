@@ -76,7 +76,7 @@ export const TopTracksAndArtistsSection = ({
       url={t.url}
       leftPanel={(isHovered) => (
         <AboutItemOverlay diameter={70} isHovered={isHovered}>
-          <Link to={t.url} target="_blank">
+          <Link to={t.url} target="_blank" rel="noopener noreferrer">
             <img
               src={t.thumbnailUrl ?? "/public/android-chrome-512x512.png"}
               alt={t.name}

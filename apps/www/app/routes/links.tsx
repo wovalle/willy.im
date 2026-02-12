@@ -164,9 +164,10 @@ export default function Links() {
               href={link}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label={`${name} profile`}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/60 text-gray-600 shadow-lg backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:bg-white/80 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700/80 dark:hover:text-gray-100"
             >
-              <Icon size="1.2em" />
+              <Icon size="1.2em" aria-hidden />
             </a>
           ))}
         </div>
