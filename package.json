@@ -2,12 +2,12 @@
   "name": "willy.im",
   "version": "1.0.0",
   "scripts": {
-    "dev": "pnpm --stream -r dev",
+    "dev": "npm run dev --workspace=www",
     "compose": "docker compose up",
-    "build": "pnpm --stream -r build",
-    "postbuild": "pnpm --stream -r postbuild",
-    "start": "pnpm --stream -r start",
-    "test": "pnpm --stream -r test"
+    "build": "npm run build --workspaces",
+    "postbuild": "npm run postbuild --workspaces --if-present",
+    "start": "npm run start --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {},
   "workspaces": [
