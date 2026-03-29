@@ -1,0 +1,28 @@
+name: Test drizzle-audit
+
+on:
+  pull_request:
+    paths:
+      - "packages/drizzle_audit/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/drizzle_audit
+
+      - name: Build
+        run: npm run build
+        working-directory: packages/drizzle_audit
+
+      - name: Test
+        run: node --test ./dist/test/**/*.test.js
+        working-directory: packages/drizzle_audit
