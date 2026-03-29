@@ -8,6 +8,10 @@ function quoteIdent(value: string) {
   return `"${value.replaceAll('"', '""')}"`
 }
 
+function quoteLiteral(value: string) {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
 function assertNonEmpty(value: string, label: string) {
   if (value.trim().length === 0) {
     throw new Error(`${label} must not be empty`)
@@ -99,7 +103,7 @@ FOR EACH ROW
 BEGIN
   INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""})
   VALUES (
-    '${table}',
+    ${quoteLiteral(table)},
     'INSERT',
     NEW.${quoteIdent(rowIdColumn)},
     (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""}
@@ -137,7 +141,7 @@ FOR EACH ROW
 BEGIN
   INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""})
   VALUES (
-    '${table}',
+    ${quoteLiteral(table)},
     'UPDATE',
     NEW.${quoteIdent(rowIdColumn)},
     (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""}
@@ -175,7 +179,7 @@ FOR EACH ROW
 BEGIN
   INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""})
   VALUES (
-    '${table}',
+    ${quoteLiteral(table)},
     'DELETE',
     OLD.${quoteIdent(rowIdColumn)},
     (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""}
@@ -221,7 +225,7 @@ export type D1AuditTriggerTargetWithColumns = D1AuditTriggerTarget & {
 }
 
 function buildJsonObjectExpr(columns: string[], ref: "NEW" | "OLD"): string {
-  return `json_object(${columns.map((c) => `'${c}', ${ref}.${quoteIdent(c)}`).join(", ")})`
+  return `json_object(${columns.map((c) => `${quoteLiteral(c)}, ${ref}.${quoteIdent(c)}`).join(", ")})`
 }
 
 function buildInsertTriggerWithColumnsSql(
@@ -254,7 +258,7 @@ FOR EACH ROW
 BEGIN
   INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""}, new_data)
   VALUES (
-    '${table}',
+    ${quoteLiteral(table)},
     'INSERT',
     NEW.${quoteIdent(rowIdColumn)},
     (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""},
@@ -293,7 +297,7 @@ FOR EACH ROW
 BEGIN
   INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""}, old_data, new_data)
   VALUES (
-    '${table}',
+    ${quoteLiteral(table)},
     'UPDATE',
     NEW.${quoteIdent(rowIdColumn)},
     (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""},
@@ -333,7 +337,7 @@ FOR EACH ROW
 BEGIN
   INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""}, old_data)
   VALUES (
-    '${table}',
+    ${quoteLiteral(table)},
     'DELETE',
     OLD.${quoteIdent(rowIdColumn)},
     (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""},
@@ -379,4 +383,3 @@ export function createAttachD1AuditTriggersSqlWithColumns(
     .map((target) => createAttachD1AuditTriggerSqlWithColumns(target, options))
     .join("\n\n")
 }
-

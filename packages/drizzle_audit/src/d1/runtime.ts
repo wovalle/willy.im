@@ -25,9 +25,20 @@ export function setD1AuditContext(
   assertActorId(actorId)
   const table = options?.contextTable ?? DEFAULT_CONTEXT_TABLE
 
-  db.run(
+  const result = db.run(
     sql`INSERT OR REPLACE INTO ${sql.identifier(table)} (key, value) VALUES ('user_id', ${actorId})`,
   )
+
+  // Handle async drivers (D1) by chaining if result is a Promise
+  if (result && typeof (result as Promise<unknown>).then === "function") {
+    return (result as Promise<unknown>).then(() => {
+      if (options?.workspaceId !== undefined && options.workspaceId !== "") {
+        return db.run(
+          sql`INSERT OR REPLACE INTO ${sql.identifier(table)} (key, value) VALUES ('workspace_id', ${options.workspaceId})`,
+        )
+      }
+    })
+  }
 
   if (options?.workspaceId !== undefined && options.workspaceId !== "") {
     db.run(
@@ -45,7 +56,7 @@ export function clearD1AuditContext(
   options?: { contextTable?: string },
 ) {
   const table = options?.contextTable ?? DEFAULT_CONTEXT_TABLE
-  db.run(
+  return db.run(
     sql`DELETE FROM ${sql.identifier(table)} WHERE key IN ('user_id', 'workspace_id')`,
   )
 }

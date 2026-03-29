@@ -11,13 +11,11 @@ function assertActorId(actorId: string) {
   }
 }
 
-const WORKSPACE_CONTEXT_KEY = "app.workspace_id"
-
 export async function setAuditContext(
   db: AuditSqlExecutor,
   actorId: string,
   contextKey = "app.user_id",
-  options?: { workspaceId?: string },
+  options?: { workspaceId?: string; workspaceContextKey?: string },
 ) {
   assertActorId(actorId)
 
@@ -25,8 +23,9 @@ export async function setAuditContext(
     sql`select set_config(${contextKey}, ${actorId}, true) as audit_context`,
   )
   if (options?.workspaceId !== undefined && options.workspaceId !== "") {
+    const wsKey = options.workspaceContextKey ?? "app.workspace_id"
     await db.execute(
-      sql`select set_config(${WORKSPACE_CONTEXT_KEY}, ${options.workspaceId}, true) as workspace_context`,
+      sql`select set_config(${wsKey}, ${options.workspaceId}, true) as workspace_context`,
     )
   }
 }
@@ -39,7 +38,7 @@ export async function withAuditedTransaction<
   actorId: string,
   callback: (tx: TTransaction) => Promise<TResult> | TResult,
   contextKey = "app.user_id",
-  options?: { workspaceId?: string },
+  options?: { workspaceId?: string; workspaceContextKey?: string },
 ) {
   assertActorId(actorId)
 

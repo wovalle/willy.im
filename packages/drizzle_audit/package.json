@@ -42,8 +42,8 @@
     "directory": "packages/drizzle_audit"
   },
   "peerDependencies": {
-    "drizzle-orm": ">=0.30.0",
     "drizzle-kit": ">=0.20.0",
+    "drizzle-orm": ">=0.30.0",
     "tsx": ">=4.0.0"
   },
   "peerDependenciesMeta": {
@@ -63,8 +63,8 @@
     "registry": "https://npm.pkg.github.com"
   },
   "optionalDependencies": {
-    "@electric-sql/pglite": "^0.3.15",
+    "@electric-sql/pglite": "^0.3.16",
     "@types/better-sqlite3": "^7.6.13",
-    "better-sqlite3": "^11.9.1"
+    "better-sqlite3": "^11.10.0"
   }
 }

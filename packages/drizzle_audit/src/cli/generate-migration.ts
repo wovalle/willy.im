@@ -128,7 +128,7 @@ async function main() {
   const migrationFile = resolve(migrationDir, "migration.sql")
   const existing = readFileSync(migrationFile, "utf-8")
   const auditSql = await getAuditSql(config, cwd)
-  const separator = existing.endsWith("\n") ? "\n\n" : "\n\n"
+  const separator = "\n\n"
   writeFileSync(migrationFile, existing + separator + "-- drizzle-audit\n\n" + auditSql, "utf-8")
   console.log("Appended audit SQL to", migrationFile)
 }
