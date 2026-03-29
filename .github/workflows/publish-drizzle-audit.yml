@@ -46,6 +46,7 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://npm.pkg.github.com"
+          scope: "@wovalle"
 
       - name: Install dependencies
         run: npm install
@@ -55,6 +56,8 @@ jobs:
         run: npm run build
         working-directory: packages/drizzle_audit
 
+      - name: Debug npmrc
+        run: cat ~/.npmrc
 
       - name: Publish
         run: npm publish
