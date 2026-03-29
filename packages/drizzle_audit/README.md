@@ -1,281 +1,278 @@
 # drizzle-audit
 
-Lightweight Postgres auditing for Drizzle ORM.
-
-This library keeps auditing inside the database by using Postgres triggers. Your application does not write audit rows manually. Instead, it sets the current actor once per write transaction and then performs normal Drizzle writes.
-
-## What It Does
-
-- Creates an `audit_logs` table
-- Creates a reusable Postgres trigger function
-- Attaches audit triggers to the tables you choose
-- Exposes `setAuditContext(...)` and `withAuditedTransaction(...)` for request-scoped actor context
-- Fails audited writes when no actor context is present
-
-## What It Does Not Do
-
-- No repositories
-- No ORM hooks
-- No query wrappers around every write
-- No app-specific audit read API
-- No automatic redaction of sensitive fields
-
-## Design
-
-The intended flow is:
-
-1. Start a transaction
-2. Set the actor with `withAuditedTransaction(...)` or `setAuditContext(...)`
-3. Run normal `insert`, `update`, or `delete` queries
-4. Let Postgres triggers write audit rows automatically
-
-If an audited table is written without audit context, the trigger raises an exception and the write fails.
+Automatic audit logging for [Drizzle ORM](https://orm.drizzle.team). Supports Postgres (triggers) and D1/SQLite (triggers or app-level wrapper).
 
 ## Install
 
 ```bash
-npm install drizzle-audit drizzle-orm
+npm install @wovalle/drizzle-audit
 ```
 
-For testing, this package uses [`@electric-sql/pglite`](https://www.npmjs.com/package/@electric-sql/pglite). The integration approach is compatible with [Drizzle’s PGlite support](https://orm.drizzle.team/docs/connect-pglite).
+Peer dependencies: `drizzle-orm`. Optional: `drizzle-kit` (for CLI), `tsx` (for TS config files).
 
-## Public API
+## Quick Start
+
+### Postgres (triggers)
 
 ```ts
 import {
   pgAuditLogTable,
   createAuditInstallSql,
-  createAttachAuditTriggerSql,
   createAttachAuditTriggersSql,
-  createAuditAddWorkspaceColumnSql,
-  setAuditContext,
   withAuditedTransaction,
-} from "drizzle-audit/postgres"
-```
+} from "@wovalle/drizzle-audit/postgres"
 
-## Add The Audit Table To Your Schema
-
-```ts
-// db/schema.ts
-import { pgTable, text } from "drizzle-orm/pg-core"
-import { pgAuditLogTable } from "drizzle-audit/postgres"
-
-// Without workspace column (default)
+// 1. Add to your Drizzle schema
 export const auditLogs = pgAuditLogTable()
 
-// Or with optional workspace_id (when using workspaceIdColumn in install)
-// export const auditLogs = pgAuditLogTable({ workspaceIdColumn: "workspace_id" })
+// 2. Generate migration SQL
+const migrationSql = [
+  createAuditInstallSql(),
+  createAttachAuditTriggersSql([
+    { table: "users" },
+    { table: "invoices", rowIdColumn: "invoice_id" },
+  ]),
+].join("\n\n")
 
-export const users = pgTable("users", {
-  id: text("id").primaryKey(),
-  email: text("email").notNull(),
+// 3. Use in your app
+await withAuditedTransaction(db, currentUser.id, async (tx) => {
+  await tx.insert(users).values({ id: "u1", name: "Ada" })
+  await tx.update(users).set({ name: "Ada Lovelace" }).where(eq(users.id, "u1"))
 })
 ```
 
-## Create The Audit Migration
+Postgres triggers capture full row snapshots (`old_data`/`new_data` as JSONB) automatically.
 
-### Option A: CLI (recommended)
+### D1/SQLite — App-Level Wrapper (recommended)
 
-From your app (where `drizzle-audit` and `drizzle-kit` are installed), run:
+For D1 and SQLite, the `withAudit` wrapper is the simplest approach. No triggers, no context tables — it intercepts operations in your JS code where you already have the user session.
 
-```bash
-npx drizzle-audit generate --config app/db/audit.ts --drizzle-config app/db/drizzle.config.ts --migrations-dir drizzle
+```ts
+import { d1AuditLogTable } from "@wovalle/drizzle-audit/d1"
+import { withAudit } from "@wovalle/drizzle-audit/d1-runtime"
+
+// 1. Add to your schema
+export const auditLogs = d1AuditLogTable()
+
+// 2. Create the audit_logs table (in a migration or setup script)
+// CREATE TABLE audit_logs (
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   table_name TEXT NOT NULL,
+//   operation TEXT NOT NULL,
+//   row_id TEXT,
+//   user_id TEXT,
+//   old_data TEXT,
+//   new_data TEXT,
+//   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+// );
+
+// 3. Use in your app (e.g. React Router action)
+const audit = withAudit(db, auditLogs, { userId: session.userId })
+
+audit.insert(users, { id: "u1", name: "Ada" })
+audit.update(users, eq(users.id, "u1"), { name: "Ada Lovelace" })
+audit.delete(users, eq(users.id, "u1"))
+
+// Non-audited access is still available
+audit.db.select().from(users).all()
 ```
 
-This will:
+The wrapper auto-detects primary keys from your Drizzle table schema, captures old/new row data, and runs each operation + audit log insert in a transaction.
 
-1. Run `drizzle-kit generate` to create a new migration from your schema
-2. Find the newly created migration folder
-3. Append the audit SQL (install + triggers) from your config to that migration’s `migration.sql`
+### D1/SQLite — Triggers
 
-**Consumer config file:** a module that exports `createAuditSql()` or `createWebAuditSql()` returning the full audit SQL string. Example:
+If you prefer trigger-based auditing on SQLite (works with D1, better-sqlite3, libsql):
+
+```ts
+import {
+  createD1AuditInstallSql,
+  createAttachD1AuditTriggersSql,
+  d1AuditLogTable,
+  d1AuditContextTable,
+  withD1AuditedTransaction,
+} from "@wovalle/drizzle-audit/d1"
+
+// 1. Add to schema
+export const auditLogs = d1AuditLogTable()
+export const auditContext = d1AuditContextTable()
+
+// 2. Install (creates audit_logs + _audit_context tables + triggers)
+sqlite.exec(createD1AuditInstallSql())
+sqlite.exec(createAttachD1AuditTriggersSql([
+  { table: "users" },
+]))
+
+// 3. Use — context is passed via _audit_context table within a transaction
+withD1AuditedTransaction(db, "user_123", (tx) => {
+  tx.insert(users).values({ id: "u1", name: "Ada" }).run()
+})
+```
+
+Since SQLite has no session variables, context (user_id) is stored in a `_audit_context` table that triggers read from within the transaction.
+
+For full row snapshots, use the column-aware variant (SQLite can't enumerate columns dynamically):
+
+```ts
+sqlite.exec(createAttachD1AuditTriggersSqlWithColumns([
+  { table: "users", columns: ["id", "name", "email"] },
+]))
+```
+
+## Workspace / Tenant Scoping
+
+All three approaches support an optional workspace column for multi-tenant apps.
+
+### Postgres
+
+```ts
+// Install with workspace column
+createAuditInstallSql({ workspaceIdColumn: "workspace_id" })
+export const auditLogs = pgAuditLogTable({ workspaceIdColumn: "workspace_id" })
+
+// Pass workspace at runtime
+await withAuditedTransaction(
+  db, userId, async (tx) => { /* ... */ },
+  "app.user_id",
+  { workspaceId: "ws_1" },
+)
+```
+
+To add workspace to an existing install, use `createAuditAddWorkspaceColumnSql()`.
+
+### D1 Runtime
+
+```ts
+const audit = withAudit(db, auditLogs, {
+  userId: "user_1",
+  workspaceId: "ws_1",
+})
+```
+
+### D1 Triggers
+
+```ts
+createD1AuditInstallSql({ workspaceIdColumn: "workspace_id" })
+createAttachD1AuditTriggersSql(
+  [{ table: "users" }],
+  { workspaceIdColumn: "workspace_id" },
+)
+
+withD1AuditedTransaction(db, "user_1", (tx) => { /* ... */ }, {
+  workspaceId: "ws_1",
+})
+```
+
+## CLI
+
+Generate a Drizzle migration with audit SQL appended:
+
+```bash
+npx drizzle-audit generate \
+  --config app/db/audit.ts \
+  --drizzle-config drizzle.config.ts \
+  --migrations-dir drizzle
+```
+
+Your config file exports a `createAuditSql()` function:
 
 ```ts
 // app/db/audit.ts
-import {
-  createAttachAuditTriggersSql,
-  createAuditInstallSql,
-} from "drizzle-audit/postgres"
-
-export const auditedTables = [
-  { table: "users" },
-  { table: "workspaces" },
-  { table: "transactions" },
-  { table: "invoice", rowIdColumn: "invoice_id" },
-] as const
+import { createAuditInstallSql, createAttachAuditTriggersSql } from "@wovalle/drizzle-audit/postgres"
 
 export function createAuditSql() {
   return [
-    createAuditInstallSql({ workspaceIdColumn: "workspace_id" }), // optional
-    createAttachAuditTriggersSql([...auditedTables]),
+    createAuditInstallSql(),
+    createAttachAuditTriggersSql([
+      { table: "users" },
+      { table: "workspaces" },
+    ]),
   ].join("\n\n")
 }
 ```
 
-**CLI options:**
+## API Reference
 
-- `--config <path>` — Path to your audit config (required). Use a `.ts` path if you have `tsx` installed; otherwise use a built `.js` path.
-- `--drizzle-config <path>` — Drizzle config for `drizzle-kit` (default: `drizzle.config.ts`)
-- `--migrations-dir <path>` — Migrations directory relative to cwd (default: `drizzle`)
-- `--cwd <path>` — Working directory (default: `process.cwd()`)
+### `@wovalle/drizzle-audit/postgres`
 
-**Rerun when you add audited tables:** run the same command again later. It will create a new migration (from your current schema) and append the **current** audit SQL (install + all triggers). Apply the migration as usual. If you already ran the install in a previous migration, the install part is idempotent (`IF NOT EXISTS`); the new migration will mainly add or adjust triggers for the tables in your config.
+| Export | Description |
+|---|---|
+| `pgAuditLogTable(options?)` | Drizzle table definition for `audit_logs` |
+| `createAuditInstallSql(options?)` | SQL to create the audit table, indexes, and trigger function |
+| `createAttachAuditTriggerSql(target, options?)` | SQL to attach audit trigger to one table |
+| `createAttachAuditTriggersSql(targets, options?)` | Same, for multiple tables |
+| `createAuditAddWorkspaceColumnSql(options)` | SQL to add workspace column to existing install |
+| `setAuditContext(db, actorId, contextKey?, options?)` | Set actor context in current transaction |
+| `withAuditedTransaction(db, actorId, callback, contextKey?, options?)` | Transaction wrapper with actor context |
 
-**Limitations:**
+### `@wovalle/drizzle-audit/d1`
 
-- For `.ts` config you need `tsx` installed (e.g. `npm i -D tsx`). For `.js` config, no extra deps.
-- `drizzle-kit` must be installed in the project (peer dependency).
-- The CLI always appends to the **newest** migration folder (by name order). Run it right after `drizzle-kit generate` so that “newest” is the migration you just created.
+| Export | Description |
+|---|---|
+| `d1AuditLogTable(options?)` | Drizzle SQLite table definition for `audit_logs` |
+| `d1AuditContextTable(options?)` | Drizzle SQLite table definition for `_audit_context` |
+| `createD1AuditInstallSql(options?)` | SQL to create audit + context tables and indexes |
+| `createAttachD1AuditTriggerSql(target, options?)` | SQL for audit triggers (one table) |
+| `createAttachD1AuditTriggersSql(targets, options?)` | Same, for multiple tables |
+| `createAttachD1AuditTriggerSqlWithColumns(target, options?)` | Column-aware triggers with full row snapshots |
+| `createAttachD1AuditTriggersSqlWithColumns(targets, options?)` | Same, for multiple tables |
+| `setD1AuditContext(db, actorId, options?)` | Set actor in `_audit_context` table |
+| `clearD1AuditContext(db, options?)` | Clear actor from `_audit_context` table |
+| `withD1AuditedTransaction(db, actorId, callback, options?)` | Transaction wrapper with context management |
 
-### Option B: Manual migration
+### `@wovalle/drizzle-audit/d1-runtime`
 
-Use a Drizzle custom migration and paste the SQL generated by this library.
+| Export | Description |
+|---|---|
+| `withAudit(db, auditTable, context)` | App-level audit wrapper (no triggers needed) |
 
-```ts
-import {
-  createAttachAuditTriggersSql,
-  createAuditInstallSql,
-} from "drizzle-audit/postgres"
+`withAudit` returns an object with:
+- `.insert(table, data)` — Insert + audit log
+- `.update(table, where, data)` — Fetch old rows, update, audit log (per row)
+- `.delete(table, where)` — Fetch old rows, delete, audit log (per row)
+- `.db` — Raw Drizzle instance for non-audited operations
 
-const sql = [
-  createAuditInstallSql(),
-  createAttachAuditTriggersSql([
-    { table: "users" },
-    { table: "workspaces" },
-    { table: "transactions" },
-    { table: "invoice", rowIdColumn: "invoice_id" },
-  ]),
-].join("\n\n")
-```
+## Audit Log Schema
 
-That migration should install:
-
-- the `audit_logs` table
-- indexes for common lookups
-- the `drizzle_audit_trigger()` function
-- triggers for the tables you attach
-
-Install options for `createAuditInstallSql()` (and for `createAttachAuditTriggersSql`) include optional **`workspaceIdColumn`** (e.g. `"workspace_id"`). When set, the table and trigger get that column; the trigger reads the value from session variable `app.${workspaceIdColumn}`. The runtime uses `app.workspace_id` when you pass `workspaceId` (see Optional workspace_id below).
-
-## Recommended App Usage
-
-Prefer `withAuditedTransaction(...)` for all writes to audited tables.
-
-```ts
-import { withAuditedTransaction } from "drizzle-audit/postgres"
-
-await withAuditedTransaction(db, currentUser.id, async (tx) => {
-  await tx.insert(users).values({
-    id: "user_123",
-    email: "ada@example.com",
-  })
-
-  await tx.update(users).set({
-    email: "ada.lovelace@example.com",
-  })
-})
-
-// With optional workspace (when workspaceIdColumn is set in install)
-await withAuditedTransaction(
-  db,
-  currentUser.id,
-  async (tx) => { /* ... */ },
-  "app.user_id",
-  { workspaceId: currentWorkspace.id },
-)
-```
-
-This is the main rule:
-
-- reads can use `db`
-- writes to audited tables should use `withAuditedTransaction(...)`
-
-If you need lower-level control, use `setAuditContext(...)` inside an existing transaction:
-
-```ts
-import { setAuditContext } from "drizzle-audit/postgres"
-
-await db.transaction(async (tx) => {
-  await setAuditContext(tx, currentUser.id) // optional 4th arg: { workspaceId: "..." }
-  await tx.delete(users).where(...)
-  await tx.update(users).set(...).where(...)
-})
-```
-
-## Optional workspace_id
-
-When you need to scope audit rows by workspace (or tenant), set **`workspaceIdColumn`** in the install options (e.g. `"workspace_id"`). The trigger then reads from session variable `app.workspace_id` and stores it in the audit row. The column is only created when this option is set.
-
-- **Add from the start:** pass `workspaceIdColumn: "workspace_id"` to `createAuditInstallSql(options)` and use `pgAuditLogTable({ workspaceIdColumn: "workspace_id" })` in your schema. When running audited writes, pass `{ workspaceId: "..." }` as the last argument to `withAuditedTransaction` or as the fourth argument to `setAuditContext`.
-- **Add after the table exists:** create a new migration and paste the SQL returned by `createAuditAddWorkspaceColumnSql(options)` (same options as your install: `auditSchema`, `auditTable`, `triggerFunctionName`, `workspaceIdColumn`). Run the migration; the new column and updated trigger will be applied. Then pass `workspaceId` at runtime as above.
-
-The built-in runtime only sets `app.workspace_id`. If you use a custom column name (e.g. `tenant_id`), set the session variable yourself (e.g. raw `set_config`) or use the default column name `workspace_id`.
-
-## Actor Context
-
-Writes to audited tables without `setAuditContext` or `withAuditedTransaction` will still succeed, but the `user_id` column will be `NULL`. This is useful for migrations and seeds, but for application writes you should always set the actor:
-
-- Use `withAuditedTransaction(db, actorId, ...)` for all request-scoped writes
-- Background jobs should use an explicit actor string, such as `system:reconcile` or `system:webhook`
-
-## Generated Audit Schema
-
-The generated table is conceptually:
+### Postgres
 
 ```sql
 CREATE TABLE audit_logs (
-  id BIGSERIAL PRIMARY KEY,
+  id         BIGSERIAL PRIMARY KEY,
   table_name TEXT NOT NULL,
-  operation TEXT NOT NULL,
-  row_id TEXT,
-  user_id TEXT NOT NULL,
-  workspace_id TEXT,  -- only when workspaceIdColumn is set
-  old_data JSONB,
-  new_data JSONB,
+  operation  TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+  row_id     TEXT,
+  user_id    TEXT,
+  old_data   JSONB,
+  new_data   JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
-Rows contain full JSON snapshots:
+### D1/SQLite
 
-- `INSERT`: `new_data`
-- `UPDATE`: `old_data` and `new_data`
-- `DELETE`: `old_data`
-
-## Trigger Attachment
-
-Attach triggers one table at a time:
-
-```ts
-import { createAttachAuditTriggerSql } from "drizzle-audit/postgres"
-
-const sql = createAttachAuditTriggerSql({ table: "users" })
+```sql
+CREATE TABLE audit_logs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  table_name TEXT NOT NULL,
+  operation  TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+  row_id     TEXT,
+  user_id    TEXT,
+  old_data   TEXT,  -- JSON string
+  new_data   TEXT,  -- JSON string
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 ```
 
-Or in bulk:
+## Which Approach Should I Use?
 
-```ts
-import { createAttachAuditTriggersSql } from "drizzle-audit/postgres"
+| | Postgres Triggers | D1 Runtime (`withAudit`) | D1 Triggers |
+|---|---|---|---|
+| **Setup** | Migration SQL | Create table only | Migration SQL + context table |
+| **Row snapshots** | Automatic (full JSONB) | Automatic (full JSON) | Requires listing columns |
+| **User context** | Native session vars | Available in JS | `_audit_context` table |
+| **Bypass risk** | Low (DB-level) | Medium (must use wrapper) | Low (DB-level) |
+| **Best for** | Postgres apps | D1/Cloudflare Workers | SQLite apps needing DB-level guarantees |
 
-const sql = createAttachAuditTriggersSql([
-  { table: "users" },
-  { table: "invoices", rowIdColumn: "invoice_id" },
-  { table: "entries", schema: "ledger" },
-])
-```
+## License
 
-## Important Assumptions
-
-- Postgres only
-- Auditing only applies to tables where you attach the trigger
-- The default row id column is `id`
-- For tables with a different primary key column, pass `rowIdColumn`
-- Sensitive columns are captured as-is in `old_data` and `new_data`
-
-## Suggested AI Integration Prompt
-
-If another AI needs to wire this into an app, tell it:
-
-```txt
-Add drizzle-audit to the Postgres Drizzle schema, create a custom migration using createAuditInstallSql() and createAttachAuditTriggersSql(), attach triggers to the audited tables, and make all writes to those tables go through withAuditedTransaction(db, actorId, async (tx) => { ... }). Do not add repository wrappers or manual audit inserts.
-```
+MIT
