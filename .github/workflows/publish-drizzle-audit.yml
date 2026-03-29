@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   test:
@@ -36,6 +37,9 @@ jobs:
   publish:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -54,7 +58,7 @@ jobs:
         working-directory: packages/drizzle_audit
 
       - name: Publish
-        run: npm publish --access public
+        run: npm publish
         working-directory: packages/drizzle_audit
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
