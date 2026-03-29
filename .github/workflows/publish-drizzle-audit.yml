@@ -1,0 +1,60 @@
+name: Publish drizzle-audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/drizzle_audit/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/drizzle_audit
+
+      - name: Build
+        run: npm run build
+        working-directory: packages/drizzle_audit
+
+      - name: Test
+        run: node --test ./dist/test/**/*.test.js
+        working-directory: packages/drizzle_audit
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@wovalle"
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/drizzle_audit
+
+      - name: Build
+        run: npm run build
+        working-directory: packages/drizzle_audit
+
+      - name: Publish
+        run: npm publish --access public
+        working-directory: packages/drizzle_audit
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
