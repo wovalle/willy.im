@@ -280,3 +280,89 @@ test("workspace_id column and context are stored when enabled", async () => {
     await client.close()
   }
 })
+
+test("custom workspace column name uses matching context key", async () => {
+  const client = new PGlite()
+  const auditLogsWithTenant = pgAuditLogTable({ workspaceIdColumn: "tenant_id" })
+  const db = drizzle({
+    client,
+    schema: {
+      auditLogs: auditLogsWithTenant,
+      users,
+    },
+  })
+
+  try {
+    await client.exec(
+      createAuditInstallSql({ workspaceIdColumn: "tenant_id" }),
+    )
+    await client.exec(`
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL
+      );
+    `)
+    await client.exec(
+      createAttachAuditTriggersSql([{ table: "users" }]),
+    )
+
+    // Use workspaceContextKey matching the trigger's "app.tenant_id"
+    await withAuditedTransaction(
+      db,
+      "user_1",
+      async (tx) => {
+        await tx.insert(users).values({ id: "u1", name: "Alice" })
+      },
+      "app.user_id",
+      { workspaceId: "tenant_abc", workspaceContextKey: "app.tenant_id" },
+    )
+
+    const logs = await db.select().from(auditLogsWithTenant)
+    assert.equal(logs.length, 1)
+    assert.equal(logs[0]?.user_id, "user_1")
+    assert.equal((logs[0] as Record<string, unknown>).tenant_id, "tenant_abc")
+  } finally {
+    await client.close()
+  }
+})
+
+test("custom context key for user_id works", async () => {
+  const client = new PGlite()
+  const db = drizzle({
+    client,
+    schema: { auditLogs, users },
+  })
+
+  try {
+    await client.exec(
+      createAuditInstallSql({ contextKey: "myapp.actor" }),
+    )
+    await client.exec(`
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL
+      );
+    `)
+    await client.exec(
+      createAttachAuditTriggersSql(
+        [{ table: "users" }],
+        { contextKey: "myapp.actor" },
+      ),
+    )
+
+    await withAuditedTransaction(
+      db,
+      "custom_user",
+      async (tx) => {
+        await tx.insert(users).values({ id: "u1", name: "Alice" })
+      },
+      "myapp.actor",
+    )
+
+    const logs = await db.select().from(auditLogs).orderBy(asc(auditLogs.id))
+    assert.equal(logs.length, 1)
+    assert.equal(logs[0]?.user_id, "custom_user")
+  } finally {
+    await client.close()
+  }
+})

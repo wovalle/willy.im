@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import Database from "better-sqlite3"
-import { asc, eq } from "drizzle-orm"
+import { asc, eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/better-sqlite3"
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
 
@@ -227,6 +227,60 @@ test("d1 writes without audit context produce rows with user_id = NULL", () => {
 
     assert.equal(logs[2]?.operation, "DELETE")
     assert.equal(logs[2]?.user_id, null)
+  } finally {
+    sqlite.close()
+  }
+})
+
+test("d1 trigger SQL handles table names with special characters", () => {
+  const sqlite = new Database(":memory:")
+  const db = drizzle({ client: sqlite, schema: { auditLogs, auditContext } })
+
+  try {
+    sqlite.exec(createD1AuditInstallSql())
+    // Table name with a single quote — the quoteLiteral fix prevents SQL breakage
+    const tableName = "user's_data"
+    sqlite.exec(`CREATE TABLE "${tableName}" (id TEXT PRIMARY KEY, val TEXT);`)
+    sqlite.exec(
+      createAttachD1AuditTriggersSql([{ table: tableName }]),
+    )
+
+    // Seed context and insert
+    withD1AuditedTransaction(db, "tester", (tx) => {
+      tx.run(sql`INSERT INTO "${sql.raw(tableName)}" (id, val) VALUES ('r1', 'hello')`)
+    })
+
+    const logs = db.select().from(auditLogs).all()
+    assert.equal(logs.length, 1)
+    assert.equal(logs[0]?.table_name, tableName)
+    assert.equal(logs[0]?.row_id, "r1")
+    assert.equal(logs[0]?.user_id, "tester")
+  } finally {
+    sqlite.close()
+  }
+})
+
+test("d1 column-aware triggers handle column names with special characters", () => {
+  const sqlite = new Database(":memory:")
+  const db = drizzle({ client: sqlite, schema: { auditLogs, auditContext } })
+
+  try {
+    sqlite.exec(createD1AuditInstallSql())
+    sqlite.exec(`CREATE TABLE items (id TEXT PRIMARY KEY, "user's name" TEXT);`)
+    sqlite.exec(
+      createAttachD1AuditTriggersSqlWithColumns([
+        { table: "items", columns: ["id", "user's name"] },
+      ]),
+    )
+
+    withD1AuditedTransaction(db, "tester", (tx) => {
+      tx.run(sql`INSERT INTO items (id, "user's name") VALUES ('i1', 'Ada')`)
+    })
+
+    const logs = db.select().from(auditLogs).all()
+    assert.equal(logs.length, 1)
+    const newData = JSON.parse(logs[0]?.new_data as string)
+    assert.equal(newData["user's name"], "Ada")
   } finally {
     sqlite.close()
   }
