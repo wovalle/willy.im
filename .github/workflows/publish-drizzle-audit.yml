@@ -55,14 +55,9 @@ jobs:
         run: npm run build
         working-directory: packages/drizzle_audit
 
-      - name: Create .npmrc
-        run: echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
-        working-directory: packages/drizzle_audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish
         run: npm publish
         working-directory: packages/drizzle_audit
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
