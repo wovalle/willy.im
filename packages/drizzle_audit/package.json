@@ -1,0 +1,68 @@
+{
+  "name": "@wovalle/drizzle-audit",
+  "version": "0.1.0",
+  "description": "Lightweight audit logging for Drizzle ORM using database triggers (Postgres + D1/SQLite)",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": "./dist/src/index.js",
+    "./postgres": "./dist/src/postgres/index.js",
+    "./d1": "./dist/src/d1/index.js",
+    "./d1-runtime": "./dist/src/d1-runtime/index.js"
+  },
+  "bin": {
+    "drizzle-audit": "./dist/src/cli/generate-migration.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test ./dist/test/**/*.test.js"
+  },
+  "keywords": [
+    "drizzle",
+    "drizzle-orm",
+    "audit",
+    "audit-log",
+    "postgres",
+    "d1",
+    "sqlite",
+    "cloudflare",
+    "triggers"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wovalle/willy.im",
+    "directory": "packages/drizzle_audit"
+  },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.30.0",
+    "drizzle-kit": ">=0.20.0",
+    "tsx": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-kit": {
+      "optional": true
+    },
+    "tsx": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.15",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.19.7",
+    "better-sqlite3": "^11.9.1",
+    "drizzle-orm": "^1.0.0-beta.15-859cf75",
+    "typescript": "^5.9.3"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}
