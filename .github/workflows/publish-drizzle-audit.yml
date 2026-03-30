@@ -45,6 +45,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@wovalle"
 
       - name: Install dependencies
         run: npm install
@@ -54,14 +56,8 @@ jobs:
         run: npm run build
         working-directory: packages/drizzle_audit
 
-      - name: Setup npm auth
-        run: |
-          unset NPM_CONFIG_USERCONFIG
-          echo "@wovalle:registry=https://npm.pkg.github.com" > $HOME/.npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> $HOME/.npmrc
-
       - name: Publish
-        run: |
-          unset NPM_CONFIG_USERCONFIG
-          npm publish
+        run: npm publish
         working-directory: packages/drizzle_audit
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
