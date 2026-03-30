@@ -48,6 +48,11 @@ jobs:
           registry-url: "https://npm.pkg.github.com"
           scope: "@wovalle"
 
+      - name: Override root .npmrc
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" > .npmrc
+          echo "@wovalle:registry=https://npm.pkg.github.com" >> .npmrc
+
       - name: Install dependencies
         run: npm install
         working-directory: packages/drizzle_audit
