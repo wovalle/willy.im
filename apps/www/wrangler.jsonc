@@ -7,6 +7,9 @@
   "name": "willy-im",
   "compatibility_date": "2025-04-04",
   "main": "./workers/app.ts",
+  "build": {
+    "command": "npm run build",
+  },
   "observability": {
     "enabled": true,
   },
