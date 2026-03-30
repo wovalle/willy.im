@@ -3,7 +3,11 @@ import { and, eq, gte, inArray, like, lte, or, sql } from "drizzle-orm"
 import type { DrizzleD1Database } from "drizzle-orm/d1"
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
 import type { AuditLogEntry, AuditLogEntityType, AuditLogEventType } from "../utils.js"
-import type { AuditLogFilters } from "../audit/audit.schemas.js"
+export type AuditLogFilters = {
+  search?: string
+  entities?: string[]
+  actions?: string[]
+}
 import type { SqliteDrizzleRepositorySchema } from "./drizzle_repository.js"
 import { SqliteDrizzleRepository } from "./drizzle_repository.js"
 

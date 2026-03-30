@@ -21,8 +21,3 @@ export type {
   JsonSerializable,
   AuditLogEntry,
 } from "./utils.js"
-export type {
-  AuditLogFilters,
-  AuditLogSearchParams,
-} from "./audit/audit.schemas.js"
-export { auditLogSearchParamsSchema } from "./audit/audit.schemas.js"

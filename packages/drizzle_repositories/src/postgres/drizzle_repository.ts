@@ -46,7 +46,7 @@ export class PgDrizzleRepository<
     orderBy?: { column: PgColumn; direction: "asc" | "desc" }[]
     tx?: PgTransaction<TSchema>
   }): Promise<TReturn[]> {
-    try {
+    return this.execute(async () => {
       const { where, pagination, orderBy, tx } = params || {}
       const dbInstance = (tx ?? this.db) as NodePgDatabase<TSchema>
       const whereCondition = where
@@ -63,20 +63,20 @@ export class PgDrizzleRepository<
         : withPagination
       const rows = await withOrderBy
       return rows as TReturn[]
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   override async findOne<TReturn = InferredSelectModel<T>>(params: {
     where: WhereCondition | undefined
     tx?: PgTransaction<TSchema>
   }): Promise<TReturn | undefined> {
-    try {
+    return this.execute(async () => {
       const { where, tx } = params
       const dbInstance = (tx ?? this.db) as NodePgDatabase<TSchema>
       const result = await dbInstance.select().from(this.table as never)
         .where(Array.isArray(where) ? and(...where) : where).limit(1)
       return result[0] as TReturn | undefined
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   override async findById<TReturn = InferredSelectModel<T>>(
@@ -89,7 +89,7 @@ export class PgDrizzleRepository<
   override async doCreate<TData extends Record<string, unknown>, TReturn = InferredSelectModel<T>>(
     data: TData, options?: PgRepositoryOptions,
   ): Promise<TReturn> {
-    try {
+    return this.execute(async () => {
       const dbInstance = (options?.tx ?? this.db) as NodePgDatabase<TSchema>
       const now = Math.floor(Date.now() / 1000)
       const dataWithTimestamps = {
@@ -102,13 +102,13 @@ export class PgDrizzleRepository<
         ...(this.hasColumn("id") && !dataWithTimestamps.id && { id: crypto.randomUUID() }),
       } as never).returning()
       return result[0] as TReturn
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   override async doUpdate<TData extends Record<string, unknown>, TReturn = InferredSelectModel<T>>(
     id: string | number, data: TData, options?: PgRepositoryOptions,
   ): Promise<TReturn> {
-    try {
+    return this.execute(async () => {
       const pkColumn = this.getPrimaryKeyColumn()
       const dbInstance = (options?.tx ?? this.db) as NodePgDatabase<TSchema>
       const dataWithTimestamp = {
@@ -118,7 +118,7 @@ export class PgDrizzleRepository<
       const result = await dbInstance.update(this.table as never)
         .set(dataWithTimestamp as never).where(eq(pkColumn, id)).returning()
       return result[0] as TReturn
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   override async doDelete(id: string | number, options?: PgRepositoryOptions): Promise<void> {
@@ -130,7 +130,7 @@ export class PgDrizzleRepository<
   override async upsert<TData extends Record<string, unknown>, TReturn = InferredSelectModel<T>>(
     data: TData, options?: PgRepositoryOptions & { conflictColumns?: string[] },
   ): Promise<UpsertResult<TReturn>> {
-    try {
+    return this.execute(async () => {
       const dbInstance = (options?.tx ?? this.db) as NodePgDatabase<TSchema>
       const conflictColumns = options?.conflictColumns || ["id"]
       const now = Math.floor(Date.now() / 1000)
@@ -158,11 +158,11 @@ export class PgDrizzleRepository<
         ...(this.hasColumn("id") && !dataWithTimestamps.id && { id: crypto.randomUUID() }),
       } as never).returning()
       return { entity: insertResult[0] as TReturn }
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   override async count(params?: { where?: WhereCondition; tx?: PgTransaction<TSchema> }): Promise<number> {
-    try {
+    return this.execute(async () => {
       const { where, tx } = params || {}
       const dbInstance = (tx ?? this.db) as NodePgDatabase<TSchema>
       const whereCondition = where
@@ -173,7 +173,7 @@ export class PgDrizzleRepository<
       const result = whereCondition ? await base.where(whereCondition) : await base
       const value = (result as { count: number }[])[0]?.count
       return typeof value === "number" ? value : Number(value) || 0
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   protected getPrimaryKeyColumn(): PgColumn {

@@ -41,7 +41,7 @@ export class SqliteDrizzleRepository<
     orderBy?: { column: SQLiteColumn; direction: "asc" | "desc" }[]
     tx?: SqliteTransaction
   }): Promise<TReturn[]> {
-    try {
+    return this.execute(async () => {
       const { where, pagination, orderBy, tx } = params || {}
       const dbInstance = tx || this.db
       const whereCondition = where
@@ -58,20 +58,20 @@ export class SqliteDrizzleRepository<
         : withPagination
       const rows = await withOrderBy
       return rows as TReturn[]
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   override async findOne<TReturn = InferredSelectModel<T>>(params: {
     where: WhereCondition | undefined
     tx?: SqliteTransaction
   }): Promise<TReturn | undefined> {
-    try {
+    return this.execute(async () => {
       const { where, tx } = params
       const dbInstance = tx || this.db
       const result = await dbInstance.select().from(this.table)
         .where(Array.isArray(where) ? sql`${where.join(" AND ")}` : where).limit(1)
       return result[0] as TReturn | undefined
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   override async findById<TReturn = InferredSelectModel<T>>(
@@ -84,7 +84,7 @@ export class SqliteDrizzleRepository<
   override async doCreate<TData extends Record<string, unknown>, TReturn = InferredSelectModel<T>>(
     data: TData, options?: SqliteRepositoryOptions,
   ): Promise<TReturn> {
-    try {
+    return this.execute(async () => {
       const dbInstance = options?.tx || this.db
       const now = Math.floor(Date.now() / 1000)
       const dataWithTimestamps = {
@@ -97,13 +97,13 @@ export class SqliteDrizzleRepository<
         ...(this.hasColumn("id") && !dataWithTimestamps.id && { id: crypto.randomUUID() }),
       }).returning()
       return (result as TReturn[])[0] as TReturn
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   override async doUpdate<TData extends Record<string, unknown>, TReturn = InferredSelectModel<T>>(
     id: string | number, data: TData, options?: SqliteRepositoryOptions,
   ): Promise<TReturn> {
-    try {
+    return this.execute(async () => {
       const pkColumn = this.getPrimaryKeyColumn()
       const dbInstance = options?.tx || this.db
       const dataWithTimestamp = {
@@ -113,7 +113,7 @@ export class SqliteDrizzleRepository<
       const result = await dbInstance.update(this.table).set(dataWithTimestamp)
         .where(eq(pkColumn, id)).returning()
       return (result as TReturn[])[0] as TReturn
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   override async doDelete(id: string | number, options?: SqliteRepositoryOptions): Promise<void> {
@@ -125,7 +125,7 @@ export class SqliteDrizzleRepository<
   override async upsert<TData extends Record<string, unknown>, TReturn = InferredSelectModel<T>>(
     data: TData, options?: SqliteRepositoryOptions & { conflictColumns?: string[] },
   ): Promise<UpsertResult<TReturn>> {
-    try {
+    return this.execute(async () => {
       const dbInstance = options?.tx || this.db
       const conflictColumns = options?.conflictColumns || ["id"]
       const now = Math.floor(Date.now() / 1000)
@@ -153,11 +153,11 @@ export class SqliteDrizzleRepository<
         ...(this.hasColumn("id") && !dataWithTimestamps.id && { id: crypto.randomUUID() }),
       }).returning()) as TReturn[]
       return { entity: insertResult[0] }
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   override async count(params?: { where?: WhereCondition; tx?: SqliteTransaction }): Promise<number> {
-    try {
+    return this.execute(async () => {
       const { where, tx } = params || {}
       const dbInstance = tx || this.db
       const whereCondition = where
@@ -179,7 +179,7 @@ export class SqliteDrizzleRepository<
         : await (countQuery as Promise<{ count: number }[]>)
       const value = result[0]?.count
       return typeof value === "number" ? value : Number(value) || 0
-    } catch (err) { throw this.handleError(err) }
+    })
   }
 
   protected getPrimaryKeyColumn(): SQLiteColumn {

@@ -3,7 +3,11 @@ import { and, desc, eq, gte, inArray, like, lte, or, sql } from "drizzle-orm"
 import type { PgDatabaseLike } from "./drizzle_repository.js"
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core"
 import type { AuditLogEntry, AuditLogEntityType, AuditLogEventType } from "../utils.js"
-import type { AuditLogFilters } from "../audit/audit.schemas.js"
+export type AuditLogFilters = {
+  search?: string
+  entities?: string[]
+  actions?: string[]
+}
 import type { PgDrizzleRepositorySchema } from "./drizzle_repository.js"
 import { PgDrizzleRepository } from "./drizzle_repository.js"
 

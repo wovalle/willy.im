@@ -67,6 +67,17 @@ export abstract class BaseDrizzleRepository<
   protected async beforeDelete(_data: Record<string, unknown>): Promise<void> {}
   protected async afterDelete(_data: Record<string, unknown>): Promise<void> {}
 
+  // --- Error handling ---
+  protected abstract handleError(err: unknown): Error
+
+  protected async execute<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn()
+    } catch (err) {
+      throw this.handleError(err)
+    }
+  }
+
   // --- Abstract read/write (dialect implements these) ---
   abstract findMany<TReturn = unknown>(params?: {
     where?: WhereCondition
