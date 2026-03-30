@@ -54,12 +54,14 @@ jobs:
         run: npm run build
         working-directory: packages/drizzle_audit
 
-      - name: Create .npmrc
+      - name: Setup npm auth
         run: |
-          echo "@wovalle:registry=https://npm.pkg.github.com" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> .npmrc
-        working-directory: packages/drizzle_audit
+          unset NPM_CONFIG_USERCONFIG
+          echo "@wovalle:registry=https://npm.pkg.github.com" > $HOME/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> $HOME/.npmrc
 
       - name: Publish
-        run: npm publish
+        run: |
+          unset NPM_CONFIG_USERCONFIG
+          npm publish
         working-directory: packages/drizzle_audit
