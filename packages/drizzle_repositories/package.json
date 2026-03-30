@@ -1,0 +1,65 @@
+{
+  "name": "@wovalle/drizzle-repositories",
+  "version": "0.0.1",
+  "description": "Generic repository layer for Drizzle ORM with audit logging (Postgres + D1/SQLite)",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./sqlite": {
+      "types": "./dist/src/sqlite/index.d.ts",
+      "import": "./dist/src/sqlite/index.js"
+    },
+    "./postgres": {
+      "types": "./dist/src/postgres/index.d.ts",
+      "import": "./dist/src/postgres/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test ./dist/test/**/*.test.js"
+  },
+  "keywords": [
+    "drizzle",
+    "drizzle-orm",
+    "repository",
+    "postgres",
+    "d1",
+    "sqlite",
+    "audit"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wovalle/willy.im",
+    "directory": "packages/drizzle_repositories"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "peerDependencies": {
+    "drizzle-orm": "^1.0.0-beta.15-859cf75"
+  },
+  "devDependencies": {
+    "drizzle-orm": "^1.0.0-beta.15-859cf75",
+    "typescript": "^5.9.3"
+  },
+  "optionalDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}

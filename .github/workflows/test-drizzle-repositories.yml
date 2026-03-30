@@ -1,0 +1,33 @@
+name: Test drizzle-repositories
+
+on:
+  pull_request:
+    paths:
+      - "packages/drizzle_repositories/**"
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/drizzle_repositories
+
+      - name: Build
+        run: npm run build
+        working-directory: packages/drizzle_repositories
+
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: packages/drizzle_repositories
+
+      - name: Test
+        run: npm test
+        working-directory: packages/drizzle_repositories
