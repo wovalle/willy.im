@@ -2,7 +2,10 @@ import type { AuditService } from "./audit_service.js"
 import type { DrizzleRepositoryLike } from "./base_drizzle_repository.js"
 import type { JsonSerializable } from "./utils.js"
 
-type EntityWithId = { id: string | number }
+function hasId(value: unknown): value is { id: string | number } {
+  return value != null && typeof value === "object" && "id" in value
+    && (typeof (value as Record<string, unknown>).id === "string" || typeof (value as Record<string, unknown>).id === "number")
+}
 
 export class AuditableDrizzleRepository<TEntity = unknown> {
   constructor(
@@ -38,11 +41,10 @@ export class AuditableDrizzleRepository<TEntity = unknown> {
     options?: unknown,
   ): Promise<TEntity> {
     const result = (await this.repo.create(data, options)) as TEntity
-    const entity = result as unknown as EntityWithId
-    if (entity?.id) {
+    if (hasId(result)) {
       await this.auditService.logEntityCreate(
         this.getEntityType(),
-        entity.id.toString(),
+        result.id.toString(),
         data as JsonSerializable,
       )
     }
@@ -70,15 +72,12 @@ export class AuditableDrizzleRepository<TEntity = unknown> {
   async delete(id: string | number, options?: unknown): Promise<void> {
     const item = await this.repo.findById(id, options)
     await this.repo.delete(id, options)
-    if (item) {
-      const entity = item as EntityWithId
-      if (entity?.id) {
-        await this.auditService.logEntityDelete(
-          this.getEntityType(),
-          entity.id.toString(),
-          item as JsonSerializable,
-        )
-      }
+    if (hasId(item)) {
+      await this.auditService.logEntityDelete(
+        this.getEntityType(),
+        item.id.toString(),
+        item as JsonSerializable,
+      )
     }
   }
 
@@ -87,19 +86,18 @@ export class AuditableDrizzleRepository<TEntity = unknown> {
     options?: unknown & { conflictColumns?: string[] },
   ): Promise<TEntity> {
     const result = await this.repo.upsert(data, options)
-    const entity = result.entity as unknown as EntityWithId
-    if (entity?.id) {
+    if (hasId(result.entity)) {
       if (result.previousEntity != null) {
         await this.auditService.logEntityUpdate(
           this.getEntityType(),
-          entity.id.toString(),
+          result.entity.id.toString(),
           result.previousEntity as JsonSerializable,
           result.entity as JsonSerializable,
         )
       } else {
         await this.auditService.logEntityCreate(
           this.getEntityType(),
-          entity.id.toString(),
+          result.entity.id.toString(),
           result.entity as JsonSerializable,
         )
       }

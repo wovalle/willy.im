@@ -1,4 +1,4 @@
-import { getTableName, type SQL } from "drizzle-orm"
+import { getTableName, type SQL, type Table } from "drizzle-orm"
 
 export type PaginationParams = {
   page?: number
@@ -47,16 +47,14 @@ export interface DrizzleRepositoryLike {
 
 export abstract class BaseDrizzleRepository<
   TSchema extends BaseDrizzleRepositorySchema,
-  TTable extends object,
+  TTable extends Table,
   TOptions extends BaseRepositoryOptions = BaseRepositoryOptions,
 > {
   protected abstract db: unknown
   protected abstract table: TTable
 
   getEntityType(): string {
-    return getTableName(
-      this.table as unknown as Parameters<typeof getTableName>[0],
-    )
+    return getTableName(this.table)
   }
 
   // --- Lifecycle hooks (no-op by default) ---

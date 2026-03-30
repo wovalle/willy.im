@@ -88,16 +88,25 @@ export function createAuditableRepositoryFactory<TDb>(
 }
 
 export function createRepositoriesFactory<TDb>(deps: {
+  db: TDb; auditService: AuditService
+}): {
+  createRepository: ReturnType<typeof createRepositoryFactory<Record<string, unknown>>>
+  createAuditableRepository: ReturnType<typeof createAuditableRepositoryFactory<TDb>>
+}
+export function createRepositoriesFactory<TDb>(deps: {
+  db: TDb; auditService?: null
+}): {
+  createRepository: ReturnType<typeof createRepositoryFactory<Record<string, unknown>>>
+}
+export function createRepositoriesFactory<TDb>(deps: {
   db: TDb; auditService?: AuditService | null
 }) {
   const { db, auditService } = deps
   const createRepository = createRepositoryFactory({ db: db as PgDatabaseLike<Record<string, unknown>> })
-  const createAuditableRepository = auditService != null
-    ? createAuditableRepositoryFactory(auditService, { db })
-    : (table: PgTable) => {
-        throw new Error("createAuditableRepository requires auditService in createRepositoriesFactory deps")
-      }
-  return { createRepository, createAuditableRepository }
+  if (auditService != null) {
+    return { createRepository, createAuditableRepository: createAuditableRepositoryFactory(auditService, { db }) }
+  }
+  return { createRepository }
 }
 
 export type CreateRepositoryFn<TSchema extends Record<string, unknown>> =
@@ -105,12 +114,12 @@ export type CreateRepositoryFn<TSchema extends Record<string, unknown>> =
 
 export function createAuditService<TDb>(
   db: TDb,
-  schema: { auditLogs: PgTable; user?: PgTable },
+  schema: { auditLogs: PgTable },
   user?: { id: string } | null,
   workspaceId?: string,
 ): AuditService {
   const auditLogRepo = new PgAuditLogRepository(
-    db as PgDatabaseLike<PgAuditLogSchema>, schema.auditLogs, schema as PgAuditLogSchema,
+    db as PgDatabaseLike<PgAuditLogSchema>, schema.auditLogs,
   )
   return new AuditService(auditLogRepo, user ?? null, workspaceId)
 }

@@ -69,7 +69,7 @@ function makeRepo(db: ReturnType<typeof drizzle<typeof schema>>) {
 }
 
 function makeAuditLogRepo(db: ReturnType<typeof drizzle<typeof schema>>) {
-  return new SqliteAuditLogRepository(db as any, auditLogTable, schema as any)
+  return new SqliteAuditLogRepository(db as any, auditLogTable)
 }
 
 // ============================================================================

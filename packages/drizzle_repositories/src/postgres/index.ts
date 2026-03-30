@@ -8,7 +8,6 @@ export {
 export {
   PgAuditLogRepository,
   type PgAuditLogSchema,
-  type AuditLogWithEmail,
 } from "./audit_log.repository.js"
 export { pgAuditLogTable } from "./audit-log-schema.js"
 export {

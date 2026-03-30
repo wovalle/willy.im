@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "packages/drizzle_repositories/**"
+  workflow_call:
 
 jobs:
   test:

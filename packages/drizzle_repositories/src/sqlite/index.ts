@@ -7,6 +7,5 @@ export {
 export {
   SqliteAuditLogRepository,
   type SqliteAuditLogSchema,
-  type AuditLogWithEmail,
 } from "./audit_log.repository.js"
 export { auditLogTable } from "./audit-log-schema.js"
