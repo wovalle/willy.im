@@ -84,32 +84,36 @@ export class SqliteDrizzleRepository<
   override async doCreate<TData extends Record<string, unknown>, TReturn = InferredSelectModel<T>>(
     data: TData, options?: SqliteRepositoryOptions,
   ): Promise<TReturn> {
-    const dbInstance = options?.tx || this.db
-    const now = Math.floor(Date.now() / 1000)
-    const dataWithTimestamps = {
-      ...data,
-      ...(this.hasColumn("created_at") && { created_at: now }),
-      ...(this.hasColumn("updated_at") && { updated_at: now }),
-    }
-    const result = await dbInstance.insert(this.table).values({
-      ...dataWithTimestamps,
-      ...(this.hasColumn("id") && !dataWithTimestamps.id && { id: crypto.randomUUID() }),
-    }).returning()
-    return (result as TReturn[])[0] as TReturn
+    try {
+      const dbInstance = options?.tx || this.db
+      const now = Math.floor(Date.now() / 1000)
+      const dataWithTimestamps = {
+        ...data,
+        ...(this.hasColumn("created_at") && { created_at: now }),
+        ...(this.hasColumn("updated_at") && { updated_at: now }),
+      }
+      const result = await dbInstance.insert(this.table).values({
+        ...dataWithTimestamps,
+        ...(this.hasColumn("id") && !dataWithTimestamps.id && { id: crypto.randomUUID() }),
+      }).returning()
+      return (result as TReturn[])[0] as TReturn
+    } catch (err) { throw this.handleError(err) }
   }
 
   override async doUpdate<TData extends Record<string, unknown>, TReturn = InferredSelectModel<T>>(
     id: string | number, data: TData, options?: SqliteRepositoryOptions,
   ): Promise<TReturn> {
-    const pkColumn = this.getPrimaryKeyColumn()
-    const dbInstance = options?.tx || this.db
-    const dataWithTimestamp = {
-      ...data,
-      ...(this.hasColumn("updated_at") && { updated_at: Math.floor(Date.now() / 1000) }),
-    }
-    const result = await dbInstance.update(this.table).set(dataWithTimestamp)
-      .where(eq(pkColumn, id)).returning()
-    return (result as TReturn[])[0] as TReturn
+    try {
+      const pkColumn = this.getPrimaryKeyColumn()
+      const dbInstance = options?.tx || this.db
+      const dataWithTimestamp = {
+        ...data,
+        ...(this.hasColumn("updated_at") && { updated_at: Math.floor(Date.now() / 1000) }),
+      }
+      const result = await dbInstance.update(this.table).set(dataWithTimestamp)
+        .where(eq(pkColumn, id)).returning()
+      return (result as TReturn[])[0] as TReturn
+    } catch (err) { throw this.handleError(err) }
   }
 
   override async doDelete(id: string | number, options?: SqliteRepositoryOptions): Promise<void> {
