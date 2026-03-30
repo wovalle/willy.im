@@ -26,3 +26,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
         working-directory: packages/drizzle_repositories
+
+      - name: Test
+        run: npm test
+        working-directory: packages/drizzle_repositories

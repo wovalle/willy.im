@@ -7,12 +7,6 @@ export type PaginationParams = {
 
 export type WhereCondition = SQL | SQL[]
 
-export interface AuditContext {
-  user?: { id: string } | null
-  request?: Request
-  skipAudit?: boolean
-}
-
 export class DatabaseError extends Error {
   fieldErrors?: Record<string, string[]>
 

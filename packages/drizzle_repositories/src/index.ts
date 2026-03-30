@@ -14,11 +14,15 @@ export {
   type AuditUser,
   type AuditLogRepositoryLike,
 } from "./audit_service.js"
-export type { AuditLogEntityType, AuditLogEventType } from "./utils.js"
+export type {
+  AuditLogEntityType,
+  AuditLogEventType,
+  AuditContext,
+  JsonSerializable,
+  AuditLogEntry,
+} from "./utils.js"
 export type {
   AuditLogFilters,
   AuditLogSearchParams,
 } from "./audit/audit.schemas.js"
 export { auditLogSearchParamsSchema } from "./audit/audit.schemas.js"
-
-export * from "./sqlite/index.js"

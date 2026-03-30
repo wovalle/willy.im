@@ -1,8 +1,8 @@
 import type { AuditService } from "./audit_service.js"
 import type { DrizzleRepositoryLike } from "./base_drizzle_repository.js"
+import type { JsonSerializable } from "./utils.js"
 
 type EntityWithId = { id: string | number }
-type JsonSerializable = Record<string, unknown>
 
 export class AuditableDrizzleRepository<TEntity = unknown> {
   constructor(

@@ -1,6 +1,4 @@
-import { type AuditLogEntityType, type AuditLogEventType } from "./utils.js"
-
-type JsonSerializable = Record<string, unknown>
+import { type AuditLogEntityType, type AuditLogEventType, type JsonSerializable } from "./utils.js"
 
 export type AuditUser = { id: string }
 

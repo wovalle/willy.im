@@ -15,12 +15,6 @@ import {
 export type { PaginationParams, WhereCondition }
 export { DatabaseError }
 
-export interface AuditContext {
-  user?: { id: string } | null
-  request?: Request
-  skipAudit?: boolean
-}
-
 export type PgTransaction<TSchema extends Record<string, unknown>> = Parameters<
   Parameters<PgDatabaseLike<TSchema>["transaction"]>[0]
 >[0]

@@ -12,12 +12,6 @@ import {
 export type { PaginationParams, WhereCondition }
 export { DatabaseError }
 
-export interface AuditContext {
-  user?: { id: string } | null
-  request?: Request
-  skipAudit?: boolean
-}
-
 export type SqliteTransaction = SQLiteTransaction<"async", unknown, any, any>
 
 export type SqliteRepositoryOptions = BaseRepositoryOptions & {

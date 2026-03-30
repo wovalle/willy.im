@@ -6,18 +6,29 @@
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "exports": {
-    ".": "./dist/src/index.js",
-    "./sqlite": "./dist/src/sqlite/index.js",
-    "./postgres": "./dist/src/postgres/index.js"
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./sqlite": {
+      "types": "./dist/src/sqlite/index.d.ts",
+      "import": "./dist/src/sqlite/index.js"
+    },
+    "./postgres": {
+      "types": "./dist/src/postgres/index.d.ts",
+      "import": "./dist/src/postgres/index.js"
+    }
   },
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
+  "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test ./dist/test/**/*.test.js"
   },
   "keywords": [
     "drizzle",
@@ -34,11 +45,16 @@
     "url": "https://github.com/wovalle/willy.im",
     "directory": "packages/drizzle_repositories"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "peerDependencies": {
     "drizzle-orm": "^1.0.0-beta.15-859cf75",
     "zod": ">=3.0.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.0.0",
     "drizzle-orm": "^1.0.0-beta.15-859cf75",
     "typescript": "^5.9.3"
   },
