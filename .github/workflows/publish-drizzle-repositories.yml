@@ -1,0 +1,68 @@
+name: Publish drizzle-repositories
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/drizzle_repositories/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/drizzle_repositories
+
+      - name: Build
+        run: npm run build
+        working-directory: packages/drizzle_repositories
+
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: packages/drizzle_repositories
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@wovalle"
+
+      - name: Override root .npmrc
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" > .npmrc
+          echo "@wovalle:registry=https://npm.pkg.github.com" >> .npmrc
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/drizzle_repositories
+
+      - name: Build
+        run: npm run build
+        working-directory: packages/drizzle_repositories
+
+      - name: Publish
+        run: npm publish
+        working-directory: packages/drizzle_repositories
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
