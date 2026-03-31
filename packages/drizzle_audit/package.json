@@ -1,6 +1,6 @@
 {
   "name": "@wovalle/drizzle-audit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lightweight audit logging for Drizzle ORM using database triggers (Postgres + D1/SQLite)",
   "type": "module",
   "main": "./dist/src/index.js",
@@ -42,8 +42,8 @@
     "directory": "packages/drizzle_audit"
   },
   "peerDependencies": {
-    "drizzle-kit": ">=0.20.0",
-    "drizzle-orm": ">=0.30.0",
+    "drizzle-kit": ">=1.0.0-0",
+    "drizzle-orm": ">=1.0.0-0",
     "tsx": ">=4.0.0"
   },
   "peerDependenciesMeta": {
