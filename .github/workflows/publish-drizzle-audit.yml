@@ -21,6 +21,9 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Override root .npmrc
+        run: echo "" > .npmrc
+
       - name: Install dependencies
         run: npm install
         working-directory: packages/drizzle_audit
