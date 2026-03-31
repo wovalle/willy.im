@@ -22,8 +22,8 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Override root .npmrc
-        run: echo "" > .npmrc
+      - name: Remove root .npmrc
+        run: rm -f .npmrc
 
       - name: Install dependencies
         run: npm install
