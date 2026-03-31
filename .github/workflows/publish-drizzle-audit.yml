@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "packages/drizzle_audit/**"
+      - ".github/workflows/publish-drizzle-audit.yml"
   workflow_dispatch:
 
 permissions:
