@@ -44,13 +44,9 @@
   "peerDependencies": {
     "drizzle-kit": ">=1.0.0-0",
     "drizzle-orm": ">=1.0.0-0",
-    "tsx": ">=4.0.0"
   },
   "peerDependenciesMeta": {
     "drizzle-kit": {
-      "optional": true
-    },
-    "tsx": {
       "optional": true
     }
   },

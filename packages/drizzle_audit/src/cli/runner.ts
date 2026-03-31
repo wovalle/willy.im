@@ -1,6 +1,6 @@
 /**
  * Runner script used to load a consumer's audit config (TS or JS) and print the
- * generated SQL to stdout. Invoked with: node [--import tsx] runner.js <config-path>
+ * generated SQL to stdout. Invoked with: node --experimental-strip-types runner.js <config-path>
  * Config module must export createAuditSql() or createWebAuditSql().
  */
 const configPath = process.argv[2]

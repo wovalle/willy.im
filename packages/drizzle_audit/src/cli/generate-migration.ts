@@ -79,14 +79,14 @@ async function getAuditSql(configPath: string, cwd: string): Promise<string> {
       const __dirname = fileURLToPath(new URL(".", import.meta.url))
       const runnerPath = resolve(__dirname, "runner.js")
       const out = execSync(
-        `node --import tsx "${runnerPath}" "${resolved}"`,
+        `node --experimental-strip-types "${runnerPath}" "${resolved}"`,
         { cwd, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 },
       )
       return out.trim()
     } catch (e) {
       const err = e as { message?: string; stderr?: string }
       console.error(
-        "Loading .ts config requires tsx. Install it: npm i -D tsx",
+        "Failed to load .ts config. Requires Node >= 22.6.0.",
       )
       console.error(err.stderr ?? err.message)
       process.exit(1)
