@@ -43,7 +43,7 @@
   },
   "peerDependencies": {
     "drizzle-kit": ">=1.0.0-0",
-    "drizzle-orm": ">=1.0.0-0",
+    "drizzle-orm": ">=1.0.0-0"
   },
   "peerDependenciesMeta": {
     "drizzle-kit": {
