@@ -1,6 +1,6 @@
 {
   "name": "@wovalle/drizzle-audit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Lightweight audit logging for Drizzle ORM using database triggers (Postgres + D1/SQLite)",
   "type": "module",
   "main": "./dist/src/index.js",
