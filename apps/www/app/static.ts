@@ -56,6 +56,7 @@ export const navLinks = [
   { name: "/posts", url: "/posts", in: ["header", "footer"] },
   { name: "/about", url: "/about", in: ["header", "footer"] },
   { name: "/privacy", url: "/privacy", in: ["footer"] },
+  { name: "/terms", url: "/terms", in: ["footer"] },
 ]
 
 export const siteConfig = {

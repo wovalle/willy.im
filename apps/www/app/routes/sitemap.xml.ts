@@ -10,6 +10,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     { path: "/posts", priority: "0.9", changefreq: "weekly" as const },
     { path: "/about", priority: "0.8", changefreq: "monthly" as const },
     { path: "/privacy", priority: "0.5", changefreq: "yearly" as const },
+    { path: "/terms", priority: "0.5", changefreq: "yearly" as const },
   ]
 
   const postPages = allPosts.map((post) => ({

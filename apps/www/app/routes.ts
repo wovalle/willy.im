@@ -10,6 +10,7 @@ export default [
     route("cron/update", "routes/cron/update.ts"),
     route("about", "routes/about.tsx"),
     route("privacy", "routes/privacy.tsx"),
+    route("terms", "routes/terms.tsx"),
     route("links/onlyfans", "routes/links.onlyfans.tsx"),
     route("sitemap.xml", "routes/sitemap.xml.ts"),
   ]),
