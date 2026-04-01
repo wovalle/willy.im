@@ -2,13 +2,15 @@ import { createRequestHandler } from "react-router"
 
 import type { DrizzleClient } from "../app/db/drizzle"
 import { getAppEnv } from "../app/lib/env"
-import type { ILogger } from "../app/lib/services"
-import { createServiceContext, type ServiceContext } from "../app/lib/services"
-import type { AuthService } from "../app/lib/auth.server"
-import type { GithubService } from "../app/modules/github/github.server"
-import type { GoodreadsService } from "../app/modules/goodreads/goodreads.server"
-import type { SpotifyService } from "../app/modules/spotify/spotify.server"
-import type { YoutubeService } from "../app/modules/youtube/youtube.server"
+import { createAuthService, type AuthService } from "../app/lib/auth.server"
+import { createBaseContext, type BaseServiceContext, type ILogger } from "../app/lib/services"
+import { createGithubService, type GithubService } from "../app/modules/github/github.server"
+import {
+  createGoodreadsService,
+  type GoodreadsService,
+} from "../app/modules/goodreads/goodreads.server"
+import { createSpotifyService, type SpotifyService } from "../app/modules/spotify/spotify.server"
+import { createYoutubeService, type YoutubeService } from "../app/modules/youtube/youtube.server"
 
 import { updateGithub } from "./tasks/github"
 import { updateYoutube } from "./tasks/youtube"
@@ -42,21 +44,25 @@ const requestHandler = createRequestHandler(
 
 export default {
   async fetch(request, env, ctx) {
-    const { db, logger, services } = createServiceContext(env.db)
+    const baseCtx = createBaseContext(env.db)
 
     return requestHandler(request, {
       cloudflare: { env, ctx },
-      db,
-      logger,
-      getAppEnv,
-      services,
+      ...baseCtx,
+      services: {
+        auth: createAuthService(baseCtx),
+        github: createGithubService(baseCtx),
+        youtube: createYoutubeService(baseCtx),
+        spotify: createSpotifyService(baseCtx),
+        goodreads: createGoodreadsService(baseCtx),
+      },
     })
   },
 
   async scheduled(event, env, ctx) {
     const startTime = Date.now()
-    const serviceCtx = createServiceContext(env.db)
-    const { logger } = serviceCtx
+    const baseCtx = createBaseContext(env.db)
+    const { logger } = baseCtx
 
     logger.info(`[scheduled] Cron triggered: "${event.cron}" at ${new Date(event.scheduledTime).toISOString()}`)
 
@@ -67,7 +73,7 @@ export default {
         spotify: updateSpotify,
         goodreads: updateGoodreads,
       },
-      serviceCtx,
+      baseCtx,
       logger,
     )
 

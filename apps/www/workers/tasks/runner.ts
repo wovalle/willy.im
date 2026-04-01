@@ -1,7 +1,6 @@
-import type { ServiceContext } from "../../app/lib/services"
-import type { ILogger } from "../../app/lib/services"
+import type { BaseServiceContext, ILogger } from "../../app/lib/services"
 
-type TaskFn = (ctx: ServiceContext) => Promise<{ count: number }>
+type TaskFn = (ctx: BaseServiceContext) => Promise<{ count: number }>
 
 interface TaskResult {
   success: boolean
@@ -12,7 +11,7 @@ interface TaskResult {
 
 export async function runTasks(
   tasks: Record<string, TaskFn>,
-  ctx: ServiceContext,
+  ctx: BaseServiceContext,
   logger: ILogger,
 ): Promise<Record<string, TaskResult>> {
   const results: Record<string, TaskResult> = {}

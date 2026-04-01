@@ -1,13 +1,17 @@
 import { kv } from "../../app/db/schema"
-import type { ServiceContext } from "../../app/lib/services"
+import type { BaseServiceContext } from "../../app/lib/services"
+import { createSpotifyService } from "../../app/modules/spotify/spotify.server"
 
-export async function updateSpotify({ db, logger, services }: ServiceContext) {
+export async function updateSpotify(ctx: BaseServiceContext) {
+  const { db, logger } = ctx
+  const spotify = createSpotifyService(ctx)
+
   logger.info("[scheduled] [spotify] Fetching top tracks, artists, and now playing...")
 
   const [topTracks, topArtists, nowPlaying] = await Promise.all([
-    services.spotify.getTopTracks(30),
-    services.spotify.getTopArtists(30),
-    services.spotify.getNowPlaying().catch(() => null),
+    spotify.getTopTracks(30),
+    spotify.getTopArtists(30),
+    spotify.getNowPlaying().catch(() => null),
   ])
 
   const spotifyData = {

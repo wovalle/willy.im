@@ -1,10 +1,14 @@
 import { kv } from "../../app/db/schema"
-import type { ServiceContext } from "../../app/lib/services"
+import type { BaseServiceContext } from "../../app/lib/services"
+import { createGithubService } from "../../app/modules/github/github.server"
 
-export async function updateGithub({ db, logger, services }: ServiceContext) {
+export async function updateGithub(ctx: BaseServiceContext) {
+  const { db, logger } = ctx
+  const github = createGithubService(ctx)
+
   logger.info("[scheduled] [github] Fetching repositories...")
 
-  const repositories = await services.github.getRepositories({ username: "wovalle" })
+  const repositories = await github.getRepositories({ username: "wovalle" })
 
   const githubData = {
     repositories,

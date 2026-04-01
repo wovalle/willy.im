@@ -1,14 +1,18 @@
 import { kv } from "../../app/db/schema"
-import type { ServiceContext } from "../../app/lib/services"
+import type { BaseServiceContext } from "../../app/lib/services"
+import { createGoodreadsService } from "../../app/modules/goodreads/goodreads.server"
 
-export async function updateGoodreads({ db, logger, services }: ServiceContext) {
+export async function updateGoodreads(ctx: BaseServiceContext) {
+  const { db, logger } = ctx
+  const goodreads = createGoodreadsService(ctx)
+
   logger.info("[scheduled] [goodreads] Fetching reviews, currently reading, want to read, and stats...")
 
   const [reviews, currentlyReading, wantToRead, readingStats] = await Promise.all([
-    services.goodreads.getReviews({ limit: 30, trimTitle: false }),
-    services.goodreads.getCurrentlyReading({ limit: 100, trimTitle: false }),
-    services.goodreads.getWantToRead({ limit: 30, trimTitle: false }),
-    services.goodreads.getReadingStats(),
+    goodreads.getReviews({ limit: 30, trimTitle: false }),
+    goodreads.getCurrentlyReading({ limit: 100, trimTitle: false }),
+    goodreads.getWantToRead({ limit: 30, trimTitle: false }),
+    goodreads.getReadingStats(),
   ])
 
   const goodreadsData = {

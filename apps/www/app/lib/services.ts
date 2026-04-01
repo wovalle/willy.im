@@ -1,10 +1,5 @@
 import { createDrizzleClient, type DrizzleClient } from "../db/drizzle"
-import { createAuthService } from "./auth.server"
 import { getAppEnv } from "./env"
-import { createGithubService } from "../modules/github/github.server"
-import { createGoodreadsService } from "../modules/goodreads/goodreads.server"
-import { createSpotifyService } from "../modules/spotify/spotify.server"
-import { createYoutubeService } from "../modules/youtube/youtube.server"
 
 export interface ILogger {
   info(message: string, ...args: unknown[]): void
@@ -67,21 +62,10 @@ export function declareService<TService = object>(
   }
 }
 
-export function createServiceContext(d1: D1Database) {
-  const db = createDrizzleClient(d1)
-  const logger = createConsoleLogger()
-
-  const baseContext = { getAppEnv, db, logger }
-
-  const services = {
-    auth: createAuthService(baseContext),
-    github: createGithubService(baseContext),
-    youtube: createYoutubeService(baseContext),
-    spotify: createSpotifyService(baseContext),
-    goodreads: createGoodreadsService(baseContext),
+export function createBaseContext(d1: D1Database): BaseServiceContext {
+  return {
+    db: createDrizzleClient(d1),
+    logger: createConsoleLogger(),
+    getAppEnv,
   }
-
-  return { db, logger, getAppEnv, services }
 }
-
-export type ServiceContext = ReturnType<typeof createServiceContext>
