@@ -1,4 +1,4 @@
-import type { DrizzleClient } from "../db/drizzle"
+import { createDrizzleClient, type DrizzleClient } from "../db/drizzle"
 import { getAppEnv } from "./env"
 
 export interface ILogger {
@@ -59,5 +59,13 @@ export function declareService<TService = object>(
       },
       factory,
     )(context)
+  }
+}
+
+export function createBaseContext(d1: D1Database): BaseServiceContext {
+  return {
+    db: createDrizzleClient(d1),
+    logger: createConsoleLogger(),
+    getAppEnv,
   }
 }

@@ -1,6 +1,8 @@
 import {
   getTableColumns,
   getTableName,
+  type InferInsertModel,
+  type InferSelectModel,
   type SQL,
 } from "drizzle-orm"
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
@@ -55,8 +57,8 @@ export type AuditedDb<TDb extends DrizzleSQLiteDb> = {
    */
   insert: <T extends SQLiteTable>(
     table: T,
-    data: Record<string, unknown>,
-  ) => JsonValue
+    data: InferInsertModel<T>,
+  ) => InferSelectModel<T>
 
   /**
    * Update rows matching `where` and log an UPDATE audit event for each affected row.
@@ -66,8 +68,8 @@ export type AuditedDb<TDb extends DrizzleSQLiteDb> = {
   update: <T extends SQLiteTable>(
     table: T,
     where: SQL,
-    data: Record<string, unknown>,
-  ) => JsonValue[]
+    data: Partial<InferInsertModel<T>>,
+  ) => InferSelectModel<T>[]
 
   /**
    * Delete rows matching `where` and log a DELETE audit event for each affected row.
@@ -77,7 +79,7 @@ export type AuditedDb<TDb extends DrizzleSQLiteDb> = {
   delete: <T extends SQLiteTable>(
     table: T,
     where: SQL,
-  ) => JsonValue[]
+  ) => InferSelectModel<T>[]
 
   /** Access the underlying db for non-audited operations. */
   db: TDb
