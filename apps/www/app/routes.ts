@@ -14,7 +14,5 @@ export default [
     route("links/onlyfans", "routes/links.onlyfans.tsx"),
     route("sitemap.xml", "routes/sitemap.xml.ts"),
   ]),
-  route("33", "routes/33/route.tsx"),
-  route("axs", "routes/axs/route.tsx"),
   route("links", "routes/links.tsx"),
 ] satisfies RouteConfig

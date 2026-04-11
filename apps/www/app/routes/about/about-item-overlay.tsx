@@ -7,7 +7,7 @@ export type AboutItemOverlayProps = {
   overlay?: ReactNode
   extraElementClassName?: string
   analyticsEvent?: string
-  analyticsEventData?: string
+  analyticsUrl?: string
   onClick?: () => void
   isHovered?: boolean
 }
@@ -18,7 +18,7 @@ export const AboutItemOverlay: FC<AboutItemOverlayProps> = ({
   extraElementClassName,
   overlay,
   analyticsEvent,
-  analyticsEventData,
+  analyticsUrl,
   onClick,
   isHovered,
 }) => {
@@ -35,7 +35,7 @@ export const AboutItemOverlay: FC<AboutItemOverlayProps> = ({
       onClick={onClick}
       onKeyDown={onClick}
       data-luchy-event={analyticsEvent}
-      data-luchy-event-data={analyticsEventData}
+      data-luchy-prop-url={analyticsUrl}
     >
       <div className={cn("absolute left-0 top-0 rounded-xl", extraClassWithHover)}>{overlay}</div>
       {children}

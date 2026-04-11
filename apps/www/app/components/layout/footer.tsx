@@ -45,7 +45,7 @@ const NowPlayingContent = ({
       className="flex flex-row items-center justify-between md:flex-row-reverse md:justify-center md:px-0"
     >
       <div className="flex flex-col text-base">
-        <Link to={linkUrl} className="text-gray-800 dark:text-gray-50">
+        <Link to={linkUrl} className="text-gray-800 dark:text-gray-50" data-luchy-event="now-playing-click">
           {displayText}
         </Link>
         {subtitleText && <p className="text-gray-400 dark:text-gray-500 text-sm">{subtitleText}</p>}
@@ -93,6 +93,8 @@ export const Footer = (opts: {
         rel="noopener noreferrer"
         aria-label={tooltip}
         className="text-gray-600 dark:text-gray-400 hover:text-prim-700 dark:hover:text-prim-300 transition-colors"
+        data-luchy-event="social-footer-click"
+        data-luchy-prop-platform={name.toLowerCase()}
       >
         <Icon size="1.5em" aria-hidden />
       </a>

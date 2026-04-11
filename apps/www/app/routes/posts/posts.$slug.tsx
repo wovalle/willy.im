@@ -78,6 +78,7 @@ export default function Component({ loaderData }: Route.ComponentProps) {
               to="/rss.xml"
               className="self-center border-0 no-underline"
               aria-label="Subscribe to RSS feed"
+              data-luchy-event="rss-click"
             >
               <IconRss size="1em" className="ml-2 self-center" aria-hidden />
             </Link>
