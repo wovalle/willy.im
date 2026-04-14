@@ -37,6 +37,9 @@ jobs:
   publish-npm:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -54,10 +57,8 @@ jobs:
         working-directory: packages/drizzle_audit
 
       - name: Publish to npm
-        run: npm publish
+        run: npm publish --provenance --access public
         working-directory: packages/drizzle_audit
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
 
   publish-gpr:
     needs: test

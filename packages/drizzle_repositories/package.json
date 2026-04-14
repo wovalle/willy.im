@@ -1,6 +1,6 @@
 {
   "name": "@willyim/drizzle-repositories",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Generic repository layer for Drizzle ORM with audit logging (Postgres + D1/SQLite)",
   "type": "module",
   "main": "./dist/src/index.js",
