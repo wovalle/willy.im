@@ -5,7 +5,7 @@ Automatic audit logging for [Drizzle ORM](https://orm.drizzle.team). Supports Po
 ## Install
 
 ```bash
-npm install @wovalle/drizzle-audit
+npm install @willyim/drizzle-audit
 ```
 
 Peer dependencies: `drizzle-orm`. Optional: `drizzle-kit` (for CLI), `tsx` (for TS config files).
@@ -20,7 +20,7 @@ import {
   createAuditInstallSql,
   createAttachAuditTriggersSql,
   withAuditedTransaction,
-} from "@wovalle/drizzle-audit/postgres"
+} from "@willyim/drizzle-audit/postgres"
 
 // 1. Add to your Drizzle schema
 export const auditLogs = pgAuditLogTable()
@@ -48,8 +48,8 @@ Postgres triggers capture full row snapshots (`old_data`/`new_data` as JSONB) au
 For D1 and SQLite, the `withAudit` wrapper is the simplest approach. No triggers, no context tables — it intercepts operations in your JS code where you already have the user session.
 
 ```ts
-import { d1AuditLogTable } from "@wovalle/drizzle-audit/d1"
-import { withAudit } from "@wovalle/drizzle-audit/d1-runtime"
+import { d1AuditLogTable } from "@willyim/drizzle-audit/d1"
+import { withAudit } from "@willyim/drizzle-audit/d1-runtime"
 
 // 1. Add to your schema
 export const auditLogs = d1AuditLogTable()
@@ -90,7 +90,7 @@ import {
   d1AuditLogTable,
   d1AuditContextTable,
   withD1AuditedTransaction,
-} from "@wovalle/drizzle-audit/d1"
+} from "@willyim/drizzle-audit/d1"
 
 // 1. Add to schema
 export const auditLogs = d1AuditLogTable()
@@ -177,7 +177,7 @@ Your config file exports a `createAuditSql()` function:
 
 ```ts
 // app/db/audit.ts
-import { createAuditInstallSql, createAttachAuditTriggersSql } from "@wovalle/drizzle-audit/postgres"
+import { createAuditInstallSql, createAttachAuditTriggersSql } from "@willyim/drizzle-audit/postgres"
 
 export function createAuditSql() {
   return [
@@ -192,7 +192,7 @@ export function createAuditSql() {
 
 ## API Reference
 
-### `@wovalle/drizzle-audit/postgres`
+### `@willyim/drizzle-audit/postgres`
 
 | Export | Description |
 |---|---|
@@ -204,7 +204,7 @@ export function createAuditSql() {
 | `setAuditContext(db, actorId, contextKey?, options?)` | Set actor context in current transaction |
 | `withAuditedTransaction(db, actorId, callback, contextKey?, options?)` | Transaction wrapper with actor context |
 
-### `@wovalle/drizzle-audit/d1`
+### `@willyim/drizzle-audit/d1`
 
 | Export | Description |
 |---|---|
@@ -219,7 +219,7 @@ export function createAuditSql() {
 | `clearD1AuditContext(db, options?)` | Clear actor from `_audit_context` table |
 | `withD1AuditedTransaction(db, actorId, callback, options?)` | Transaction wrapper with context management |
 
-### `@wovalle/drizzle-audit/d1-runtime`
+### `@willyim/drizzle-audit/d1-runtime`
 
 | Export | Description |
 |---|---|
