@@ -1,0 +1,62 @@
+{
+  "name": "@willyim/rbac",
+  "version": "0.1.0",
+  "description": "Typed RBAC where permissions are the primitive and roles are named permission bags",
+  "type": "module",
+  "main": "./dist/src/define-permissions.js",
+  "types": "./dist/src/define-permissions.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/define-permissions.d.ts",
+      "default": "./dist/src/define-permissions.js"
+    },
+    "./react": {
+      "types": "./dist/src/create-permissions-hook.d.ts",
+      "default": "./dist/src/create-permissions-hook.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test ./dist/test/**/*.test.js"
+  },
+  "keywords": [
+    "rbac",
+    "permissions",
+    "roles",
+    "authorization",
+    "typed",
+    "react",
+    "react-router"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wovalle/willy.im",
+    "directory": "packages/rbac"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.7",
+    "typescript": "^5.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

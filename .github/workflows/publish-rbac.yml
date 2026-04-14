@@ -1,11 +1,11 @@
-name: Publish drizzle-audit
+name: Publish rbac
 
 on:
   push:
     branches: [main]
     paths:
-      - "packages/drizzle_audit/**"
-      - ".github/workflows/publish-drizzle-audit.yml"
+      - "packages/rbac/**"
+      - ".github/workflows/publish-rbac.yml"
   workflow_dispatch:
 
 permissions:
@@ -23,15 +23,15 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: packages/drizzle_audit
+        working-directory: packages/rbac
 
       - name: Build
         run: npm run build
-        working-directory: packages/drizzle_audit
+        working-directory: packages/rbac
 
       - name: Test
         run: node --test ./dist/test/**/*.test.js
-        working-directory: packages/drizzle_audit
+        working-directory: packages/rbac
 
   publish-npm:
     needs: test
@@ -49,14 +49,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: packages/drizzle_audit
+        working-directory: packages/rbac
 
       - name: Build
         run: npm run build
-        working-directory: packages/drizzle_audit
+        working-directory: packages/rbac
 
       - name: Publish to npm
         run: npm publish --provenance --access public
-        working-directory: packages/drizzle_audit
+        working-directory: packages/rbac
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
