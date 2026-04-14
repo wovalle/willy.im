@@ -34,7 +34,32 @@ jobs:
         run: node --test ./dist/test/**/*.test.js
         working-directory: packages/drizzle_audit
 
-  publish:
+  publish-npm:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/drizzle_audit
+
+      - name: Build
+        run: npm run build
+        working-directory: packages/drizzle_audit
+
+      - name: Publish to npm
+        run: npm publish
+        working-directory: packages/drizzle_audit
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
+
+  publish-gpr:
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -47,12 +72,12 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://npm.pkg.github.com"
-          scope: "@wovalle"
+          scope: "@willyim"
 
       - name: Override root .npmrc
         run: |
           echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" > .npmrc
-          echo "@wovalle:registry=https://npm.pkg.github.com" >> .npmrc
+          echo "@willyim:registry=https://npm.pkg.github.com" >> .npmrc
 
       - name: Install dependencies
         run: npm install
@@ -62,8 +87,8 @@ jobs:
         run: npm run build
         working-directory: packages/drizzle_audit
 
-      - name: Publish
-        run: npm publish
+      - name: Publish to GitHub Packages
+        run: npm publish --registry https://npm.pkg.github.com
         working-directory: packages/drizzle_audit
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

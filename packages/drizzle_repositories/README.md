@@ -5,7 +5,7 @@ Generic repository layer for [Drizzle ORM](https://orm.drizzle.team) with option
 ## Install
 
 ```bash
-npm install @wovalle/drizzle-repositories
+npm install @willyim/drizzle-repositories
 ```
 
 Peer dependencies: `drizzle-orm` (^1.0.0-beta.15), `zod` (>=3.0.0).
@@ -13,7 +13,7 @@ Peer dependencies: `drizzle-orm` (^1.0.0-beta.15), `zod` (>=3.0.0).
 ## Quick Start (SQLite / D1)
 
 ```ts
-import { SqliteDrizzleRepository } from "@wovalle/drizzle-repositories/sqlite"
+import { SqliteDrizzleRepository } from "@willyim/drizzle-repositories/sqlite"
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
 import { drizzle } from "drizzle-orm/d1"
 
@@ -60,7 +60,7 @@ const total = await userRepo.count({ where: eq(users.name, "Ada") })
 ## Quick Start (Postgres)
 
 ```ts
-import { PgDrizzleRepository } from "@wovalle/drizzle-repositories/postgres"
+import { PgDrizzleRepository } from "@willyim/drizzle-repositories/postgres"
 import { pgTable, text, integer } from "drizzle-orm/pg-core"
 
 const users = pgTable("users", {
@@ -85,8 +85,8 @@ await userRepo.delete(user.id)
 `AuditableDrizzleRepository` wraps any repository to automatically log create, update, and delete operations via `AuditService`.
 
 ```ts
-import { AuditableDrizzleRepository, AuditService } from "@wovalle/drizzle-repositories"
-import { PgAuditLogRepository, pgAuditLogTable } from "@wovalle/drizzle-repositories/postgres"
+import { AuditableDrizzleRepository, AuditService } from "@willyim/drizzle-repositories"
+import { PgAuditLogRepository, pgAuditLogTable } from "@willyim/drizzle-repositories/postgres"
 
 // 1. Add audit_logs table to your schema
 export const auditLogs = pgAuditLogTable()
@@ -126,7 +126,7 @@ import {
   createAuditableRepositoryFactory,
   createAuditService,
   extendRepository,
-} from "@wovalle/drizzle-repositories/postgres"
+} from "@willyim/drizzle-repositories/postgres"
 
 // Basic factory
 const createRepository = createRepositoryFactory({ db })
@@ -186,7 +186,7 @@ class UserRepository extends PgDrizzleRepository<typeof schema, typeof users> {
 Database constraint violations are wrapped in `DatabaseError`, which includes structured `fieldErrors`:
 
 ```ts
-import { DatabaseError } from "@wovalle/drizzle-repositories"
+import { DatabaseError } from "@willyim/drizzle-repositories"
 
 try {
   await userRepo.create({ email: "duplicate@example.com" })
@@ -200,7 +200,7 @@ try {
 
 ## API Reference
 
-### `@wovalle/drizzle-repositories`
+### `@willyim/drizzle-repositories`
 
 | Export | Description |
 |---|---|
@@ -210,7 +210,7 @@ try {
 | `AuditService` | Service for logging entity and system audit events |
 | `auditLogSearchParamsSchema` | Zod schema for audit log search/filter params |
 
-### `@wovalle/drizzle-repositories/sqlite`
+### `@willyim/drizzle-repositories/sqlite`
 
 | Export | Description |
 |---|---|
@@ -218,7 +218,7 @@ try {
 | `SqliteAuditLogRepository` | Audit log repository for SQLite/D1 |
 | `auditLogTable` | Drizzle SQLite table definition for audit logs |
 
-### `@wovalle/drizzle-repositories/postgres`
+### `@willyim/drizzle-repositories/postgres`
 
 | Export | Description |
 |---|---|
