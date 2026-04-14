@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   test:
@@ -40,37 +39,3 @@ jobs:
       - name: Publish to npm
         run: npm publish --provenance --access public
         working-directory: packages/drizzle_repositories
-
-  publish-gpr:
-    needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@willyim"
-
-      - name: Override root .npmrc
-        run: |
-          echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" > .npmrc
-          echo "@willyim:registry=https://npm.pkg.github.com" >> .npmrc
-
-      - name: Install dependencies
-        run: npm install
-        working-directory: packages/drizzle_repositories
-
-      - name: Build
-        run: npm run build
-        working-directory: packages/drizzle_repositories
-
-      - name: Publish to GitHub Packages
-        run: npm publish --registry https://npm.pkg.github.com
-        working-directory: packages/drizzle_repositories
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
