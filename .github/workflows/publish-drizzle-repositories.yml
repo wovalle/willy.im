@@ -39,3 +39,5 @@ jobs:
       - name: Publish to npm
         run: npm publish --provenance --access public
         working-directory: packages/drizzle_repositories
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
