@@ -1,0 +1,62 @@
+name: Publish rbac
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/rbac/**"
+      - ".github/workflows/publish-rbac.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/rbac
+
+      - name: Build
+        run: npm run build
+        working-directory: packages/rbac
+
+      - name: Test
+        run: node --test ./dist/test/**/*.test.js
+        working-directory: packages/rbac
+
+  publish-npm:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/rbac
+
+      - name: Build
+        run: npm run build
+        working-directory: packages/rbac
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        working-directory: packages/rbac
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
