@@ -204,6 +204,12 @@ export function createAuditSql() {
 | `setAuditContext(db, actorId, contextKey?, options?)` | Set actor context in current transaction |
 | `withAuditedTransaction(db, actorId, callback, contextKey?, options?)` | Transaction wrapper with actor context |
 
+### `@willyim/drizzle-audit`
+
+| Export | Description |
+|---|---|
+| `computeDiff(operation, oldData, newData, options?)` | Compute field-by-field diff from old/new row data |
+
 ### `@willyim/drizzle-audit/d1`
 
 | Export | Description |
@@ -230,6 +236,43 @@ export function createAuditSql() {
 - `.update(table, where, data)` — Fetch old rows, update, audit log (per row)
 - `.delete(table, where)` — Fetch old rows, delete, audit log (per row)
 - `.db` — Raw Drizzle instance for non-audited operations
+
+## Computing Diffs
+
+The `computeDiff` utility produces field-by-field diffs from the `old_data`/`new_data` captured by audit triggers. It works with any operation type and requires no Drizzle dependency.
+
+```ts
+import { computeDiff } from "@willyim/drizzle-audit"
+
+const result = computeDiff(
+  "UPDATE",
+  { id: "u1", name: "Ada", email: "ada@example.com" },
+  { id: "u1", name: "Ada Lovelace", email: "ada@example.com" },
+)
+// {
+//   operation: "UPDATE",
+//   changes: [{ field: "name", old: "Ada", new: "Ada Lovelace" }]
+// }
+```
+
+For INSERT operations, pass `null` as `oldData` — all fields appear as additions. For DELETE, pass `null` as `newData` — all fields appear as removals.
+
+```ts
+// INSERT — every field is new
+computeDiff("INSERT", null, { id: "u1", name: "Ada" })
+
+// DELETE — every field is removed
+computeDiff("DELETE", { id: "u1", name: "Ada" }, null)
+```
+
+By default, `updated_at` and `created_at` fields are excluded. Override with `ignoreFields`:
+
+```ts
+computeDiff("UPDATE", oldData, newData, { ignoreFields: [] }) // include all fields
+computeDiff("UPDATE", oldData, newData, { ignoreFields: ["internal_note"] })
+```
+
+Nested objects are compared using deep equality. Fields are returned sorted alphabetically.
 
 ## Audit Log Schema
 
