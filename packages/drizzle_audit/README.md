@@ -43,7 +43,7 @@ await withAuditedTransaction(db, currentUser.id, async (tx) => {
 
 Postgres triggers capture full row snapshots (`old_data`/`new_data` as JSONB) automatically.
 
-### D1/SQLite — App-Level Wrapper (recommended)
+### D1/SQLite — App-Level Wrapper
 
 For D1 and SQLite, the `withAudit` wrapper is the simplest approach. No triggers, no context tables — it intercepts operations in your JS code where you already have the user session.
 
@@ -69,15 +69,17 @@ export const auditLogs = d1AuditLogTable()
 // 3. Use in your app (e.g. React Router action)
 const audit = withAudit(db, auditLogs, { userId: session.userId })
 
-audit.insert(users, { id: "u1", name: "Ada" })
-audit.update(users, eq(users.id, "u1"), { name: "Ada Lovelace" })
-audit.delete(users, eq(users.id, "u1"))
+await audit.insert(users, { id: "u1", name: "Ada" })
+await audit.update(users, eq(users.id, "u1"), { name: "Ada Lovelace" })
+await audit.delete(users, eq(users.id, "u1"))
 
 // Non-audited access is still available
 audit.db.select().from(users).all()
 ```
 
-The wrapper auto-detects primary keys from your Drizzle table schema, captures old/new row data, and runs each operation + audit log insert in a transaction.
+The wrapper auto-detects primary keys from your Drizzle table schema and captures old/new row data. All methods return Promises and must be awaited.
+
+> **Note:** Each operation runs the data write and audit log insert as sequential statements with no transaction wrapper. This is required for D1 compatibility (D1 does not support `BEGIN`/`COMMIT` over the prepared-statement API). In the unlikely event of a failure between the two writes, one may succeed without the other. If you need atomic auditing, use the trigger-based approach instead (see below).
 
 ### D1/SQLite — Triggers
 
