@@ -4,7 +4,7 @@ import test from "node:test"
 import Database from "better-sqlite3"
 import { asc, eq, isNull } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/better-sqlite3"
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core"
 
 import { d1AuditLogTable } from "../src/d1/index.js"
 import { withAudit } from "../src/d1-runtime/index.js"
@@ -53,12 +53,12 @@ function setupDb() {
   return { db, sqlite }
 }
 
-test("withAudit insert logs audit row with new_data", () => {
+test("withAudit insert logs audit row with new_data", async () => {
   const { db, sqlite } = setupDb()
   try {
     const audited = withAudit(db, auditLogs, { userId: "user_1" })
 
-    const row = audited.insert(users, { id: "u1", name: "Ada", email: "ada@example.com" })
+    const row = await audited.insert(users, { id: "u1", name: "Ada", email: "ada@example.com" })
     assert.equal(row.id, "u1")
     assert.equal(row.name, "Ada")
 
@@ -79,14 +79,13 @@ test("withAudit insert logs audit row with new_data", () => {
   }
 })
 
-test("withAudit update captures old and new data", () => {
+test("withAudit update captures old and new data", async () => {
   const { db, sqlite } = setupDb()
   try {
-    // Seed a row
     db.insert(users).values({ id: "u1", name: "Ada", email: "ada@example.com" }).run()
 
     const audited = withAudit(db, auditLogs, { userId: "user_2" })
-    const rows = audited.update(users, eq(users.id, "u1"), { name: "Ada Lovelace" })
+    const rows = await audited.update(users, eq(users.id, "u1"), { name: "Ada Lovelace" })
 
     assert.equal(rows.length, 1)
     assert.equal(rows[0]?.name, "Ada Lovelace")
@@ -109,22 +108,20 @@ test("withAudit update captures old and new data", () => {
   }
 })
 
-test("withAudit delete captures old data", () => {
+test("withAudit delete captures old data", async () => {
   const { db, sqlite } = setupDb()
   try {
     db.insert(users).values({ id: "u1", name: "Ada" }).run()
 
     const audited = withAudit(db, auditLogs, { userId: "user_3" })
-    const deleted = audited.delete(users, eq(users.id, "u1"))
+    const deleted = await audited.delete(users, eq(users.id, "u1"))
 
     assert.equal(deleted.length, 1)
     assert.equal(deleted[0]?.id, "u1")
 
-    // Verify row is gone
     const remaining = db.select().from(users).all()
     assert.equal(remaining.length, 0)
 
-    // Verify audit log
     const logs = db.select().from(auditLogs).all()
     assert.equal(logs.length, 1)
     assert.equal(logs[0]?.operation, "DELETE")
@@ -141,14 +138,14 @@ test("withAudit delete captures old data", () => {
   }
 })
 
-test("withAudit works with custom primary key column", () => {
+test("withAudit works with custom primary key column", async () => {
   const { db, sqlite } = setupDb()
   try {
     const audited = withAudit(db, auditLogs, { userId: "user_1" })
 
-    audited.insert(invoices, { invoice_id: "inv_1", amount: 100 })
-    audited.update(invoices, eq(invoices.invoice_id, "inv_1"), { amount: 200 })
-    audited.delete(invoices, eq(invoices.invoice_id, "inv_1"))
+    await audited.insert(invoices, { invoice_id: "inv_1", amount: 100 })
+    await audited.update(invoices, eq(invoices.invoice_id, "inv_1"), { amount: 200 })
+    await audited.delete(invoices, eq(invoices.invoice_id, "inv_1"))
 
     const logs = db.select().from(auditLogs).orderBy(asc(auditLogs.id)).all()
     assert.equal(logs.length, 3)
@@ -168,7 +165,7 @@ test("withAudit works with custom primary key column", () => {
   }
 })
 
-test("withAudit handles multi-row update", () => {
+test("withAudit handles multi-row update", async () => {
   const { db, sqlite } = setupDb()
   try {
     db.insert(users).values([
@@ -178,8 +175,7 @@ test("withAudit handles multi-row update", () => {
     ]).run()
 
     const audited = withAudit(db, auditLogs, { userId: "admin" })
-    // Update all users (no where = all rows, but let's use a broader condition)
-    const rows = audited.update(users, isNull(users.email), { email: "bulk@example.com" })
+    const rows = await audited.update(users, isNull(users.email), { email: "bulk@example.com" })
 
     assert.equal(rows.length, 3)
 
@@ -189,15 +185,14 @@ test("withAudit handles multi-row update", () => {
     for (const log of logs) {
       assert.equal(log.operation, "UPDATE")
       assert.equal(log.user_id, "admin")
-      const newData = JSON.parse(log.new_data as string)
-      assert.equal(newData.email, "bulk@example.com")
+      assert.equal(JSON.parse(log.new_data as string).email, "bulk@example.com")
     }
   } finally {
     sqlite.close()
   }
 })
 
-test("withAudit with workspace_id", () => {
+test("withAudit with workspace_id", async () => {
   const sqlite = new Database(":memory:")
   const auditLogsWithWs = d1AuditLogTable({ workspaceIdColumn: "workspace_id" })
   const db = drizzle({ client: sqlite, schema: { auditLogs: auditLogsWithWs, users } })
@@ -226,7 +221,7 @@ test("withAudit with workspace_id", () => {
       userId: "user_1",
       workspaceId: "ws_1",
     })
-    audited.insert(users, { id: "u1", name: "Ada" })
+    await audited.insert(users, { id: "u1", name: "Ada" })
 
     const logs = db.select().from(auditLogsWithWs).all()
     assert.equal(logs.length, 1)
@@ -237,12 +232,11 @@ test("withAudit with workspace_id", () => {
   }
 })
 
-test("withAudit.db gives access to raw db for non-audited ops", () => {
+test("withAudit.db gives access to raw db for non-audited ops", async () => {
   const { db, sqlite } = setupDb()
   try {
     const audited = withAudit(db, auditLogs, { userId: "user_1" })
 
-    // Direct insert — no audit
     audited.db.insert(users).values({ id: "u1", name: "Ada" }).run()
 
     const logs = db.select().from(auditLogs).all()
