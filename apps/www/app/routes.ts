@@ -13,6 +13,7 @@ export default [
     route("terms", "routes/terms.tsx"),
     route("links/onlyfans", "routes/links.onlyfans.tsx"),
     route("sitemap.xml", "routes/sitemap.xml.ts"),
+    route("calendar", "routes/calendar.ts"),
   ]),
   route("links", "routes/links.tsx"),
 ] satisfies RouteConfig
