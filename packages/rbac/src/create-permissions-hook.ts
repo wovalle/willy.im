@@ -4,14 +4,17 @@ export type UsePermissionsReturn<P extends string> = {
   isSuperadmin: boolean
 }
 
+export type PermissionsData<P extends string> = {
+  granted: P[]
+  isSuperadmin?: boolean
+}
+
 export function createPermissionsHook<P extends string>(
-  useGranted: () => P[],
-  allPermissions?: P[],
+  useData: () => PermissionsData<P>,
 ): () => UsePermissionsReturn<P> {
   return function usePermissions() {
-    const granted = useGranted()
+    const { granted, isSuperadmin = false } = useData()
     const set = new Set<P>(granted)
-    const isSuperadmin = allPermissions != null && allPermissions.every((p) => set.has(p))
 
     return {
       has: (permission: P) => set.has(permission),

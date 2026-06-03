@@ -119,7 +119,10 @@ import type { Permission } from "../lib/permissions"
 
 export const usePermissions = createPermissionsHook<Permission>(() => {
   const data = useRouteLoaderData("routes/_dashboard_layout")
-  return data?.permissions ?? []
+  return {
+    granted: data?.permissions.granted ?? [],
+    isSuperadmin: data?.permissions.isSuperadmin ?? false,
+  }
 })
 ```
 
@@ -169,12 +172,11 @@ Returns an object with:
 |--------|------|---------|-------------|
 | `superadmin` | `boolean` | `false` | When `true`, all `has()` checks pass and `granted` returns every permission |
 
-### `createPermissionsHook(useGranted, allPermissions?)`
+### `createPermissionsHook(useData)`
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `useGranted` | `() => P[]` | A React hook or function that returns the granted permissions |
-| `allPermissions` | `P[]` (optional) | Pass `auth.permissions` to enable `isSuperadmin` detection in the hook |
+| `useData` | `() => { granted: P[], isSuperadmin?: boolean }` | A React hook that returns permissions data from your loader |
 
 Returns a `usePermissions` hook with:
 
@@ -182,7 +184,7 @@ Returns a `usePermissions` hook with:
 |----------|-------------|
 | `has(permission)` | Returns `true` if the permission is granted |
 | `granted` | Array of all granted permissions |
-| `isSuperadmin` | `true` when every permission in `allPermissions` is granted (requires passing `allPermissions`) |
+| `isSuperadmin` | `true` when the data source explicitly sets it (not inferred) |
 
 ## License
 
