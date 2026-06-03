@@ -1,6 +1,6 @@
 {
   "name": "@willyim/rbac",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typed RBAC where permissions are the primitive and roles are named permission bags",
   "type": "module",
   "main": "./dist/src/define-permissions.js",

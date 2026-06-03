@@ -2,6 +2,11 @@ export type PermissionChecker<P extends string> = {
   has(permission: P): boolean
   require(permission: P): void
   granted: P[]
+  isSuperadmin: boolean
+}
+
+export type CheckerOptions = {
+  superadmin?: boolean
 }
 
 export type DefinePermissionsConfig<
@@ -13,7 +18,7 @@ export type PermissionsResult<
   P extends readonly string[],
   R extends Record<string, readonly P[number][]>,
 > = {
-  createChecker(role: keyof R & string): PermissionChecker<P[number]>
+  createChecker(role: keyof R & string, opts?: CheckerOptions): PermissionChecker<P[number]>
   permissions: P
   roles: R
 }
@@ -25,18 +30,20 @@ export function definePermissions<
   type Permission = P[number]
   type Role = keyof R & string
 
-  function createChecker(role: Role): PermissionChecker<Permission> {
+  function createChecker(role: Role, opts?: CheckerOptions): PermissionChecker<Permission> {
+    const superadmin = opts?.superadmin ?? false
     const rolePerms = config.roles[role] as readonly string[]
     const grantedSet = new Set(rolePerms)
 
     return {
-      has: (p) => grantedSet.has(p),
+      has: (p) => superadmin || grantedSet.has(p),
       require: (p) => {
-        if (!grantedSet.has(p)) {
+        if (!superadmin && !grantedSet.has(p)) {
           throw new Response("Forbidden", { status: 403 })
         }
       },
-      granted: [...rolePerms] as Permission[],
+      granted: superadmin ? ([...config.permissions] as Permission[]) : ([...rolePerms] as Permission[]),
+      isSuperadmin: superadmin,
     }
   }
 
