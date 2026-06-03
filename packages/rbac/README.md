@@ -60,6 +60,33 @@ checker.has("reports:read") // false
 checker.require("reports:read") // throws Response("Forbidden", { status: 403 })
 ```
 
+### Superadmin
+
+Pass `{ superadmin: true }` to grant all permissions regardless of role. The library handles the semantics; your app decides who is a superadmin.
+
+```ts
+const checker = auth.createChecker("agent", { superadmin: isSuperAdmin(user.email) })
+
+checker.has("reports:read")   // true — superadmin bypasses role restrictions
+checker.isSuperadmin          // true
+checker.granted               // all permissions in the system
+```
+
+Add superadmin-only features as permissions that no role lists. Only superadmins (via the flag) will ever have them:
+
+```ts
+// permissions.ts
+export const auth = definePermissions({
+  permissions: ["contacts:read", /* ... */, "jobs:manage"] as const,
+  roles: {
+    admin: ["contacts:read", /* ... */],  // jobs:manage not listed — only superadmins get it
+  },
+})
+
+// route loader
+if (!permissions.has("jobs:manage")) throw new Response("Not Found", { status: 404 })
+```
+
 ### React Router loader example
 
 ```ts
@@ -68,7 +95,7 @@ import { auth } from "./permissions"
 
 export async function getSessionContext() {
   const role = await getRoleFromSession()
-  const permissions = auth.createChecker(role)
+  const permissions = auth.createChecker(role, { superadmin: isSuperAdmin(user.email) })
   return { permissions, /* ... */ }
 }
 
@@ -92,7 +119,10 @@ import type { Permission } from "../lib/permissions"
 
 export const usePermissions = createPermissionsHook<Permission>(() => {
   const data = useRouteLoaderData("routes/_dashboard_layout")
-  return data?.permissions ?? []
+  return {
+    granted: data?.permissions.granted ?? [],
+    isSuperadmin: data?.permissions.isSuperadmin ?? false,
+  }
 })
 ```
 
@@ -123,23 +153,30 @@ function Nav() {
 
 Returns an object with:
 
-- `createChecker(role)` — returns a `PermissionChecker` for the given role
+- `createChecker(role, opts?)` — returns a `PermissionChecker` for the given role
 - `permissions` — the original permissions array
 - `roles` — the original roles config
 
 ### `PermissionChecker<P>`
 
-| Method | Description |
+| Member | Description |
 |--------|-------------|
-| `has(permission)` | Returns `true` if the permission is granted |
-| `require(permission)` | Throws `Response("Forbidden", { status: 403 })` if not granted |
-| `granted` | Array of all granted permissions |
+| `has(permission)` | Returns `true` if the permission is granted (always `true` for superadmin) |
+| `require(permission)` | Throws `Response("Forbidden", { status: 403 })` if not granted (never throws for superadmin) |
+| `granted` | Array of all granted permissions (all permissions for superadmin) |
+| `isSuperadmin` | `true` when the checker was created with `{ superadmin: true }` |
 
-### `createPermissionsHook(useGranted)`
+### `CheckerOptions`
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `superadmin` | `boolean` | `false` | When `true`, all `has()` checks pass and `granted` returns every permission |
+
+### `createPermissionsHook(useData)`
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `useGranted` | `() => P[]` | A React hook or function that returns the granted permissions |
+| `useData` | `() => { granted: P[], isSuperadmin?: boolean }` | A React hook that returns permissions data from your loader |
 
 Returns a `usePermissions` hook with:
 
@@ -147,6 +184,7 @@ Returns a `usePermissions` hook with:
 |----------|-------------|
 | `has(permission)` | Returns `true` if the permission is granted |
 | `granted` | Array of all granted permissions |
+| `isSuperadmin` | `true` when the data source explicitly sets it (not inferred) |
 
 ## License
 

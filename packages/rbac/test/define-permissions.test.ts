@@ -85,6 +85,42 @@ describe("createChecker", () => {
   })
 })
 
+describe("superadmin", () => {
+  it("has() returns true for all permissions", () => {
+    const checker = auth.createChecker("viewer", { superadmin: true })
+    for (const p of auth.permissions) {
+      assert.equal(checker.has(p), true, `superadmin should have ${p}`)
+    }
+  })
+
+  it("require() never throws", () => {
+    const checker = auth.createChecker("viewer", { superadmin: true })
+    for (const p of auth.permissions) {
+      assert.doesNotThrow(() => checker.require(p))
+    }
+  })
+
+  it("granted returns all permissions", () => {
+    const checker = auth.createChecker("viewer", { superadmin: true })
+    assert.deepEqual(checker.granted, [...auth.permissions])
+  })
+
+  it("isSuperadmin is true when flag is set", () => {
+    const checker = auth.createChecker("viewer", { superadmin: true })
+    assert.equal(checker.isSuperadmin, true)
+  })
+
+  it("isSuperadmin is false by default", () => {
+    const checker = auth.createChecker("admin")
+    assert.equal(checker.isSuperadmin, false)
+  })
+
+  it("isSuperadmin is false when flag is explicitly false", () => {
+    const checker = auth.createChecker("admin", { superadmin: false })
+    assert.equal(checker.isSuperadmin, false)
+  })
+})
+
 describe("edge cases", () => {
   it("works with a role that has no permissions", () => {
     const empty = definePermissions({
