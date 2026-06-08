@@ -14,6 +14,10 @@ export default [
     route("links/onlyfans", "routes/links.onlyfans.tsx"),
     route("sitemap.xml", "routes/sitemap.xml.ts"),
     route("calendar", "routes/calendar.ts"),
+    route("notes", "routes/notes/list.tsx"),
+    route("notes/new", "routes/notes/new.tsx"),
+    route("notes/:id", "routes/notes/view.tsx"),
+    route("notes/:id/edit", "routes/notes/edit.tsx"),
   ]),
   route("links", "routes/links.tsx"),
 ] satisfies RouteConfig
