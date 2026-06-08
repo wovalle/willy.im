@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm"
 import { marked } from "marked"
 import { useState } from "react"
 import { notes } from "~/db/schema"
+import { requireAdmin } from "~/lib/admin"
 import type { Route } from "./+types/edit"
 
 export const headers = (): HeadersInit => ({
@@ -15,8 +16,7 @@ export const meta: Route.MetaFunction = ({ loaderData }) => [
 ]
 
 export const loader = async ({ request, params, context }: Route.LoaderArgs) => {
-  const session = await context.services.auth.api.getSession({ headers: request.headers })
-  if (!session) throw redirect("/login")
+  await requireAdmin(request, context.services.auth)
 
   const rows = await context.db.select().from(notes).where(eq(notes.id, params.id))
   const note = rows[0]
@@ -26,8 +26,7 @@ export const loader = async ({ request, params, context }: Route.LoaderArgs) => 
 }
 
 export const action = async ({ request, params, context }: Route.ActionArgs) => {
-  const session = await context.services.auth.api.getSession({ headers: request.headers })
-  if (!session) throw redirect("/login")
+  await requireAdmin(request, context.services.auth)
 
   const formData = await request.formData()
   const intent = formData.get("intent")

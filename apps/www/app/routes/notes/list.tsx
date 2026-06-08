@@ -1,11 +1,11 @@
-import { Link, redirect } from "react-router"
+import { Link } from "react-router"
 import { desc } from "drizzle-orm"
 import { notes } from "~/db/schema"
+import { requireAdmin } from "~/lib/admin"
 import type { Route } from "./+types/list"
 
 export const loader = async ({ request, context }: Route.LoaderArgs) => {
-  const session = await context.services.auth.api.getSession({ headers: request.headers })
-  if (!session) throw redirect("/login")
+  await requireAdmin(request, context.services.auth)
 
   const allNotes = await context.db.select().from(notes).orderBy(desc(notes.created_at))
   return { notes: allNotes }

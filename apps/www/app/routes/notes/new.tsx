@@ -1,16 +1,15 @@
-import { redirect, Form, useActionData } from "react-router"
+import { Form, redirect, useActionData } from "react-router"
 import { notes } from "~/db/schema"
+import { requireAdmin } from "~/lib/admin"
 import type { Route } from "./+types/new"
 
 export const loader = async ({ request, context }: Route.LoaderArgs) => {
-  const session = await context.services.auth.api.getSession({ headers: request.headers })
-  if (!session) throw redirect("/login")
+  await requireAdmin(request, context.services.auth)
   return null
 }
 
 export const action = async ({ request, context }: Route.ActionArgs) => {
-  const session = await context.services.auth.api.getSession({ headers: request.headers })
-  if (!session) throw redirect("/login")
+  await requireAdmin(request, context.services.auth)
 
   const formData = await request.formData()
   const title = (formData.get("title") as string)?.trim()
