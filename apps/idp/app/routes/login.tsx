@@ -40,14 +40,23 @@ export default function Login() {
     setStep("otp")
   }
 
+  // When an OIDC authorization is pending, the oauth-provider client attaches the
+  // signed query to the sign-in request and the server returns a URL to resume the
+  // flow (→ consent or back to the client). Honor it instead of going home.
+  function continueAfterSignIn(data: unknown) {
+    const url = (data as { url?: string } | null)?.url
+    if (url) window.location.href = url
+    else navigate("/")
+  }
+
   async function verifyCode(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setPending("otp")
-    const { error } = await authClient.signIn.emailOtp({ email, otp: code })
+    const { data, error } = await authClient.signIn.emailOtp({ email, otp: code })
     setPending(null)
     if (error) return setError(error.message ?? "Invalid or expired code.")
-    navigate("/")
+    continueAfterSignIn(data)
   }
 
   async function signInWithPasskey() {
@@ -59,7 +68,7 @@ export default function Login() {
         setError(res.error.message ?? "Passkey sign-in failed.")
         return
       }
-      navigate("/")
+      continueAfterSignIn(res?.data)
     } catch {
       // User dismissed the system passkey prompt — leave the form as-is.
     } finally {

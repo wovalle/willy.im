@@ -1,7 +1,9 @@
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { emailOTP } from "better-auth/plugins/email-otp"
+import { jwt } from "better-auth/plugins/jwt"
 import { passkey } from "@better-auth/passkey"
+import { oauthProvider } from "@better-auth/oauth-provider"
 
 /**
  * Schema-generation config ONLY. The real auth instance lives in
@@ -12,10 +14,14 @@ import { passkey } from "@better-auth/passkey"
  * Regenerate with:  npm run auth:db:generate
  */
 export const auth = betterAuth({
+  baseURL: "http://localhost:5173",
+  secret: "schema-gen-only",
   database: drizzleAdapter({} as never, { provider: "sqlite" }),
   emailAndPassword: { enabled: false },
   plugins: [
     emailOTP({ sendVerificationOTP: async () => {} }),
     passkey(),
+    jwt(),
+    oauthProvider({ loginPage: "/login", consentPage: "/consent", storeClientSecret: "hashed" }),
   ],
 })

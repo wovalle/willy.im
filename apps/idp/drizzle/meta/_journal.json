@@ -15,6 +15,13 @@
       "when": 1781027975590,
       "tag": "0001_fancy_sandman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781038746729,
+      "tag": "0002_mushy_mercury",
+      "breakpoints": true
     }
   ]
 }

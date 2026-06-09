@@ -1,7 +1,9 @@
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { emailOTP } from "better-auth/plugins/email-otp"
+import { jwt } from "better-auth/plugins/jwt"
 import { passkey } from "@better-auth/passkey"
+import { oauthProvider } from "@better-auth/oauth-provider"
 import { Resend } from "resend"
 
 import * as schema from "../db/schema"
@@ -62,6 +64,15 @@ export function createAuthService(context: BaseServiceContext) {
         rpName: "willy.im",
         rpID: url.hostname,
         origin: url.origin,
+      }),
+      // OIDC signing keys for id_tokens issued by the OAuth provider.
+      jwt(),
+      // Turns willy.im into an OAuth 2.1 / OIDC provider so other apps can
+      // "Login with willy.im". Login + consent are handled by our own pages.
+      oauthProvider({
+        loginPage: "/login",
+        consentPage: "/consent",
+        storeClientSecret: "hashed",
       }),
     ],
   })
