@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router"
-import { Fingerprint, Loader2, ShieldCheck } from "lucide-react"
+import { Fingerprint, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react"
 
 import type { Route } from "./+types/index"
 import { authClient } from "~/lib/auth-client"
@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
+import { Input } from "~/components/ui/input"
 
 export function meta() {
   return [
@@ -26,25 +27,51 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { user: session?.user ?? null }
 }
 
+type Passkey = { id: string; name?: string | null; createdAt: string | Date }
+
 export default function Index({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData
   const navigate = useNavigate()
-  const [msg, setMsg] = useState<string | null>(null)
-  const [pending, setPending] = useState<null | "signout" | "passkey">(null)
+  const [pending, setPending] = useState<null | "signout" | "add" | string>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [name, setName] = useState("")
+  const [passkeys, setPasskeys] = useState<Passkey[] | null>(null)
+
+  async function refreshPasskeys() {
+    const { data } = await authClient.passkey.listUserPasskeys()
+    setPasskeys((data as Passkey[]) ?? [])
+  }
+
+  useEffect(() => {
+    if (user) refreshPasskeys()
+  }, [user])
 
   async function signOut() {
     setPending("signout")
     await authClient.signOut()
-    setPending(null)
     navigate("/login")
   }
 
-  async function addPasskey() {
-    setMsg(null)
-    setPending("passkey")
-    const res = await authClient.passkey.addPasskey()
+  async function addPasskey(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setPending("add")
+    const res = await authClient.passkey.addPasskey({ name: name.trim() || undefined })
     setPending(null)
-    setMsg(res?.error ? (res.error.message ?? "Couldn't add passkey.") : "Passkey added.")
+    if (res?.error) {
+      setError(res.error.message ?? "Couldn't add passkey.")
+      return
+    }
+    setName("")
+    refreshPasskeys()
+  }
+
+  async function removePasskey(id: string) {
+    setError(null)
+    setPending(id)
+    await authClient.passkey.deletePasskey({ id })
+    setPending(null)
+    refreshPasskeys()
   }
 
   return (
@@ -62,20 +89,70 @@ export default function Index({ loaderData }: Route.ComponentProps) {
 
         {user ? (
           <>
-            <CardContent className="flex flex-col gap-1">
-              <p className="text-sm font-medium">{user.name || user.email}</p>
-              <p className="text-muted-foreground text-sm">{user.email}</p>
-              {msg ? <p className="text-muted-foreground mt-2 text-sm">{msg}</p> : null}
-            </CardContent>
-            <CardFooter className="flex flex-col gap-2">
-              <Button variant="outline" className="w-full" onClick={addPasskey} disabled={!!pending}>
-                {pending === "passkey" ? (
-                  <Loader2 className="size-4 animate-spin" />
+            <CardContent className="flex flex-col gap-4">
+              <div>
+                <p className="text-sm font-medium">{user.name || user.email}</p>
+                <p className="text-muted-foreground text-sm">{user.email}</p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                  Passkeys
+                </p>
+                {passkeys === null ? (
+                  <Loader2 className="text-muted-foreground size-4 animate-spin" />
+                ) : passkeys.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">No passkeys yet.</p>
                 ) : (
-                  <Fingerprint className="size-4" />
+                  <ul className="flex flex-col gap-1">
+                    {passkeys.map((pk) => (
+                      <li
+                        key={pk.id}
+                        className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+                      >
+                        <span className="flex items-center gap-2 text-sm">
+                          <Fingerprint className="text-muted-foreground size-4" />
+                          {pk.name || "Unnamed passkey"}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Delete passkey"
+                          onClick={() => removePasskey(pk.id)}
+                          disabled={!!pending}
+                          className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                        >
+                          {pending === pk.id ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-4" />
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-                Add a passkey
-              </Button>
+
+                <form onSubmit={addPasskey} className="mt-1 flex gap-2">
+                  <Input
+                    placeholder="Name (e.g. 1Pass, MacBook)"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={!!pending}
+                  />
+                  <Button type="submit" variant="outline" disabled={!!pending}>
+                    {pending === "add" ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                    Add
+                  </Button>
+                </form>
+              </div>
+
+              {error ? <p className="text-destructive text-sm">{error}</p> : null}
+            </CardContent>
+            <CardFooter>
               <Button className="w-full" onClick={signOut} disabled={!!pending}>
                 {pending === "signout" ? <Loader2 className="size-4 animate-spin" /> : null}
                 Sign out
