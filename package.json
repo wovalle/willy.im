@@ -11,7 +11,8 @@
   },
   "devDependencies": {},
   "workspaces": [
-    "apps/www"
+    "apps/www",
+    "apps/idp"
   ],
   "license": "MIT"
 }

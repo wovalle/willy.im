@@ -1,0 +1,32 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "idp-willy-im",
+  "account_id": "d5705803ba3e46be8c7b0566e47ff7d6",
+  "compatibility_date": "2025-04-04",
+  "main": "./workers/app.ts",
+  "observability": {
+    "enabled": true,
+  },
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "BETTER_AUTH_URL": "https://idp.willy.im",
+  },
+  "d1_databases": [
+    {
+      "binding": "db",
+      "database_name": "idp-willy-im",
+      "database_id": "7a13019b-235f-4408-bdea-eead1d81778e",
+      "migrations_dir": "drizzle",
+    },
+  ],
+  "routes": [
+    {
+      "pattern": "idp.willy.im",
+      "custom_domain": true,
+    },
+  ],
+}
