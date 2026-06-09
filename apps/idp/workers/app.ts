@@ -27,14 +27,43 @@ const requestHandler = createRequestHandler(
 
 export default {
   async fetch(request, env, ctx) {
-    const baseCtx = createBaseContext(env.db)
+    const started = Date.now()
+    const url = new URL(request.url)
+    const requestId = crypto.randomUUID().slice(0, 8)
 
-    return requestHandler(request, {
-      cloudflare: { env, ctx },
-      ...baseCtx,
-      services: {
-        auth: createAuthService(baseCtx),
-      },
+    const baseCtx = createBaseContext(env.db, { requestId })
+    baseCtx.logger.info("request.start", {
+      method: request.method,
+      path: url.pathname,
+      // surface whether a session cookie is even present (helps debug auth)
+      hasSessionCookie: /better-auth\.session_token=/.test(request.headers.get("cookie") ?? ""),
     })
+
+    try {
+      const response = await requestHandler(request, {
+        cloudflare: { env, ctx },
+        ...baseCtx,
+        services: {
+          auth: createAuthService(baseCtx),
+        },
+      })
+      baseCtx.logger.info("request.end", {
+        method: request.method,
+        path: url.pathname,
+        status: response.status,
+        location: response.headers.get("location") ?? undefined,
+        ms: Date.now() - started,
+      })
+      return response
+    } catch (err) {
+      baseCtx.logger.error("request.error", {
+        method: request.method,
+        path: url.pathname,
+        ms: Date.now() - started,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      })
+      throw err
+    }
   },
 } satisfies ExportedHandler<Env>

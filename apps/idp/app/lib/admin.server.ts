@@ -24,8 +24,14 @@ export async function requireAdminSession(
   auth: AuthService,
 ) {
   const session = await auth.api.getSession({ headers: request.headers })
+  const admin = isAdminEmail(ctx, session?.user.email)
+  ctx.logger.info("admin.gate", {
+    hasSession: !!session,
+    email: session?.user.email,
+    admin,
+  })
   if (!session) throw redirect("/login")
-  if (!isAdminEmail(ctx, session.user.email)) {
+  if (!admin) {
     throw new Response("Forbidden", { status: 403 })
   }
   return session

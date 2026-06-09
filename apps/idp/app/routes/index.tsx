@@ -25,6 +25,7 @@ export function meta() {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const session = await context.services.auth.api.getSession({ headers: request.headers })
+  context.logger.info("home.loader", { hasSession: !!session, email: session?.user.email })
   return {
     user: session?.user ?? null,
     isAdmin: isAdminEmail(context, session?.user.email),
