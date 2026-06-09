@@ -13,6 +13,7 @@
   },
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
+    "APP_ENV": "production",
     "BETTER_AUTH_URL": "https://idp.willy.im",
   },
   "d1_databases": [
