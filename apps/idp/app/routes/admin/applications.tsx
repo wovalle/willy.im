@@ -1,5 +1,5 @@
 import { Form, useActionData, useNavigation } from "react-router"
-import { Loader2, Trash2 } from "lucide-react"
+import { KeyRound, Loader2, Trash2 } from "lucide-react"
 
 import type { Route } from "./+types/applications"
 import {
@@ -7,6 +7,7 @@ import {
   deleteApplication,
   listApplications,
   requireAdminSession,
+  rotateApplicationSecret,
 } from "~/lib/admin.server"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
@@ -37,6 +38,15 @@ export async function action({ request, context }: Route.ActionArgs) {
     return { ok: true }
   }
 
+  if (intent === "rotate") {
+    const created = await rotateApplicationSecret(
+      request,
+      context.services.auth,
+      String(form.get("clientId")),
+    )
+    return { created, rotated: true }
+  }
+
   const name = String(form.get("name") ?? "").trim()
   const app = String(form.get("app") ?? "").trim()
   const redirectUris = String(form.get("redirectUris") ?? "")
@@ -62,6 +72,7 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
   const nav = useNavigation()
   const busy = nav.state !== "idle"
   const created = actionData && "created" in actionData ? actionData.created : null
+  const rotated = actionData && "rotated" in actionData ? actionData.rotated : false
   const error = actionData && "error" in actionData ? actionData.error : null
 
   return (
@@ -101,7 +112,11 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
           {error ? <p className="text-destructive mt-3 text-sm">{error}</p> : null}
           {created ? (
             <div className="bg-muted mt-4 rounded-md p-3 text-sm">
-              <p className="font-medium">Application created — copy the secret now, it won't be shown again.</p>
+              <p className="font-medium">
+                {rotated
+                  ? "Secret rotated — the old one no longer works. Copy the new secret now, it won't be shown again."
+                  : "Application created — copy the secret now, it won't be shown again."}
+              </p>
               <p className="mt-2 font-mono text-xs break-all">client_id: {created.clientId}</p>
               <p className="font-mono text-xs break-all">client_secret: {created.clientSecret}</p>
             </div>
@@ -136,19 +151,36 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
                   {a.redirectUris.join(", ")}
                 </TableCell>
                 <TableCell>
-                  <Form method="post">
-                    <input type="hidden" name="clientId" value={a.clientId} />
-                    <button
-                      type="submit"
-                      name="intent"
-                      value="delete"
-                      aria-label="Delete application"
-                      className="text-muted-foreground hover:text-destructive"
-                      disabled={busy}
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  </Form>
+                  <div className="flex items-center gap-3">
+                    <Form method="post">
+                      <input type="hidden" name="clientId" value={a.clientId} />
+                      <button
+                        type="submit"
+                        name="intent"
+                        value="rotate"
+                        aria-label="Rotate client secret"
+                        title="Rotate client secret"
+                        className="text-muted-foreground hover:text-foreground"
+                        disabled={busy}
+                      >
+                        <KeyRound className="size-4" />
+                      </button>
+                    </Form>
+                    <Form method="post">
+                      <input type="hidden" name="clientId" value={a.clientId} />
+                      <button
+                        type="submit"
+                        name="intent"
+                        value="delete"
+                        aria-label="Delete application"
+                        title="Delete application"
+                        className="text-muted-foreground hover:text-destructive"
+                        disabled={busy}
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </Form>
+                  </div>
                 </TableCell>
               </TableRow>
             ))

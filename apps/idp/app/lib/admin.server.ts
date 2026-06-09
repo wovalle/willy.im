@@ -127,6 +127,22 @@ export async function createApplication(
   return { clientId: created.client_id, clientSecret: created.client_secret }
 }
 
+/**
+ * Generates a new client secret and replaces the stored hash. The old secret
+ * stops working immediately. The new plaintext is returned once.
+ */
+export async function rotateApplicationSecret(
+  request: Request,
+  auth: AuthService,
+  clientId: string,
+) {
+  const res = (await auth.api.rotateClientSecret({
+    headers: request.headers,
+    body: { client_id: clientId },
+  })) as { client_secret?: string; clientSecret?: string }
+  return { clientId, clientSecret: res.client_secret ?? res.clientSecret ?? "" }
+}
+
 export async function deleteApplication(ctx: BaseServiceContext, clientId: string) {
   await ctx.db.delete(schema.oauthClient).where(eq(schema.oauthClient.clientId, clientId))
 }
