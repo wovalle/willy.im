@@ -7,6 +7,10 @@ export default [
   route("consent", "routes/consent.tsx"),
   route("auth/*", "routes/auth/auth.$.ts"),
 
+  // RFC 8414 root-level metadata (issuer path suffixed), proxied to basePath.
+  route(".well-known/oauth-authorization-server/auth", "routes/well-known/oauth-as.ts"),
+  route(".well-known/openid-configuration/auth", "routes/well-known/openid.ts"),
+
   route("admin", "routes/admin/layout.tsx", [
     index("routes/admin/applications.tsx"),
     route("users", "routes/admin/users.tsx"),

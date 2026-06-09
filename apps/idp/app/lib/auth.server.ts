@@ -115,6 +115,9 @@ export function createAuthService(context: BaseServiceContext) {
         loginPage: "/login",
         consentPage: "/consent",
         storeClientSecret: "hashed",
+        // We serve the RFC 8414 root metadata ourselves (routes/well-known/*),
+        // so silence Better Auth's "ensure it exists" startup warnings.
+        silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
         // Each OAuth client is tagged with metadata.app (its application key).
         // We surface only that application's workspaces + roles as a claim.
         customIdTokenClaims: async ({ user, metadata }) => {
