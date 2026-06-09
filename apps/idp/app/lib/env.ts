@@ -8,6 +8,11 @@ const appEnvSchema = z.object({
   // Auth email sender. Optional locally — without it OTPs are logged to console.
   RESEND_TOKEN: z.string().optional(),
   EMAIL_FROM: z.string().default("willy.im <noreply@emails.willy.im>"),
+
+  // Admin console + management API. Comma-separated allowlist of admin emails.
+  ADMIN_EMAILS: z.string().default("hey@willy.im"),
+  // Bearer token for the read-only management API (/api/v1/*). Optional.
+  ADMIN_API_TOKEN: z.string().optional(),
 })
 
 export type AppEnv = z.infer<typeof appEnvSchema>

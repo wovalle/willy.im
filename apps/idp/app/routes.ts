@@ -6,4 +6,17 @@ export default [
   route("login/verify", "routes/login.verify.tsx"),
   route("consent", "routes/consent.tsx"),
   route("auth/*", "routes/auth/auth.$.ts"),
+
+  route("admin", "routes/admin/layout.tsx", [
+    index("routes/admin/applications.tsx"),
+    route("users", "routes/admin/users.tsx"),
+    route("workspaces", "routes/admin/workspaces.tsx"),
+  ]),
+
+  // Management API (Bearer ADMIN_API_TOKEN) + OpenAPI docs.
+  route("api/v1/applications", "routes/api/applications.ts"),
+  route("api/v1/users", "routes/api/users.ts"),
+  route("api/v1/workspaces", "routes/api/workspaces.ts"),
+  route("api/openapi.json", "routes/api/openapi.ts"),
+  route("api/docs", "routes/api/docs.tsx"),
 ] satisfies RouteConfig
