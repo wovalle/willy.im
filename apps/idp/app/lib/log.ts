@@ -4,7 +4,9 @@
  * browser console stay greppable. Use `.child()` to bind request-scoped fields.
  */
 export type LogFields = Record<string, unknown>
-type Level = "debug" | "info" | "warn" | "error"
+export type Level = "debug" | "info" | "warn" | "error"
+
+const RANK: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 }
 
 export interface Logger {
   debug(msg: string, fields?: LogFields): void
@@ -27,13 +29,17 @@ function emit(level: Level, base: LogFields, msg: string, fields?: LogFields) {
   else console.log(line)
 }
 
-export function createLogger(base: LogFields = {}): Logger {
+export function createLogger(base: LogFields = {}, minLevel: Level = "info"): Logger {
+  const threshold = RANK[minLevel]
+  const at = (level: Level, msg: string, fields?: LogFields) => {
+    if (RANK[level] >= threshold) emit(level, base, msg, fields)
+  }
   return {
-    debug: (msg, fields) => emit("debug", base, msg, fields),
-    info: (msg, fields) => emit("info", base, msg, fields),
-    warn: (msg, fields) => emit("warn", base, msg, fields),
-    error: (msg, fields) => emit("error", base, msg, fields),
-    child: (fields) => createLogger({ ...base, ...fields }),
+    debug: (msg, fields) => at("debug", msg, fields),
+    info: (msg, fields) => at("info", msg, fields),
+    warn: (msg, fields) => at("warn", msg, fields),
+    error: (msg, fields) => at("error", msg, fields),
+    child: (fields) => createLogger({ ...base, ...fields }, minLevel),
   }
 }
 

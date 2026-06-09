@@ -32,7 +32,7 @@ export default {
     const requestId = crypto.randomUUID().slice(0, 8)
 
     const baseCtx = createBaseContext(env.db, { requestId })
-    baseCtx.logger.info("request.start", {
+    baseCtx.logger.debug("request.start", {
       method: request.method,
       path: url.pathname,
       // surface whether a session cookie is even present (helps debug auth)
@@ -47,7 +47,7 @@ export default {
           auth: createAuthService(baseCtx),
         },
       })
-      baseCtx.logger.info("request.end", {
+      baseCtx.logger.debug("request.end", {
         method: request.method,
         path: url.pathname,
         status: response.status,

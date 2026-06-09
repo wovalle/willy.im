@@ -13,7 +13,7 @@ export type BaseServiceContext = {
 export function createBaseContext(d1: D1Database, logFields: LogFields = {}): BaseServiceContext {
   return {
     db: createDrizzleClient(d1),
-    logger: createLogger({ scope: "server", ...logFields }),
+    logger: createLogger({ scope: "server", ...logFields }, getAppEnv("LOG_LEVEL")),
     getAppEnv,
   }
 }

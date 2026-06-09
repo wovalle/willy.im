@@ -4,7 +4,7 @@ async function handle(request: Request, context: Route.LoaderArgs["context"]) {
   const url = new URL(request.url)
   const op = url.pathname.replace(/^\/auth\//, "")
   const log = context.logger.child({ op })
-  log.info("auth.op.start", { method: request.method })
+  log.debug("auth.op.start", { method: request.method })
   try {
     const res = await context.services.auth.handler(request)
     log.info("auth.op.end", { status: res.status, location: res.headers.get("location") ?? undefined })
