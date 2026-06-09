@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router"
-import { Fingerprint, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react"
+import { Fingerprint, Loader2, Plus, ShieldCheck, SlidersHorizontal, Trash2 } from "lucide-react"
 
 import type { Route } from "./+types/index"
 import { authClient } from "~/lib/auth-client"
+import { isAdminEmail } from "~/lib/admin.server"
 import { Button } from "~/components/ui/button"
 import {
   Card,
@@ -24,13 +25,16 @@ export function meta() {
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const session = await context.services.auth.api.getSession({ headers: request.headers })
-  return { user: session?.user ?? null }
+  return {
+    user: session?.user ?? null,
+    isAdmin: isAdminEmail(context, session?.user.email),
+  }
 }
 
 type Passkey = { id: string; name?: string | null; createdAt: string | Date }
 
 export default function Index({ loaderData }: Route.ComponentProps) {
-  const { user } = loaderData
+  const { user, isAdmin } = loaderData
   const navigate = useNavigate()
   const [pending, setPending] = useState<null | "signout" | "add" | string>(null)
   const [error, setError] = useState<string | null>(null)
@@ -165,7 +169,18 @@ export default function Index({ loaderData }: Route.ComponentProps) {
 
               {error ? <p className="text-destructive text-sm">{error}</p> : null}
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex flex-col gap-2">
+              {isAdmin ? (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => navigate("/admin")}
+                  disabled={!!pending}
+                >
+                  <SlidersHorizontal className="size-4" />
+                  Admin console
+                </Button>
+              ) : null}
               <Button className="w-full" onClick={signOut} disabled={!!pending}>
                 {pending === "signout" ? <Loader2 className="size-4 animate-spin" /> : null}
                 Sign out
