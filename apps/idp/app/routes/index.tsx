@@ -54,10 +54,15 @@ export default function Index({ loaderData }: Route.ComponentProps) {
 
   async function addPasskey(e: React.FormEvent) {
     e.preventDefault()
+    const trimmed = name.trim()
+    if (!trimmed) {
+      setError("Give the passkey a name first.")
+      return
+    }
     setError(null)
     setPending("add")
     try {
-      const res = await authClient.passkey.addPasskey({ name: name.trim() || undefined })
+      const res = await authClient.passkey.addPasskey({ name: trimmed })
       if (res?.error) {
         setError(res.error.message ?? "Couldn't add passkey.")
         return
@@ -147,7 +152,7 @@ export default function Index({ loaderData }: Route.ComponentProps) {
                     onChange={(e) => setName(e.target.value)}
                     disabled={!!pending}
                   />
-                  <Button type="submit" variant="outline" disabled={!!pending}>
+                  <Button type="submit" variant="outline" disabled={!!pending || !name.trim()}>
                     {pending === "add" ? (
                       <Loader2 className="size-4 animate-spin" />
                     ) : (
