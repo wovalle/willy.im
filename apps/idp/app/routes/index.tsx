@@ -56,22 +56,30 @@ export default function Index({ loaderData }: Route.ComponentProps) {
     e.preventDefault()
     setError(null)
     setPending("add")
-    const res = await authClient.passkey.addPasskey({ name: name.trim() || undefined })
-    setPending(null)
-    if (res?.error) {
-      setError(res.error.message ?? "Couldn't add passkey.")
-      return
+    try {
+      const res = await authClient.passkey.addPasskey({ name: name.trim() || undefined })
+      if (res?.error) {
+        setError(res.error.message ?? "Couldn't add passkey.")
+        return
+      }
+      setName("")
+      await refreshPasskeys()
+    } catch {
+      // User dismissed the system prompt (or it timed out) — not an error worth shouting about.
+    } finally {
+      setPending(null)
     }
-    setName("")
-    refreshPasskeys()
   }
 
   async function removePasskey(id: string) {
     setError(null)
     setPending(id)
-    await authClient.passkey.deletePasskey({ id })
-    setPending(null)
-    refreshPasskeys()
+    try {
+      await authClient.passkey.deletePasskey({ id })
+      await refreshPasskeys()
+    } finally {
+      setPending(null)
+    }
   }
 
   return (

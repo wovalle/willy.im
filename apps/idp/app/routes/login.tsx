@@ -53,10 +53,18 @@ export default function Login() {
   async function signInWithPasskey() {
     setError(null)
     setPending("passkey")
-    const res = await authClient.signIn.passkey()
-    setPending(null)
-    if (res?.error) return setError(res.error.message ?? "Passkey sign-in failed.")
-    navigate("/")
+    try {
+      const res = await authClient.signIn.passkey()
+      if (res?.error) {
+        setError(res.error.message ?? "Passkey sign-in failed.")
+        return
+      }
+      navigate("/")
+    } catch {
+      // User dismissed the system passkey prompt — leave the form as-is.
+    } finally {
+      setPending(null)
+    }
   }
 
   return (
