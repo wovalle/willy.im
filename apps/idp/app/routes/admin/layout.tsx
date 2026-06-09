@@ -11,9 +11,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 const TABS = [
-  { to: "/admin", label: "Applications", end: true },
-  { to: "/admin/users", label: "Users", end: false },
-  { to: "/admin/workspaces", label: "Workspaces", end: false },
+  { to: "/admin", label: "Applications", end: false },
+  { to: "/admin/users", label: "Users", end: true },
 ]
 
 export default function AdminLayout({ loaderData }: Route.ComponentProps) {

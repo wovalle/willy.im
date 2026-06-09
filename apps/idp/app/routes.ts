@@ -13,8 +13,8 @@ export default [
 
   route("admin", "routes/admin/layout.tsx", [
     index("routes/admin/applications.tsx"),
+    route("apps/:clientId", "routes/admin/app-detail.tsx"),
     route("users", "routes/admin/users.tsx"),
-    route("workspaces", "routes/admin/workspaces.tsx"),
   ]),
 
   // Management API (Bearer ADMIN_API_TOKEN) + OpenAPI docs.

@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 import { redirect } from "react-router"
 
 import * as schema from "../db/schema"
@@ -107,6 +107,14 @@ export async function listApplications(ctx: BaseServiceContext): Promise<Applica
   }))
 }
 
+export async function getApplication(
+  ctx: BaseServiceContext,
+  clientId: string,
+): Promise<ApplicationSummary | null> {
+  const all = await listApplications(ctx)
+  return all.find((a) => a.clientId === clientId) ?? null
+}
+
 /**
  * Registers an OAuth client and tags it with metadata.app (the application key
  * consumers' workspace claims are filtered by). Creation goes through better-auth
@@ -149,8 +157,54 @@ export async function rotateApplicationSecret(
   return { clientId, clientSecret: res.client_secret ?? res.clientSecret ?? "" }
 }
 
+export async function updateApplicationRedirectUris(
+  request: Request,
+  auth: AuthService,
+  clientId: string,
+  redirectUris: string[],
+) {
+  await auth.api.updateOAuthClient({
+    headers: request.headers,
+    body: { client_id: clientId, update: { redirect_uris: redirectUris } },
+  })
+}
+
 export async function deleteApplication(ctx: BaseServiceContext, clientId: string) {
   await ctx.db.delete(schema.oauthClient).where(eq(schema.oauthClient.clientId, clientId))
+}
+
+/** Workspaces belonging to one application. */
+export async function listWorkspacesForApp(ctx: BaseServiceContext, app: string) {
+  return ctx.db
+    .select({
+      id: schema.organization.id,
+      name: schema.organization.name,
+      slug: schema.organization.slug,
+      createdAt: schema.organization.createdAt,
+    })
+    .from(schema.organization)
+    .where(eq(schema.organization.applicationId, app))
+    .orderBy(desc(schema.organization.createdAt))
+}
+
+/** People with access to an app — derived from membership in its workspaces. */
+export async function listPeopleForApp(ctx: BaseServiceContext, app: string) {
+  return ctx.db
+    .select({
+      email: schema.user.email,
+      name: schema.user.name,
+      workspace: schema.organization.slug,
+      role: schema.member.role,
+    })
+    .from(schema.member)
+    .innerJoin(
+      schema.organization,
+      and(
+        eq(schema.member.organizationId, schema.organization.id),
+        eq(schema.organization.applicationId, app),
+      ),
+    )
+    .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
 }
 
 export async function listUsers(ctx: BaseServiceContext) {
