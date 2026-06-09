@@ -30,8 +30,6 @@ export function createAuthService(context: BaseServiceContext) {
   const isProd = env.APP_ENV === "production"
   const url = new URL(env.BETTER_AUTH_URL)
 
-  const googleConfigured = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
-
   return betterAuth({
     appName: "willy.im",
     basePath: "/auth",
@@ -43,14 +41,6 @@ export function createAuthService(context: BaseServiceContext) {
       expiresIn: 60 * 60 * 24 * 30, // 30 days
       updateAge: 60 * 60 * 24, // refresh daily
     },
-    socialProviders: googleConfigured
-      ? {
-          google: {
-            clientId: env.GOOGLE_CLIENT_ID!,
-            clientSecret: env.GOOGLE_CLIENT_SECRET!,
-          },
-        }
-      : undefined,
     plugins: [
       emailOTP({
         otpLength: 6,
@@ -58,13 +48,13 @@ export function createAuthService(context: BaseServiceContext) {
         async sendVerificationOTP({ email, otp }) {
           const { subject, html } = renderOtpEmail(url.origin, email, otp)
 
-          if (!isProd || !env.RESEND_API_KEY) {
+          if (!isProd || !env.RESEND_TOKEN) {
             context.logger.info(`[auth] OTP for ${email}: ${otp}`)
             context.logger.info(`[auth] sign-in link: ${url.origin}/login/verify?email=${encodeURIComponent(email)}&code=${otp}`)
             return
           }
 
-          const resend = new Resend(env.RESEND_API_KEY)
+          const resend = new Resend(env.RESEND_TOKEN)
           await resend.emails.send({ from: env.EMAIL_FROM, to: email, subject, html })
         },
       }),

@@ -25,7 +25,7 @@ export default function Login() {
   const [step, setStep] = useState<Step>("email")
   const [email, setEmail] = useState("")
   const [code, setCode] = useState("")
-  const [pending, setPending] = useState<null | "email" | "otp" | "passkey" | "google">(null)
+  const [pending, setPending] = useState<null | "email" | "otp" | "passkey">(null)
   const [error, setError] = useState<string | null>(null)
 
   const busy = pending !== null
@@ -57,16 +57,6 @@ export default function Login() {
     setPending(null)
     if (res?.error) return setError(res.error.message ?? "Passkey sign-in failed.")
     navigate("/")
-  }
-
-  async function signInWithGoogle() {
-    setError(null)
-    setPending("google")
-    const { error } = await authClient.signIn.social({ provider: "google", callbackURL: "/" })
-    if (error) {
-      setPending(null)
-      setError(error.message ?? "Google sign-in failed.")
-    }
   }
 
   return (
@@ -120,10 +110,6 @@ export default function Login() {
                   <Fingerprint className="size-4" />
                 )}
                 Sign in with a passkey
-              </Button>
-              <Button variant="outline" onClick={signInWithGoogle} disabled={busy}>
-                {pending === "google" ? <Loader2 className="size-4 animate-spin" /> : null}
-                Continue with Google
               </Button>
             </>
           ) : (
