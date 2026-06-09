@@ -11,4 +11,10 @@ export default defineConfig({
     reactRouter(),
     tsconfigPaths(),
   ],
+  resolve: {
+    // better-auth's drizzle adapter (hoisted to the repo root) declares drizzle-orm
+    // as an optional peer. drizzle-orm is only in this app's node_modules, so without
+    // deduping Vite can't resolve it from the adapter and stubs it out.
+    dedupe: ["drizzle-orm"],
+  },
 })

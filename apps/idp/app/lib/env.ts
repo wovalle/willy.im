@@ -1,11 +1,13 @@
 import { z } from "zod"
 
-/**
- * Phase 1 env surface is intentionally minimal. Auth secrets (BETTER_AUTH_SECRET,
- * GOOGLE_CLIENT_ID/SECRET, RESEND_API_KEY, …) are added in Phase 2.
- */
 const appEnvSchema = z.object({
+  APP_ENV: z.enum(["development", "production"]).default("development"),
   BETTER_AUTH_URL: z.string().default("http://localhost:5173"),
+  BETTER_AUTH_SECRET: z.string().default("dev-insecure-secret-change-me"),
+
+  // Auth email sender. Optional locally — without it OTPs are logged to console.
+  RESEND_TOKEN: z.string().optional(),
+  EMAIL_FROM: z.string().default("willy.im <noreply@emails.willy.im>"),
 })
 
 export type AppEnv = z.infer<typeof appEnvSchema>

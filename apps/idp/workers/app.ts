@@ -2,6 +2,7 @@ import { createRequestHandler } from "react-router"
 
 import type { DrizzleClient } from "../app/db/drizzle"
 import { getAppEnv } from "../app/lib/env"
+import { createAuthService, type AuthService } from "../app/lib/auth.server"
 import { createBaseContext, type ILogger } from "../app/lib/services"
 
 declare module "react-router" {
@@ -13,6 +14,9 @@ declare module "react-router" {
     db: DrizzleClient
     logger: ILogger
     getAppEnv: typeof getAppEnv
+    services: {
+      auth: AuthService
+    }
   }
 }
 
@@ -28,6 +32,9 @@ export default {
     return requestHandler(request, {
       cloudflare: { env, ctx },
       ...baseCtx,
+      services: {
+        auth: createAuthService(baseCtx),
+      },
     })
   },
 } satisfies ExportedHandler<Env>
