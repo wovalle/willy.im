@@ -55,12 +55,18 @@ export function createAuthService(context: BaseServiceContext) {
   const isProd = env.APP_ENV === "production"
   const url = new URL(env.BETTER_AUTH_URL)
 
+  // In dev, trust common localhost ports so a default `npm run dev` (5173) works
+  // even if BETTER_AUTH_URL points elsewhere. Prod trusts only its own origin.
+  const trustedOrigins = isProd
+    ? [url.origin]
+    : [...new Set([url.origin, "http://localhost:5173", "http://localhost:9100"])]
+
   return betterAuth({
     appName: "willy.im",
     basePath: "/auth",
     baseURL: url.origin,
     secret: env.BETTER_AUTH_SECRET,
-    trustedOrigins: [url.origin],
+    trustedOrigins,
     database: drizzleAdapter(context.db, { provider: "sqlite", schema }),
     session: {
       expiresIn: 60 * 60 * 24 * 30, // 30 days
