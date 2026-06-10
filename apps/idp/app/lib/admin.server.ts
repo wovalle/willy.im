@@ -42,15 +42,6 @@ export async function requireAdminSession(
   return session
 }
 
-/** API gate: require the management API bearer token. */
-export function requireAdminToken(request: Request, ctx: BaseServiceContext) {
-  const expected = ctx.getAppEnv("ADMIN_API_TOKEN")
-  const provided = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
-  if (!expected || !provided || provided !== expected) {
-    throw Response.json({ error: "unauthorized" }, { status: 401 })
-  }
-}
-
 /**
  * better-auth and drizzle's mode:"json" columns don't always agree on
  * serialization (values can come back already-parsed, once-, or twice-encoded),

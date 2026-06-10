@@ -31,12 +31,16 @@ export async function loader({ context }: Route.LoaderArgs) {
       title: "willy.im IdP — Management API",
       version: "1.0.0",
       description:
-        "Read-only management API for the willy.im identity provider. Authenticate with `Authorization: Bearer <ADMIN_API_TOKEN>`. Application registration is done in the admin console (better-auth ties client creation to an admin session).",
+        "Management API for the willy.im identity provider. Authenticate with `Authorization: Bearer <token>`. Two kinds of token: the superadmin `ADMIN_API_TOKEN` (every app) and per-app **scoped API keys** minted in the admin console (one app, a fixed permission set). The cross-app list endpoints below require the superadmin token. Application registration is done in the admin console (better-auth ties client creation to an admin session).",
     },
     servers: [{ url: baseUrl }],
     components: {
       securitySchemes: {
-        bearerAuth: { type: "http", scheme: "bearer" },
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          description: "Superadmin ADMIN_API_TOKEN or a scoped API key (wim_…).",
+        },
       },
     },
     paths: {

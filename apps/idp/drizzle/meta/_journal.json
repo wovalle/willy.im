@@ -43,6 +43,13 @@
       "when": 1781065501025,
       "tag": "0005_normal_korath",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781067098557,
+      "tag": "0006_massive_gauntlet",
+      "breakpoints": true
     }
   ]
 }

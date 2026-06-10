@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Form, Link, redirect, useActionData, useNavigation, useSubmit } from "react-router"
-import { ChevronRight, KeyRound, Loader2, Mail, Plus, Trash2, Users } from "lucide-react"
+import { ChevronRight, KeyRound, Loader2, Mail, Plus, Terminal, Trash2, Users } from "lucide-react"
 
 import type { Route } from "./+types/app-detail"
 import {
@@ -22,6 +22,7 @@ import {
   revokeInvitation,
   updateAppMember,
 } from "~/lib/members.server"
+import { createApiKey, listApiKeys, revokeApiKey } from "~/lib/api-keys.server"
 import { APP_PERMISSIONS, type AppRole } from "~/lib/permissions"
 import { requireAppPermission } from "~/lib/security.server"
 import { firstInvalidRedirectUri, parseUriList } from "~/lib/validate"
@@ -55,13 +56,14 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   const application = await getApplication(context, params.clientId)
   if (!application) throw new Response("Application not found", { status: 404 })
   const app = application.app ?? ""
-  const [workspaces, people, members, invitations] = await Promise.all([
+  const [workspaces, people, members, invitations, apiKeys] = await Promise.all([
     app ? listWorkspacesForApp(context, app) : Promise.resolve([]),
     app ? listPeopleForApp(context, app) : Promise.resolve([]),
     app ? listAppMembers(context, app) : Promise.resolve([]),
     app ? listAppInvitations(context, app) : Promise.resolve([]),
+    app ? listApiKeys(context, app) : Promise.resolve([]),
   ])
-  return { application, workspaces, people, members, invitations }
+  return { application, workspaces, people, members, invitations, apiKeys }
 }
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -93,6 +95,39 @@ export async function action({ request, context, params }: Route.ActionArgs) {
       }
     await updateApplicationRedirectUris(request, auth, clientId, redirectUris)
     return { ok: "redirects" }
+  }
+
+  if (intent === "create-api-key" || intent === "revoke-api-key") {
+    const application = await getApplication(context, clientId)
+    const app = application?.app
+    if (!app) return { error: "This application has no app key yet." }
+
+    if (intent === "create-api-key") {
+      const access = await requireAppPermission(request, context, auth, app, "apikey:create")
+      const name = String(form.get("name") ?? "").trim()
+      if (!name) return { error: "Give the key a name.", field: "key-name" }
+      const permissions = form.getAll("permissions").map(String).filter(Boolean)
+      if (permissions.length === 0)
+        return { error: "Select at least one permission.", field: "key-name" }
+      const days = Number(form.get("expiresInDays"))
+      const expiresAt =
+        Number.isFinite(days) && days > 0
+          ? new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+          : null
+      const { token, prefix } = await createApiKey(context, {
+        app,
+        name,
+        permissions,
+        createdByUserId: access.user.id,
+        expiresAt,
+      })
+      return { createdApiKey: { token, prefix, name } }
+    }
+
+    // revoke-api-key
+    await requireAppPermission(request, context, auth, app, "apikey:revoke")
+    const res = await revokeApiKey(context, { app, id: String(form.get("keyId") ?? "") })
+    return "error" in res ? { error: res.error } : { ok: "api-key-revoked" }
   }
 
   if (intent === "create-workspace") {
@@ -187,7 +222,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 }
 
 export default function AppDetail({ loaderData }: Route.ComponentProps) {
-  const { application, workspaces, people, members, invitations } = loaderData
+  const { application, workspaces, people, members, invitations, apiKeys } = loaderData
   const actionData = useActionData<typeof action>()
   const nav = useNavigation()
   const submit = useSubmit()
@@ -196,6 +231,8 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
 
   const rotatedSecret =
     actionData && "rotatedSecret" in actionData ? actionData.rotatedSecret : null
+  const createdApiKey =
+    actionData && "createdApiKey" in actionData ? actionData.createdApiKey : null
   const error = actionData && "error" in actionData ? actionData.error : null
   const field = actionData && "field" in actionData ? actionData.field : null
   const memberError =
@@ -436,6 +473,59 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               </Table>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      {/* API keys — scoped management-API credentials */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Terminal className="text-muted-foreground size-4" />
+            API keys
+          </CardTitle>
+          <CardDescription>
+            Scoped credentials for the management API. A key carries a fixed set of permissions and
+            can only act on this app. The token is shown once at creation — store it somewhere safe.
+            Authenticate with <code className="font-mono text-xs">Authorization: Bearer &lt;token&gt;</code>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-6">
+          <CreateApiKeyForm
+            busy={busy}
+            error={field === "key-name" ? (error ?? null) : null}
+            disabled={!application.app}
+          />
+
+          {createdApiKey ? (
+            <div className="bg-muted rounded-md p-3 text-sm">
+              <p className="font-medium">
+                Key “{createdApiKey.name}” created — copy it now, it won't be shown again.
+              </p>
+              <p className="mt-1 font-mono text-xs break-all">{createdApiKey.token}</p>
+            </div>
+          ) : null}
+
+          {apiKeys.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No API keys yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Prefix</TableHead>
+                  <TableHead>Permissions</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last used</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {apiKeys.map((k) => (
+                  <ApiKeyRow key={k.id} apiKey={k} busy={busy} />
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -717,6 +807,132 @@ function MemberRow({ member, busy }: { member: MemberRowData; busy: boolean }) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      </TableCell>
+    </TableRow>
+  )
+}
+
+/** Mint a scoped API key: name + permission set + optional expiry. */
+function CreateApiKeyForm({
+  busy,
+  error,
+  disabled,
+}: {
+  busy: boolean
+  error: string | null
+  disabled: boolean
+}) {
+  return (
+    <Form method="post" className="flex flex-col gap-3 rounded-lg border p-4">
+      <input type="hidden" name="intent" value="create-api-key" />
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Label htmlFor="key-name">Name</Label>
+          <Input
+            id="key-name"
+            name="name"
+            placeholder="kasso ingestion agent"
+            required
+            aria-invalid={!!error}
+            disabled={busy || disabled}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="key-expiry">Expires</Label>
+          <select id="key-expiry" name="expiresInDays" disabled={busy || disabled} className={selectClass}>
+            <option value="0">Never</option>
+            <option value="30">30 days</option>
+            <option value="90">90 days</option>
+            <option value="365">1 year</option>
+          </select>
+        </div>
+        <Button type="submit" disabled={busy || disabled}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+          Create key
+        </Button>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-muted-foreground text-xs">Permissions</Label>
+        <PermissionPicker selected={[]} disabled={busy || disabled} />
+      </div>
+      {error ? (
+        <p role="alert" className="text-destructive text-sm">
+          {error}
+        </p>
+      ) : null}
+    </Form>
+  )
+}
+
+type ApiKeyRowData = {
+  id: string
+  name: string
+  prefix: string
+  permissions: string[]
+  status: "active" | "expired" | "revoked"
+  lastUsedAt: string | Date | null
+  expiresAt: string | Date | null
+}
+
+const statusVariant: Record<ApiKeyRowData["status"], "default" | "secondary" | "outline"> = {
+  active: "default",
+  expired: "outline",
+  revoked: "secondary",
+}
+
+/** A single API key row with an inline revoke confirmation. */
+function ApiKeyRow({ apiKey, busy }: { apiKey: ApiKeyRowData; busy: boolean }) {
+  const submit = useSubmit()
+  const fmtDate = (d: string | Date | null) =>
+    d ? new Date(d as string).toLocaleDateString() : "—"
+  return (
+    <TableRow>
+      <TableCell className="font-medium">{apiKey.name}</TableCell>
+      <TableCell>
+        <code className="font-mono text-xs">{apiKey.prefix}…</code>
+      </TableCell>
+      <TableCell className="text-muted-foreground max-w-[16rem] text-xs">
+        {apiKey.permissions.join(", ") || "—"}
+      </TableCell>
+      <TableCell>
+        <Badge variant={statusVariant[apiKey.status]}>{apiKey.status}</Badge>
+      </TableCell>
+      <TableCell className="text-muted-foreground text-xs">{fmtDate(apiKey.lastUsedAt)}</TableCell>
+      <TableCell className="text-right whitespace-nowrap">
+        {apiKey.status === "revoked" ? (
+          <span className="text-muted-foreground text-xs">—</span>
+        ) : (
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={
+                <Button variant="ghost" size="sm" className="text-destructive" disabled={busy}>
+                  <Trash2 className="size-3.5" />
+                  Revoke
+                </Button>
+              }
+            />
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Revoke “{apiKey.name}”?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  The key stops working immediately. Any agent using it will start getting 401s.
+                  This can't be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  onClick={() =>
+                    submit({ intent: "revoke-api-key", keyId: apiKey.id }, { method: "post" })
+                  }
+                >
+                  Revoke
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </TableCell>
     </TableRow>
   )
