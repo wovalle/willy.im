@@ -1,7 +1,9 @@
+import { and, eq } from "drizzle-orm"
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { emailOTP } from "better-auth/plugins/email-otp"
 import { jwt } from "better-auth/plugins/jwt"
+import { organization } from "better-auth/plugins/organization"
 import { passkey } from "@better-auth/passkey"
 import { oauthProvider } from "@better-auth/oauth-provider"
 import { Resend } from "resend"
@@ -27,17 +29,44 @@ function renderOtpEmail(baseUrl: string, email: string, otp: string) {
   }
 }
 
+const WORKSPACES_CLAIM = "https://willy.im/workspaces"
+
+/**
+ * The workspaces (organizations) the user belongs to *within one application*,
+ * with their role. Scoped by organization.applicationId so a consumer only ever
+ * sees its own tenants. Consumers map role -> permissions via packages/rbac.
+ */
+async function workspaceClaimsFor(db: BaseServiceContext["db"], userId: string, app?: string) {
+  if (!app) return []
+  return db
+    .select({
+      id: schema.organization.id,
+      slug: schema.organization.slug,
+      name: schema.organization.name,
+      role: schema.member.role,
+    })
+    .from(schema.member)
+    .innerJoin(schema.organization, eq(schema.member.organizationId, schema.organization.id))
+    .where(and(eq(schema.member.userId, userId), eq(schema.organization.applicationId, app)))
+}
+
 export function createAuthService(context: BaseServiceContext) {
   const env = context.getAppEnv()
   const isProd = env.APP_ENV === "production"
   const url = new URL(env.BETTER_AUTH_URL)
+
+  // In dev, trust common localhost ports so a default `npm run dev` (5173) works
+  // even if BETTER_AUTH_URL points elsewhere. Prod trusts only its own origin.
+  const trustedOrigins = isProd
+    ? [url.origin]
+    : [...new Set([url.origin, "http://localhost:5173", "http://localhost:9100"])]
 
   return betterAuth({
     appName: "willy.im",
     basePath: "/auth",
     baseURL: url.origin,
     secret: env.BETTER_AUTH_SECRET,
-    trustedOrigins: [url.origin],
+    trustedOrigins,
     database: drizzleAdapter(context.db, { provider: "sqlite", schema }),
     session: {
       expiresIn: 60 * 60 * 24 * 30, // 30 days
@@ -65,6 +94,19 @@ export function createAuthService(context: BaseServiceContext) {
         rpID: url.hostname,
         origin: url.origin,
       }),
+      // Workspaces = organizations, each scoped to one application via
+      // applicationId. Membership + roles + invitations come for free; consumer
+      // apps map roles -> permissions locally via packages/rbac.
+      organization({
+        allowUserToCreateOrganization: true,
+        schema: {
+          organization: {
+            additionalFields: {
+              applicationId: { type: "string", required: false, input: true },
+            },
+          },
+        },
+      }),
       // OIDC signing keys for id_tokens issued by the OAuth provider.
       jwt(),
       // Turns willy.im into an OAuth 2.1 / OIDC provider so other apps can
@@ -73,6 +115,16 @@ export function createAuthService(context: BaseServiceContext) {
         loginPage: "/login",
         consentPage: "/consent",
         storeClientSecret: "hashed",
+        // We serve the RFC 8414 root metadata ourselves (routes/well-known/*),
+        // so silence Better Auth's "ensure it exists" startup warnings.
+        silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
+        // Each OAuth client is tagged with metadata.app (its application key).
+        // We surface only that application's workspaces + roles as a claim.
+        customIdTokenClaims: async ({ user, metadata }) => {
+          const app = (metadata as { app?: string } | undefined)?.app
+          const workspaces = await workspaceClaimsFor(context.db, user.id, app)
+          return workspaces.length ? { [WORKSPACES_CLAIM]: workspaces } : {}
+        },
       }),
     ],
   })

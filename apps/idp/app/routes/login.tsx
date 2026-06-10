@@ -1,8 +1,8 @@
 import { useState } from "react"
-import { useNavigate } from "react-router"
 import { Fingerprint, Loader2, Mail } from "lucide-react"
 
 import { authClient } from "~/lib/auth-client"
+import { clientLog } from "~/lib/log"
 import { Button } from "~/components/ui/button"
 import {
   Card,
@@ -21,7 +21,6 @@ export function meta() {
 type Step = "email" | "otp"
 
 export default function Login() {
-  const navigate = useNavigate()
   const [step, setStep] = useState<Step>("email")
   const [email, setEmail] = useState("")
   const [code, setCode] = useState("")
@@ -43,10 +42,13 @@ export default function Login() {
   // When an OIDC authorization is pending, the oauth-provider client attaches the
   // signed query to the sign-in request and the server returns a URL to resume the
   // flow (→ consent or back to the client). Honor it instead of going home.
+  // Full-document navigation (not RR navigate) so the just-set session cookie is
+  // sent on the destination request — a client transition races the cookie and
+  // bounces back to /login.
   function continueAfterSignIn(data: unknown) {
     const url = (data as { url?: string } | null)?.url
-    if (url) window.location.href = url
-    else navigate("/")
+    clientLog.info("signin.continue", { hasUrl: !!url, url, search: window.location.search || undefined })
+    window.location.assign(url ?? "/")
   }
 
   async function verifyCode(e: React.FormEvent) {
@@ -62,15 +64,31 @@ export default function Login() {
   async function signInWithPasskey() {
     setError(null)
     setPending("passkey")
+    clientLog.info("passkey.signin.start", {
+      origin: window.location.origin,
+      webauthnAvailable: typeof window.PublicKeyCredential !== "undefined",
+    })
     try {
       const res = await authClient.signIn.passkey()
+      clientLog.info("passkey.signin.result", {
+        hasData: !!res?.data,
+        data: res?.data,
+        error: res?.error ? { status: res.error.status, message: res.error.message } : null,
+      })
       if (res?.error) {
         setError(res.error.message ?? "Passkey sign-in failed.")
         return
       }
+      // Confirm a session actually exists before navigating (the real bug suspect).
+      const session = await authClient.getSession()
+      clientLog.info("passkey.signin.session", { hasSession: !!session?.data })
       continueAfterSignIn(res?.data)
-    } catch {
-      // User dismissed the system passkey prompt — leave the form as-is.
+    } catch (err) {
+      clientLog.error("passkey.signin.threw", {
+        name: err instanceof Error ? err.name : typeof err,
+        message: err instanceof Error ? err.message : String(err),
+      })
+      setError(err instanceof Error ? `Passkey sign-in failed: ${err.message}` : "Passkey sign-in failed.")
     } finally {
       setPending(null)
     }

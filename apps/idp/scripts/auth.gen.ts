@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { emailOTP } from "better-auth/plugins/email-otp"
 import { jwt } from "better-auth/plugins/jwt"
+import { organization } from "better-auth/plugins/organization"
 import { passkey } from "@better-auth/passkey"
 import { oauthProvider } from "@better-auth/oauth-provider"
 
@@ -21,6 +22,15 @@ export const auth = betterAuth({
   plugins: [
     emailOTP({ sendVerificationOTP: async () => {} }),
     passkey(),
+    organization({
+      schema: {
+        organization: {
+          additionalFields: {
+            applicationId: { type: "string", required: false, input: true },
+          },
+        },
+      },
+    }),
     jwt(),
     oauthProvider({ loginPage: "/login", consentPage: "/consent", storeClientSecret: "hashed" }),
   ],
