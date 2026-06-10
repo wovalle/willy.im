@@ -62,7 +62,8 @@ export async function addOrInviteAppMember(
     email: string
     role: AppRole
     permissions: string[]
-    invitedByUserId: string
+    // Null for machine callers (a scoped API key / superadmin token has no user).
+    invitedByUserId: string | null
     origin: string
   },
 ): Promise<InviteResult> {

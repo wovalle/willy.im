@@ -20,10 +20,15 @@ export default [
     route("account", "routes/app/account.tsx"),
   ]),
 
-  // Management API (Bearer ADMIN_API_TOKEN) + OpenAPI docs.
+  // Management API (Bearer: superadmin ADMIN_API_TOKEN or scoped API key) + docs.
+  // Cross-app reads (superadmin only):
   route("api/v1/applications", "routes/api/applications.ts"),
   route("api/v1/users", "routes/api/users.ts"),
   route("api/v1/workspaces", "routes/api/workspaces.ts"),
+  // Per-app writes/reads (scoped-key authenticated, permission-checked):
+  route("api/v1/apps/:app/members", "routes/api/apps.$app.members.ts"),
+  route("api/v1/apps/:app/members/:userId", "routes/api/apps.$app.members.$userId.ts"),
+  route("api/v1/apps/:app/workspaces", "routes/api/apps.$app.workspaces.ts"),
   route("api/openapi.json", "routes/api/openapi.ts"),
   route("api/docs", "routes/api/docs.tsx"),
 ] satisfies RouteConfig

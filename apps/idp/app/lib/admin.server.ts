@@ -260,3 +260,36 @@ export async function createWorkspace(
     body: { name: input.name, slug: input.slug, applicationId: input.applicationId },
   })
 }
+
+/**
+ * Session-less workspace creation for the management API. Better Auth's
+ * createOrganization needs a user session (it makes the caller the owner); a
+ * scoped API key has no user, so the row is inserted directly. Members are
+ * added separately (via the member endpoints / invitations). Slug must be
+ * unique across all apps (the organization table enforces it).
+ */
+export async function createWorkspaceForApp(
+  ctx: BaseServiceContext,
+  input: { app: string; name: string; slug: string },
+): Promise<{ id: string; name: string; slug: string } | { error: string }> {
+  const slug = input.slug.trim().toLowerCase()
+  const name = input.name.trim()
+  if (!name || !slug) return { error: "Workspace name and slug are required." }
+
+  const [clash] = await ctx.db
+    .select({ id: schema.organization.id })
+    .from(schema.organization)
+    .where(eq(schema.organization.slug, slug))
+    .limit(1)
+  if (clash) return { error: `Slug "${slug}" is already taken.` }
+
+  const id = crypto.randomUUID()
+  await ctx.db.insert(schema.organization).values({
+    id,
+    name,
+    slug,
+    applicationId: input.app,
+    createdAt: new Date(),
+  })
+  return { id, name, slug }
+}

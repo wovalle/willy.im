@@ -3,7 +3,14 @@ import { z } from "zod"
 import type { Route } from "./+types/openapi"
 import {
   ApplicationListSchema,
+  CreateWorkspaceInput,
+  InviteMemberInput,
+  InviteMemberResult,
+  MemberListSchema,
+  OkSchema,
+  UpdateMemberInput,
   UserListSchema,
+  WorkspaceCreatedSchema,
   WorkspaceListSchema,
 } from "~/lib/api-schemas"
 
@@ -20,6 +27,60 @@ const bearerGet = (summary: string, responseSchema: z.ZodType) => ({
       },
       "401": { description: "Missing or invalid bearer token" },
     },
+  },
+})
+
+/** Path param shared by all per-app operations. */
+const appParam = {
+  name: "app",
+  in: "path",
+  required: true,
+  description: "Application key (oauth_client.metadata.app).",
+  schema: { type: "string" },
+}
+const userIdParam = {
+  name: "userId",
+  in: "path",
+  required: true,
+  schema: { type: "string" },
+}
+
+const jsonContent = (schema: z.ZodType) => ({
+  content: { "application/json": { schema: json(schema) } },
+})
+
+const scopedGet = (summary: string, permission: string, responseSchema: z.ZodType) => ({
+  summary,
+  description: `Requires \`${permission}\` on the path app (or the superadmin token).`,
+  security: [{ bearerAuth: [] }],
+  parameters: [appParam],
+  responses: {
+    "200": { description: "OK", ...jsonContent(responseSchema) },
+    "401": { description: "Missing or invalid bearer token" },
+    "403": { description: "Key lacks the permission / is bound to another app" },
+  },
+})
+
+const scopedWrite = (opts: {
+  summary: string
+  permission: string
+  input?: z.ZodType
+  success: { code: "200" | "201"; schema: z.ZodType }
+  extraParams?: object[]
+}) => ({
+  summary: opts.summary,
+  description: `Requires \`${opts.permission}\` on the path app (or the superadmin token).`,
+  security: [{ bearerAuth: [] }],
+  parameters: [appParam, ...(opts.extraParams ?? [])],
+  ...(opts.input
+    ? { requestBody: { required: true, ...jsonContent(opts.input) } }
+    : {}),
+  responses: {
+    [opts.success.code]: { description: "OK", ...jsonContent(opts.success.schema) },
+    "401": { description: "Missing or invalid bearer token" },
+    "403": { description: "Key lacks the permission / is bound to another app" },
+    "409": { description: "Conflict (already a member, last admin, slug taken, …)" },
+    "422": { description: "Body failed validation" },
   },
 })
 
@@ -47,6 +108,40 @@ export async function loader({ context }: Route.LoaderArgs) {
       "/api/v1/applications": bearerGet("List registered applications", ApplicationListSchema),
       "/api/v1/users": bearerGet("List users", UserListSchema),
       "/api/v1/workspaces": bearerGet("List workspaces", WorkspaceListSchema),
+
+      "/api/v1/apps/{app}/members": {
+        get: scopedGet("List app members", "member:read", MemberListSchema),
+        post: scopedWrite({
+          summary: "Add or invite a member",
+          permission: "member:invite",
+          input: InviteMemberInput,
+          success: { code: "201", schema: InviteMemberResult },
+        }),
+      },
+      "/api/v1/apps/{app}/members/{userId}": {
+        patch: scopedWrite({
+          summary: "Update a member's role + permissions",
+          permission: "member:manage",
+          input: UpdateMemberInput,
+          success: { code: "200", schema: OkSchema },
+          extraParams: [userIdParam],
+        }),
+        delete: scopedWrite({
+          summary: "Remove a member",
+          permission: "member:manage",
+          success: { code: "200", schema: OkSchema },
+          extraParams: [userIdParam],
+        }),
+      },
+      "/api/v1/apps/{app}/workspaces": {
+        get: scopedGet("List app workspaces", "workspace:read", WorkspaceListSchema),
+        post: scopedWrite({
+          summary: "Create a workspace",
+          permission: "workspace:create",
+          input: CreateWorkspaceInput,
+          success: { code: "201", schema: WorkspaceCreatedSchema },
+        }),
+      },
     },
   }
   return Response.json(doc)
