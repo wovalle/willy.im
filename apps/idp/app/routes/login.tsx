@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { useNavigate } from "react-router"
 import { Fingerprint, Loader2, Mail } from "lucide-react"
 
 import { authClient } from "~/lib/auth-client"
@@ -22,7 +21,6 @@ export function meta() {
 type Step = "email" | "otp"
 
 export default function Login() {
-  const navigate = useNavigate()
   const [step, setStep] = useState<Step>("email")
   const [email, setEmail] = useState("")
   const [code, setCode] = useState("")
@@ -44,11 +42,13 @@ export default function Login() {
   // When an OIDC authorization is pending, the oauth-provider client attaches the
   // signed query to the sign-in request and the server returns a URL to resume the
   // flow (→ consent or back to the client). Honor it instead of going home.
+  // Full-document navigation (not RR navigate) so the just-set session cookie is
+  // sent on the destination request — a client transition races the cookie and
+  // bounces back to /login.
   function continueAfterSignIn(data: unknown) {
     const url = (data as { url?: string } | null)?.url
     clientLog.info("signin.continue", { hasUrl: !!url, url, search: window.location.search || undefined })
-    if (url) window.location.href = url
-    else navigate("/")
+    window.location.assign(url ?? "/")
   }
 
   async function verifyCode(e: React.FormEvent) {

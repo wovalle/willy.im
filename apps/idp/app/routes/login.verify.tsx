@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router"
+import { useSearchParams } from "react-router"
 import { Loader2 } from "lucide-react"
 
 import { authClient } from "~/lib/auth-client"
@@ -16,7 +16,6 @@ export function meta() {
  */
 export default function LoginVerify() {
   const [params] = useSearchParams()
-  const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
   const ran = useRef(false)
 
@@ -34,9 +33,10 @@ export default function LoginVerify() {
 
     authClient.signIn.emailOtp({ email, otp: code }).then(({ error }) => {
       if (error) setError(error.message ?? "This sign-in link is invalid or expired.")
-      else navigate("/")
+      // Full-document load so the session cookie is sent on the next request.
+      else window.location.assign("/")
     })
-  }, [email, code, navigate])
+  }, [email, code])
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6">
