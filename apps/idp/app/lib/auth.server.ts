@@ -74,7 +74,7 @@ export function createAuthService(context: BaseServiceContext) {
       // Short-lived signed session cookie so getSession can resolve without a DB
       // read right after sign-in (avoids a read-after-write race that bounced
       // freshly-logged-in users back to /login) — also fewer DB hits per request.
-      cookieCache: { enabled: true, maxAge: 5 * 60 },
+      cookieCache: { enabled: true, maxAge: 60 },
     },
     plugins: [
       emailOTP({

@@ -136,7 +136,7 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
             {applications.map((a) => (
               <TableRow
                 key={a.clientId}
-                onClick={() => navigate(`/admin/apps/${a.clientId}`)}
+                onClick={() => navigate(`/apps/${a.clientId}`)}
                 className="cursor-pointer"
               >
                 <TableCell className="font-medium">{a.name ?? "—"}</TableCell>

@@ -60,7 +60,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 
   if (intent === "delete") {
     await deleteApplication(context, clientId)
-    return redirect("/admin")
+    return redirect("/")
   }
 
   if (intent === "rotate") {
@@ -115,7 +115,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
     <div className="flex flex-col gap-6">
       {/* Breadcrumb */}
       <nav className="text-muted-foreground flex items-center gap-1.5 text-sm" aria-label="Breadcrumb">
-        <Link to="/admin" className="hover:text-foreground no-underline">
+        <Link to="/" className="hover:text-foreground no-underline">
           Applications
         </Link>
         <ChevronRight className="size-3.5" />

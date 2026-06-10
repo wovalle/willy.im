@@ -17,7 +17,18 @@ export function isAdminEmail(ctx: BaseServiceContext, email?: string | null) {
   return !!email && adminEmails(ctx).includes(email.toLowerCase())
 }
 
-/** UI gate: require a signed-in admin session, else redirect / 403. */
+/** UI gate: require any signed-in session, else redirect to /login. */
+export async function requireSession(
+  request: Request,
+  ctx: BaseServiceContext,
+  auth: AuthService,
+) {
+  const session = await auth.api.getSession({ headers: request.headers })
+  if (!session) throw redirect("/login")
+  return session
+}
+
+/** UI gate: require a signed-in admin. Non-admins go to their account, not a dead 403. */
 export async function requireAdminSession(
   request: Request,
   ctx: BaseServiceContext,
@@ -25,15 +36,9 @@ export async function requireAdminSession(
 ) {
   const session = await auth.api.getSession({ headers: request.headers })
   const admin = isAdminEmail(ctx, session?.user.email)
-  ctx.logger.info("admin.gate", {
-    hasSession: !!session,
-    email: session?.user.email,
-    admin,
-  })
+  ctx.logger.info("admin.gate", { hasSession: !!session, email: session?.user.email, admin })
   if (!session) throw redirect("/login")
-  if (!admin) {
-    throw new Response("Forbidden", { status: 403 })
-  }
+  if (!admin) throw redirect("/account")
   return session
 }
 

@@ -1,7 +1,6 @@
 import { type RouteConfig, index, route } from "@react-router/dev/routes"
 
 export default [
-  index("routes/index.tsx"),
   route("login", "routes/login.tsx"),
   route("login/verify", "routes/login.verify.tsx"),
   route("consent", "routes/consent.tsx"),
@@ -11,10 +10,13 @@ export default [
   route(".well-known/oauth-authorization-server/auth", "routes/well-known/oauth-as.ts"),
   route(".well-known/openid-configuration/auth", "routes/well-known/openid.ts"),
 
-  route("admin", "routes/admin/layout.tsx", [
-    index("routes/admin/applications.tsx"),
-    route("apps/:clientId", "routes/admin/app-detail.tsx"),
-    route("users", "routes/admin/users.tsx"),
+  // Authenticated console at the root. Admins see Applications + Users;
+  // everyone gets Account. Logged-out visitors are redirected to /login.
+  route("", "routes/app/layout.tsx", [
+    index("routes/app/applications.tsx"),
+    route("apps/:clientId", "routes/app/app-detail.tsx"),
+    route("users", "routes/app/users.tsx"),
+    route("account", "routes/app/account.tsx"),
   ]),
 
   // Management API (Bearer ADMIN_API_TOKEN) + OpenAPI docs.
