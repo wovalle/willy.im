@@ -57,6 +57,13 @@
       "when": 1781067648157,
       "tag": "0007_exotic_living_tribunal",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781068092007,
+      "tag": "0008_omniscient_joshua_kane",
+      "breakpoints": true
     }
   ]
 }

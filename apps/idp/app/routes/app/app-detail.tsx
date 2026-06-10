@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Form, Link, redirect, useActionData, useNavigation, useSubmit } from "react-router"
-import { ChevronRight, KeyRound, Loader2, Mail, Plus, ScrollText, Terminal, Trash2, Users } from "lucide-react"
+import { ChevronRight, KeyRound, Loader2, Mail, Plus, ScrollText, Terminal, Trash2, UserCog, Users } from "lucide-react"
 
 import type { Route } from "./+types/app-detail"
 import {
@@ -98,6 +98,39 @@ export async function action({ request, context, params }: Route.ActionArgs) {
       }
     await updateApplicationRedirectUris(request, auth, clientId, redirectUris)
     return { ok: "redirects" }
+  }
+
+  if (intent === "impersonate") {
+    const application = await getApplication(context, clientId)
+    const app = application?.app
+    if (!app) return { error: "This application has no app key yet." }
+    // Only superadmins can impersonate (the Better Auth admin role is
+    // superadmin-only — see auth.server.ts). We additionally scope the target to
+    // this app's members, so the action is app-bound and auditable.
+    const access = await requireAppPermission(request, context, auth, app, "user:impersonate")
+    if (!access.isSuperadmin) return { error: "Only superadmins can impersonate." }
+    const userId = String(form.get("userId") ?? "")
+    const appMembers = await listAppMembers(context, app)
+    const isMember = appMembers.find((m) => m.userId === userId)
+    if (!isMember) return { error: "That user isn't a member of this app." }
+
+    const res = await auth.api.impersonateUser({
+      body: { userId },
+      headers: request.headers,
+      asResponse: true,
+    })
+    await recordAudit(context, {
+      actor,
+      table: "user",
+      operation: "impersonate",
+      applicationId: app,
+      rowId: userId,
+      after: { email: isMember.email },
+    })
+    const headers = new Headers()
+    for (const cookie of res.headers.getSetCookie()) headers.append("set-cookie", cookie)
+    // Land on the impersonated user's account; a banner offers "stop".
+    return redirect("/account", { headers })
   }
 
   if (intent === "create-api-key" || intent === "revoke-api-key") {
@@ -873,6 +906,17 @@ function MemberRow({ member, busy }: { member: MemberRowData; busy: boolean }) {
           onClick={() => setEditing(true)}
         >
           Edit
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          title="Sign in as this user (superadmin only)"
+          onClick={() => submit({ intent: "impersonate", userId: member.userId }, { method: "post" })}
+        >
+          <UserCog className="size-3.5" />
+          Impersonate
         </Button>
         <AlertDialog>
           <AlertDialogTrigger

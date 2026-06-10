@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm"
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { admin } from "better-auth/plugins/admin"
 import { emailOTP } from "better-auth/plugins/email-otp"
 import { jwt } from "better-auth/plugins/jwt"
 import { organization } from "better-auth/plugins/organization"
@@ -56,6 +57,17 @@ export function createAuthService(context: BaseServiceContext) {
   const isProd = env.APP_ENV === "production"
   const url = new URL(env.BETTER_AUTH_URL)
 
+  // IdP-level superadmins (static allowlist). They — and only they — get the
+  // Better Auth `admin` role, which is what gates impersonation. App-scoped
+  // impersonation by app-admins is intentionally NOT enabled here: the admin
+  // plugin's authorization is global, so granting app-admins the role would let
+  // them call /auth/admin/impersonate-user directly and bypass app-scoping.
+  const superadminEmails = env.ADMIN_EMAILS.split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+  const isSuperadminEmail = (email?: string | null) =>
+    !!email && superadminEmails.includes(email.toLowerCase())
+
   // In dev, trust common localhost ports so a default `npm run dev` (5173) works
   // even if BETTER_AUTH_URL points elsewhere. Prod trusts only its own origin.
   const trustedOrigins = isProd
@@ -83,11 +95,28 @@ export function createAuthService(context: BaseServiceContext) {
           after: async (session) => {
             try {
               const [u] = await context.db
-                .select({ id: schema.user.id, email: schema.user.email })
+                .select({ id: schema.user.id, email: schema.user.email, role: schema.user.role })
                 .from(schema.user)
                 .where(eq(schema.user.id, session.userId))
                 .limit(1)
-              if (u) await claimInvitationsForUser(context, u)
+              if (u) {
+                await claimInvitationsForUser(context, u)
+                // Keep the Better Auth admin role in sync with the superadmin
+                // allowlist — idempotent, so existing admins are backfilled on
+                // their next sign-in (and a removed email loses the role).
+                const shouldBeAdmin = isSuperadminEmail(u.email)
+                if (shouldBeAdmin && u.role !== "admin") {
+                  await context.db
+                    .update(schema.user)
+                    .set({ role: "admin" })
+                    .where(eq(schema.user.id, u.id))
+                } else if (!shouldBeAdmin && u.role === "admin") {
+                  await context.db
+                    .update(schema.user)
+                    .set({ role: null })
+                    .where(eq(schema.user.id, u.id))
+                }
+              }
             } catch (err) {
               context.logger.warn("invites.claim_failed", {
                 userId: session.userId,
@@ -152,6 +181,10 @@ export function createAuthService(context: BaseServiceContext) {
           return workspaces.length ? { [WORKSPACES_CLAIM]: workspaces } : {}
         },
       }),
+      // Impersonation. Only users with the `admin` role (= superadmin allowlist,
+      // synced above) may impersonate; impersonation sessions last 1h. App-scoped
+      // impersonation by app-admins is enforced in our own route, not here.
+      admin({ impersonationSessionDuration: 60 * 60 }),
     ],
   })
 }

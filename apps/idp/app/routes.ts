@@ -4,6 +4,7 @@ export default [
   route("login", "routes/login.tsx"),
   route("login/verify", "routes/login.verify.tsx"),
   route("invite/accept", "routes/invite.accept.tsx"),
+  route("impersonation/stop", "routes/impersonation.stop.ts"),
   route("consent", "routes/consent.tsx"),
   route("auth/*", "routes/auth/auth.$.ts"),
 
