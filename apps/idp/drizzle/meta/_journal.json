@@ -50,6 +50,13 @@
       "when": 1781067098557,
       "tag": "0006_massive_gauntlet",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1781067648157,
+      "tag": "0007_exotic_living_tribunal",
+      "breakpoints": true
     }
   ]
 }

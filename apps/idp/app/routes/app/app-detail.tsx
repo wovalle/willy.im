@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Form, Link, redirect, useActionData, useNavigation, useSubmit } from "react-router"
-import { ChevronRight, KeyRound, Loader2, Mail, Plus, Terminal, Trash2, Users } from "lucide-react"
+import { ChevronRight, KeyRound, Loader2, Mail, Plus, ScrollText, Terminal, Trash2, Users } from "lucide-react"
 
 import type { Route } from "./+types/app-detail"
 import {
@@ -23,6 +23,7 @@ import {
   updateAppMember,
 } from "~/lib/members.server"
 import { createApiKey, listApiKeys, revokeApiKey } from "~/lib/api-keys.server"
+import { actorFromUser, listAuditForApp, recordAudit } from "~/lib/audit.server"
 import { APP_PERMISSIONS, type AppRole } from "~/lib/permissions"
 import { requireAppPermission } from "~/lib/security.server"
 import { firstInvalidRedirectUri, parseUriList } from "~/lib/validate"
@@ -56,18 +57,20 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   const application = await getApplication(context, params.clientId)
   if (!application) throw new Response("Application not found", { status: 404 })
   const app = application.app ?? ""
-  const [workspaces, people, members, invitations, apiKeys] = await Promise.all([
+  const [workspaces, people, members, invitations, apiKeys, audit] = await Promise.all([
     app ? listWorkspacesForApp(context, app) : Promise.resolve([]),
     app ? listPeopleForApp(context, app) : Promise.resolve([]),
     app ? listAppMembers(context, app) : Promise.resolve([]),
     app ? listAppInvitations(context, app) : Promise.resolve([]),
     app ? listApiKeys(context, app) : Promise.resolve([]),
+    app ? listAuditForApp(context, app, 20) : Promise.resolve([]),
   ])
-  return { application, workspaces, people, members, invitations, apiKeys }
+  return { application, workspaces, people, members, invitations, apiKeys, audit }
 }
 
 export async function action({ request, context, params }: Route.ActionArgs) {
-  await requireAdminSession(request, context, context.services.auth)
+  const session = await requireAdminSession(request, context, context.services.auth)
+  const actor = actorFromUser(session.user)
   const auth = context.services.auth
   const clientId = params.clientId
   const form = await request.formData()
@@ -114,20 +117,37 @@ export async function action({ request, context, params }: Route.ActionArgs) {
         Number.isFinite(days) && days > 0
           ? new Date(Date.now() + days * 24 * 60 * 60 * 1000)
           : null
-      const { token, prefix } = await createApiKey(context, {
+      const { id, token, prefix } = await createApiKey(context, {
         app,
         name,
         permissions,
         createdByUserId: access.user.id,
         expiresAt,
       })
+      await recordAudit(context, {
+        actor,
+        table: "api_key",
+        operation: "create",
+        applicationId: app,
+        rowId: id,
+        after: { name, permissions, expiresAt: expiresAt?.toISOString() ?? null },
+      })
       return { createdApiKey: { token, prefix, name } }
     }
 
     // revoke-api-key
     await requireAppPermission(request, context, auth, app, "apikey:revoke")
-    const res = await revokeApiKey(context, { app, id: String(form.get("keyId") ?? "") })
-    return "error" in res ? { error: res.error } : { ok: "api-key-revoked" }
+    const keyId = String(form.get("keyId") ?? "")
+    const res = await revokeApiKey(context, { app, id: keyId })
+    if ("error" in res) return { error: res.error }
+    await recordAudit(context, {
+      actor,
+      table: "api_key",
+      operation: "revoke",
+      applicationId: app,
+      rowId: keyId,
+    })
+    return { ok: "api-key-revoked" }
   }
 
   if (intent === "create-workspace") {
@@ -137,6 +157,13 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     if (!name || !slug) return { error: "Workspace name and slug are required.", field: "ws-name" }
     try {
       await createWorkspace(request, auth, { name, slug, applicationId: app })
+      await recordAudit(context, {
+        actor,
+        table: "organization",
+        operation: "create",
+        applicationId: app,
+        after: { name, slug },
+      })
       return { ok: "workspace" }
     } catch (e) {
       return { error: e instanceof Error ? e.message : "Couldn't create workspace.", field: "ws-name" }
@@ -178,27 +205,51 @@ export async function action({ request, context, params }: Route.ActionArgs) {
       })
       if (result.kind === "already-member")
         return { error: `${email} is already a member.`, field: "invite-email" }
+      await recordAudit(context, {
+        actor,
+        table: result.kind === "added" ? "application_member" : "application_invitation",
+        operation: "invite",
+        applicationId: app,
+        after: { email, role: readRole(form.get("role")), result: result.kind },
+      })
       return { ok: result.kind === "added" ? "member-added" : "member-invited" }
     }
 
     if (intent === "update-member") {
       await requireAppPermission(request, context, auth, app, "member:manage")
+      const userId = String(form.get("userId") ?? "")
+      const role = readRole(form.get("role"))
       const res = await updateAppMember(context, {
         app,
-        userId: String(form.get("userId") ?? ""),
-        role: readRole(form.get("role")),
+        userId,
+        role,
         permissions: readPermissions(),
       })
-      return "error" in res ? { error: res.error } : { ok: "member-updated" }
+      if ("error" in res) return { error: res.error }
+      await recordAudit(context, {
+        actor,
+        table: "application_member",
+        operation: "update",
+        applicationId: app,
+        rowId: userId,
+        after: { role, permissions: readPermissions() },
+      })
+      return { ok: "member-updated" }
     }
 
     if (intent === "remove-member") {
       await requireAppPermission(request, context, auth, app, "member:manage")
-      const res = await removeAppMember(context, {
-        app,
-        userId: String(form.get("userId") ?? ""),
+      const userId = String(form.get("userId") ?? "")
+      const res = await removeAppMember(context, { app, userId })
+      if ("error" in res) return { error: res.error }
+      await recordAudit(context, {
+        actor,
+        table: "application_member",
+        operation: "delete",
+        applicationId: app,
+        rowId: userId,
       })
-      return "error" in res ? { error: res.error } : { ok: "member-removed" }
+      return { ok: "member-removed" }
     }
 
     if (intent === "revoke-invite") {
@@ -222,7 +273,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 }
 
 export default function AppDetail({ loaderData }: Route.ComponentProps) {
-  const { application, workspaces, people, members, invitations, apiKeys } = loaderData
+  const { application, workspaces, people, members, invitations, apiKeys, audit } = loaderData
   const actionData = useActionData<typeof action>()
   const nav = useNavigation()
   const submit = useSubmit()
@@ -559,6 +610,54 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
                     <TableCell className="text-muted-foreground">{p.workspace}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{p.role}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Recent activity — audit trail */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ScrollText className="text-muted-foreground size-4" />
+            Recent activity
+          </CardTitle>
+          <CardDescription>
+            Privileged actions on this app — member, API key and workspace writes — with who did them.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {audit.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No activity yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Entity</TableHead>
+                  <TableHead>Actor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {audit.map((e) => (
+                  <TableRow key={e.id}>
+                    <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                      {new Date(`${e.createdAt.replace(" ", "T")}Z`).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{e.operation}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-xs">
+                      {e.tableName}
+                      {e.rowId ? <span className="opacity-60"> · {e.rowId.slice(0, 8)}…</span> : null}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-xs break-all">
+                      {e.actor ?? "—"}
                     </TableCell>
                   </TableRow>
                 ))}

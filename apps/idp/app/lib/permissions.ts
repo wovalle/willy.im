@@ -19,6 +19,7 @@ export const APP_PERMISSIONS = [
   "apikey:read",
   "apikey:create",
   "apikey:revoke",
+  "audit:read",
   "user:impersonate",
 ] as const
 

@@ -3,6 +3,7 @@ import { z } from "zod"
 import type { Route } from "./+types/openapi"
 import {
   ApplicationListSchema,
+  AuditListSchema,
   CreateWorkspaceInput,
   InviteMemberInput,
   InviteMemberResult,
@@ -141,6 +142,9 @@ export async function loader({ context }: Route.LoaderArgs) {
           input: CreateWorkspaceInput,
           success: { code: "201", schema: WorkspaceCreatedSchema },
         }),
+      },
+      "/api/v1/apps/{app}/audit": {
+        get: scopedGet("List recent audit entries", "audit:read", AuditListSchema),
       },
     },
   }

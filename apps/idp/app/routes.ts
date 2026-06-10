@@ -29,6 +29,7 @@ export default [
   route("api/v1/apps/:app/members", "routes/api/apps.$app.members.ts"),
   route("api/v1/apps/:app/members/:userId", "routes/api/apps.$app.members.$userId.ts"),
   route("api/v1/apps/:app/workspaces", "routes/api/apps.$app.workspaces.ts"),
+  route("api/v1/apps/:app/audit", "routes/api/apps.$app.audit.ts"),
   route("api/openapi.json", "routes/api/openapi.ts"),
   route("api/docs", "routes/api/docs.tsx"),
 ] satisfies RouteConfig

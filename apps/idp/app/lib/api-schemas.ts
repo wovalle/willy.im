@@ -72,3 +72,14 @@ export const WorkspaceCreatedSchema = z.object({
 })
 
 export const OkSchema = z.object({ ok: z.literal(true) })
+
+export const AuditEntrySchema = z.object({
+  id: z.number(),
+  tableName: z.string(),
+  operation: z.string(),
+  rowId: z.string().nullable(),
+  userId: z.string().nullable(),
+  actor: z.string().nullable(),
+  createdAt: z.string(),
+})
+export const AuditListSchema = z.object({ entries: z.array(AuditEntrySchema) })
