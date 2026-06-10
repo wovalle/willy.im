@@ -25,7 +25,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-  await requireAdminSession(request, context, context.services.auth)
+  const session = await requireAdminSession(request, context, context.services.auth)
   const form = await request.formData()
 
   const name = String(form.get("name") ?? "").trim()
@@ -43,6 +43,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     name,
     app,
     redirectUris,
+    creatorUserId: session.user.id,
   })
   return { created }
 }

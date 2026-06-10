@@ -7,6 +7,7 @@ import {
   createWorkspace,
   deleteApplication,
   getApplication,
+  listAppMembers,
   listPeopleForApp,
   listWorkspacesForApp,
   requireAdminSession,
@@ -44,11 +45,12 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   const application = await getApplication(context, params.clientId)
   if (!application) throw new Response("Application not found", { status: 404 })
   const app = application.app ?? ""
-  const [workspaces, people] = await Promise.all([
+  const [workspaces, people, members] = await Promise.all([
     app ? listWorkspacesForApp(context, app) : Promise.resolve([]),
     app ? listPeopleForApp(context, app) : Promise.resolve([]),
+    app ? listAppMembers(context, app) : Promise.resolve([]),
   ])
-  return { application, workspaces, people }
+  return { application, workspaces, people, members }
 }
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -99,7 +101,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 }
 
 export default function AppDetail({ loaderData }: Route.ComponentProps) {
-  const { application, workspaces, people } = loaderData
+  const { application, workspaces, people, members } = loaderData
   const actionData = useActionData<typeof action>()
   const nav = useNavigation()
   const submit = useSubmit()
@@ -246,15 +248,56 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
         </CardContent>
       </Card>
 
-      {/* People (derived) */}
+      {/* App access — admins & members (IdP-level) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="text-muted-foreground size-4" />
-            People with access
+            App access
           </CardTitle>
           <CardDescription>
-            Derived from workspace membership — these willy.im users can sign in to this app.
+            Admins manage this app in the IdP (all permissions); members get specific permissions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {members.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No app admins or members yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Permissions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {members.map((m) => (
+                  <TableRow key={m.userId}>
+                    <TableCell>{m.email}</TableCell>
+                    <TableCell>
+                      <Badge variant={m.role === "admin" ? "default" : "secondary"}>{m.role}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {m.role === "admin" ? "all" : (m.permissions ?? []).join(", ") || "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* People (derived from workspace membership) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="text-muted-foreground size-4" />
+            People in workspaces
+          </CardTitle>
+          <CardDescription>
+            Derived from workspace membership — these willy.im users belong to a workspace of this app.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -130,7 +130,7 @@ export async function createApplication(
   request: Request,
   ctx: BaseServiceContext,
   auth: AuthService,
-  input: { name: string; redirectUris: string[]; app: string },
+  input: { name: string; redirectUris: string[]; app: string; creatorUserId: string },
 ) {
   const created = (await auth.api.createOAuthClient({
     headers: request.headers,
@@ -143,7 +143,28 @@ export async function createApplication(
     .set({ metadata: { app: input.app } })
     .where(eq(schema.oauthClient.clientId, created.client_id))
 
+  // Whoever creates the app is its first admin.
+  await ctx.db
+    .insert(schema.applicationMember)
+    .values({ applicationId: input.app, userId: input.creatorUserId, role: "admin" })
+    .onConflictDoNothing()
+
   return { clientId: created.client_id, clientSecret: created.client_secret }
+}
+
+/** App admins/members (IdP-level), with their user details. */
+export async function listAppMembers(ctx: BaseServiceContext, app: string) {
+  return ctx.db
+    .select({
+      userId: schema.applicationMember.userId,
+      email: schema.user.email,
+      name: schema.user.name,
+      role: schema.applicationMember.role,
+      permissions: schema.applicationMember.permissions,
+    })
+    .from(schema.applicationMember)
+    .innerJoin(schema.user, eq(schema.applicationMember.userId, schema.user.id))
+    .where(eq(schema.applicationMember.applicationId, app))
 }
 
 /**
