@@ -71,6 +71,10 @@ export function createAuthService(context: BaseServiceContext) {
     session: {
       expiresIn: 60 * 60 * 24 * 30, // 30 days
       updateAge: 60 * 60 * 24, // refresh daily
+      // Short-lived signed session cookie so getSession can resolve without a DB
+      // read right after sign-in (avoids a read-after-write race that bounced
+      // freshly-logged-in users back to /login) — also fewer DB hits per request.
+      cookieCache: { enabled: true, maxAge: 5 * 60 },
     },
     plugins: [
       emailOTP({
