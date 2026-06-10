@@ -9,6 +9,7 @@ import { oauthProvider } from "@better-auth/oauth-provider"
 import { Resend } from "resend"
 
 import * as schema from "../db/schema"
+import { claimInvitationsForUser } from "./members.server"
 import type { BaseServiceContext } from "./services"
 
 /**
@@ -71,6 +72,31 @@ export function createAuthService(context: BaseServiceContext) {
     session: {
       expiresIn: 60 * 60 * 24 * 30, // 30 days
       updateAge: 60 * 60 * 24, // refresh daily
+    },
+    databaseHooks: {
+      // On every new session, claim any pending app invitations addressed to the
+      // signed-in user's (verified) email — INVITED → MEMBER. Runs regardless of
+      // entry path (console or OAuth), so membership exists before id_token claims
+      // resolve. Best-effort: a failure here must not block sign-in.
+      session: {
+        create: {
+          after: async (session) => {
+            try {
+              const [u] = await context.db
+                .select({ id: schema.user.id, email: schema.user.email })
+                .from(schema.user)
+                .where(eq(schema.user.id, session.userId))
+                .limit(1)
+              if (u) await claimInvitationsForUser(context, u)
+            } catch (err) {
+              context.logger.warn("invites.claim_failed", {
+                userId: session.userId,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
+          },
+        },
+      },
     },
     plugins: [
       emailOTP({

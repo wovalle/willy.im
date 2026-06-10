@@ -32,6 +32,42 @@ export const applicationMember = sqliteTable(
 
 export type ApplicationMember = typeof applicationMember.$inferSelect
 
+/**
+ * A pending invitation to become an app member. Only ever holds *pending*
+ * invites: the row is created when an email with no willy.im account is invited,
+ * and deleted once the invite is accepted (the application_member row becomes
+ * the record of truth) or revoked. Existing users are added directly to
+ * application_member and never get a row here. Conversion happens on the
+ * invitee's first sign-in, matched by their verified email.
+ */
+export const applicationInvitation = sqliteTable(
+  "application_invitation",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    applicationId: text("application_id").notNull(),
+    // Normalized (lowercase + trimmed) — the join key to a future user.
+    email: text("email").notNull(),
+    role: text("role", { enum: ["admin", "member"] }).notNull().default("member"),
+    permissions: text("permissions", { mode: "json" }).$type<string[]>().default([]),
+    // Unguessable token for the branded accept link. Not the security boundary;
+    // conversion is by verified-email match, the token only picks the landing UX.
+    token: text("token").notNull().unique(),
+    invitedByUserId: text("invited_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  },
+  // At most one live invite per app + email.
+  (t) => [uniqueIndex("application_invitation_app_email_uidx").on(t.applicationId, t.email)],
+)
+
+export type ApplicationInvitation = typeof applicationInvitation.$inferSelect
+
 /** Per-app, free-form user metadata (self-service profile fields an app cares about). */
 export const userAppMetadata = sqliteTable(
   "user_app_metadata",

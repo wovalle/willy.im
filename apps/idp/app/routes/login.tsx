@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useSearchParams } from "react-router"
 import { Fingerprint, Loader2, Mail } from "lucide-react"
 
 import { authClient } from "~/lib/auth-client"
@@ -21,8 +22,9 @@ export function meta() {
 type Step = "email" | "otp"
 
 export default function Login() {
+  const [searchParams] = useSearchParams()
   const [step, setStep] = useState<Step>("email")
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState(() => searchParams.get("email") ?? "")
   const [code, setCode] = useState("")
   const [pending, setPending] = useState<null | "email" | "otp" | "passkey">(null)
   const [error, setError] = useState<string | null>(null)

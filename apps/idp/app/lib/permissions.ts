@@ -15,7 +15,7 @@ export const APP_PERMISSIONS = [
   "workspace:delete",
   "member:read",
   "member:invite",
-  "member:remove",
+  "member:manage",
   "apikey:read",
   "apikey:create",
   "apikey:revoke",

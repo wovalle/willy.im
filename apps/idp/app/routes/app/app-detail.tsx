@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Form, Link, redirect, useActionData, useNavigation, useSubmit } from "react-router"
-import { ChevronRight, KeyRound, Loader2, Plus, Users } from "lucide-react"
+import { ChevronRight, KeyRound, Loader2, Mail, Plus, Trash2, Users } from "lucide-react"
 
 import type { Route } from "./+types/app-detail"
 import {
@@ -14,6 +14,16 @@ import {
   rotateApplicationSecret,
   updateApplicationRedirectUris,
 } from "~/lib/admin.server"
+import {
+  addOrInviteAppMember,
+  listAppInvitations,
+  removeAppMember,
+  resendInvitation,
+  revokeInvitation,
+  updateAppMember,
+} from "~/lib/members.server"
+import { APP_PERMISSIONS, type AppRole } from "~/lib/permissions"
+import { requireAppPermission } from "~/lib/security.server"
 import { firstInvalidRedirectUri, parseUriList } from "~/lib/validate"
 import {
   AlertDialog,
@@ -45,12 +55,13 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   const application = await getApplication(context, params.clientId)
   if (!application) throw new Response("Application not found", { status: 404 })
   const app = application.app ?? ""
-  const [workspaces, people, members] = await Promise.all([
+  const [workspaces, people, members, invitations] = await Promise.all([
     app ? listWorkspacesForApp(context, app) : Promise.resolve([]),
     app ? listPeopleForApp(context, app) : Promise.resolve([]),
     app ? listAppMembers(context, app) : Promise.resolve([]),
+    app ? listAppInvitations(context, app) : Promise.resolve([]),
   ])
-  return { application, workspaces, people, members }
+  return { application, workspaces, people, members, invitations }
 }
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -97,11 +108,86 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     }
   }
 
+  // Member-management intents. Resolved against the app's access catalog so
+  // app-admins (not just superadmin) can manage their own app once the route
+  // opens up; superadmin passes everything today.
+  if (
+    intent === "invite-member" ||
+    intent === "update-member" ||
+    intent === "remove-member" ||
+    intent === "revoke-invite" ||
+    intent === "resend-invite"
+  ) {
+    const application = await getApplication(context, clientId)
+    const app = application?.app
+    if (!app) return { error: "This application has no app key yet." }
+    const origin = new URL(request.url).origin
+
+    const readRole = (v: FormDataEntryValue | null): AppRole =>
+      String(v) === "admin" ? "admin" : "member"
+    const readPermissions = () =>
+      form.getAll("permissions").map(String).filter(Boolean)
+
+    if (intent === "invite-member") {
+      const access = await requireAppPermission(request, context, auth, app, "member:invite")
+      const email = String(form.get("email") ?? "").trim()
+      if (!email || !email.includes("@"))
+        return { error: "Enter a valid email address.", field: "invite-email" }
+      const result = await addOrInviteAppMember(context, {
+        app,
+        email,
+        role: readRole(form.get("role")),
+        permissions: readPermissions(),
+        invitedByUserId: access.user.id,
+        origin,
+      })
+      if (result.kind === "already-member")
+        return { error: `${email} is already a member.`, field: "invite-email" }
+      return { ok: result.kind === "added" ? "member-added" : "member-invited" }
+    }
+
+    if (intent === "update-member") {
+      await requireAppPermission(request, context, auth, app, "member:manage")
+      const res = await updateAppMember(context, {
+        app,
+        userId: String(form.get("userId") ?? ""),
+        role: readRole(form.get("role")),
+        permissions: readPermissions(),
+      })
+      return "error" in res ? { error: res.error } : { ok: "member-updated" }
+    }
+
+    if (intent === "remove-member") {
+      await requireAppPermission(request, context, auth, app, "member:manage")
+      const res = await removeAppMember(context, {
+        app,
+        userId: String(form.get("userId") ?? ""),
+      })
+      return "error" in res ? { error: res.error } : { ok: "member-removed" }
+    }
+
+    if (intent === "revoke-invite") {
+      await requireAppPermission(request, context, auth, app, "member:invite")
+      await revokeInvitation(context, { app, invitationId: String(form.get("invitationId") ?? "") })
+      return { ok: "invite-revoked" }
+    }
+
+    if (intent === "resend-invite") {
+      await requireAppPermission(request, context, auth, app, "member:invite")
+      const res = await resendInvitation(context, {
+        app,
+        invitationId: String(form.get("invitationId") ?? ""),
+        origin,
+      })
+      return "error" in res ? { error: res.error } : { ok: "invite-resent" }
+    }
+  }
+
   return { error: "Unknown action" }
 }
 
 export default function AppDetail({ loaderData }: Route.ComponentProps) {
-  const { application, workspaces, people, members } = loaderData
+  const { application, workspaces, people, members, invitations } = loaderData
   const actionData = useActionData<typeof action>()
   const nav = useNavigation()
   const submit = useSubmit()
@@ -112,6 +198,8 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
     actionData && "rotatedSecret" in actionData ? actionData.rotatedSecret : null
   const error = actionData && "error" in actionData ? actionData.error : null
   const field = actionData && "field" in actionData ? actionData.field : null
+  const memberError =
+    error && (field === "invite-email" || field === undefined || field === null) ? error : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -257,9 +345,18 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           </CardTitle>
           <CardDescription>
             Admins manage this app in the IdP (all permissions); members get specific permissions.
+            Inviting an existing willy.im user adds them right away; a new email gets an invitation.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-6">
+          <InviteMemberForm busy={busy} error={field === "invite-email" ? (error ?? null) : null} />
+
+          {memberError && field !== "invite-email" ? (
+            <p role="alert" className="text-destructive text-sm">
+              {memberError}
+            </p>
+          ) : null}
+
           {members.length === 0 ? (
             <p className="text-muted-foreground text-sm">No app admins or members yet.</p>
           ) : (
@@ -269,23 +366,76 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Permissions</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {members.map((m) => (
-                  <TableRow key={m.userId}>
-                    <TableCell>{m.email}</TableCell>
-                    <TableCell>
-                      <Badge variant={m.role === "admin" ? "default" : "secondary"}>{m.role}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      {m.role === "admin" ? "all" : (m.permissions ?? []).join(", ") || "—"}
-                    </TableCell>
-                  </TableRow>
+                  <MemberRow key={m.userId} member={m} busy={busy} />
                 ))}
               </TableBody>
             </Table>
           )}
+
+          {invitations.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <h3 className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
+                <Mail className="size-3.5" />
+                Pending invitations
+              </h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Permissions</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invitations.map((inv) => (
+                    <TableRow key={inv.id}>
+                      <TableCell>{inv.email}</TableCell>
+                      <TableCell>
+                        <Badge variant={inv.role === "admin" ? "default" : "secondary"}>
+                          {inv.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {inv.role === "admin" ? "all" : (inv.permissions ?? []).join(", ") || "—"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {new Date(inv.expiresAt as unknown as string).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        <Form method="post" className="inline">
+                          <input type="hidden" name="intent" value="resend-invite" />
+                          <input type="hidden" name="invitationId" value={inv.id} />
+                          <Button type="submit" variant="ghost" size="sm" disabled={busy}>
+                            Resend
+                          </Button>
+                        </Form>
+                        <Form method="post" className="inline">
+                          <input type="hidden" name="intent" value="revoke-invite" />
+                          <input type="hidden" name="invitationId" value={inv.id} />
+                          <Button
+                            type="submit"
+                            variant="ghost"
+                            size="sm"
+                            disabled={busy}
+                            className="text-destructive"
+                          >
+                            Revoke
+                          </Button>
+                        </Form>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -362,5 +512,212 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+const selectClass =
+  "border-input bg-transparent focus-visible:ring-ring/50 h-8 rounded-md border px-2 text-sm shadow-xs focus-visible:ring-[3px] focus-visible:outline-none"
+
+/** Checkboxes for the IdP management permission catalog (members only). */
+function PermissionPicker({
+  selected,
+  disabled,
+}: {
+  selected: string[]
+  disabled?: boolean
+}) {
+  return (
+    <fieldset className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
+      {APP_PERMISSIONS.map((p) => (
+        <label key={p} className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            name="permissions"
+            value={p}
+            defaultChecked={selected.includes(p)}
+            disabled={disabled}
+            className="size-3.5"
+          />
+          <span className="font-mono">{p}</span>
+        </label>
+      ))}
+    </fieldset>
+  )
+}
+
+/** Invite by email: existing user → added now; new email → invitation sent. */
+function InviteMemberForm({ busy, error }: { busy: boolean; error: string | null }) {
+  const [role, setRole] = useState<AppRole>("member")
+  return (
+    <Form method="post" className="flex flex-col gap-3 rounded-lg border p-4">
+      <input type="hidden" name="intent" value="invite-member" />
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Label htmlFor="invite-email">Email</Label>
+          <Input
+            id="invite-email"
+            name="email"
+            type="email"
+            placeholder="friend@example.com"
+            required
+            aria-invalid={!!error}
+            disabled={busy}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="invite-role">Role</Label>
+          <select
+            id="invite-role"
+            name="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value as AppRole)}
+            disabled={busy}
+            className={selectClass}
+          >
+            <option value="member">member</option>
+            <option value="admin">admin</option>
+          </select>
+        </div>
+        <Button type="submit" disabled={busy}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+          Invite
+        </Button>
+      </div>
+      {role === "member" ? (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-muted-foreground text-xs">Permissions</Label>
+          <PermissionPicker selected={[]} disabled={busy} />
+        </div>
+      ) : (
+        <p className="text-muted-foreground text-xs">Admins get all permissions.</p>
+      )}
+      {error ? (
+        <p role="alert" className="text-destructive text-sm">
+          {error}
+        </p>
+      ) : null}
+    </Form>
+  )
+}
+
+type MemberRowData = {
+  userId: string
+  email: string
+  name: string | null
+  role: "admin" | "member"
+  permissions: string[] | null
+}
+
+/** A member row, collapsible into an inline role + permission editor. */
+function MemberRow({ member, busy }: { member: MemberRowData; busy: boolean }) {
+  const submit = useSubmit()
+  const [editing, setEditing] = useState(false)
+  const [role, setRole] = useState<AppRole>(member.role)
+
+  if (editing) {
+    return (
+      <TableRow>
+        <TableCell colSpan={4}>
+          <Form
+            method="post"
+            className="flex flex-col gap-3 py-1"
+            onSubmit={() => setEditing(false)}
+          >
+            <input type="hidden" name="intent" value="update-member" />
+            <input type="hidden" name="userId" value={member.userId} />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">{member.email}</span>
+              <select
+                name="role"
+                value={role}
+                onChange={(e) => setRole(e.target.value as AppRole)}
+                disabled={busy}
+                className={selectClass}
+              >
+                <option value="member">member</option>
+                <option value="admin">admin</option>
+              </select>
+            </div>
+            {role === "member" ? (
+              <PermissionPicker selected={member.permissions ?? []} disabled={busy} />
+            ) : (
+              <p className="text-muted-foreground text-xs">Admins get all permissions.</p>
+            )}
+            <div className="flex gap-2">
+              <Button type="submit" size="sm" disabled={busy}>
+                Save
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setRole(member.role)
+                  setEditing(false)
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </Form>
+        </TableCell>
+      </TableRow>
+    )
+  }
+
+  return (
+    <TableRow>
+      <TableCell>{member.email}</TableCell>
+      <TableCell>
+        <Badge variant={member.role === "admin" ? "default" : "secondary"}>{member.role}</Badge>
+      </TableCell>
+      <TableCell className="text-muted-foreground text-xs">
+        {member.role === "admin" ? "all" : (member.permissions ?? []).join(", ") || "—"}
+      </TableCell>
+      <TableCell className="text-right whitespace-nowrap">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          onClick={() => setEditing(true)}
+        >
+          Edit
+        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger
+            render={
+              <Button variant="ghost" size="sm" className="text-destructive" disabled={busy}>
+                <Trash2 className="size-3.5" />
+                Remove
+              </Button>
+            }
+          />
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove {member.email}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                They lose access to this app in the IdP. You can re-invite them later.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={() =>
+                  submit(
+                    { intent: "remove-member", userId: member.userId },
+                    { method: "post" },
+                  )
+                }
+              >
+                Remove
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </TableCell>
+    </TableRow>
   )
 }
