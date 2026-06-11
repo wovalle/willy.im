@@ -9,11 +9,15 @@ import {
   getApplication,
   listAppMembers,
   listPeopleForApp,
+  listUserMetadataForApp,
   listWorkspacesForApp,
   requireAdminSession,
   rotateApplicationSecret,
+  setUserAppMetadata,
+  updateApplicationMetadata,
   updateApplicationRedirectUris,
 } from "~/lib/admin.server"
+import { appConfigSchema, parseJsonObject } from "~/lib/metadata"
 import {
   addOrInviteAppMember,
   listAppInvitations,
@@ -57,15 +61,16 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   const application = await getApplication(context, params.clientId)
   if (!application) throw new Response("Application not found", { status: 404 })
   const app = application.app ?? ""
-  const [workspaces, people, members, invitations, apiKeys, audit] = await Promise.all([
+  const [workspaces, people, members, invitations, apiKeys, audit, userMetadata] = await Promise.all([
     app ? listWorkspacesForApp(context, app) : Promise.resolve([]),
     app ? listPeopleForApp(context, app) : Promise.resolve([]),
     app ? listAppMembers(context, app) : Promise.resolve([]),
     app ? listAppInvitations(context, app) : Promise.resolve([]),
     app ? listApiKeys(context, app) : Promise.resolve([]),
     app ? listAuditForApp(context, app, 20) : Promise.resolve([]),
+    app ? listUserMetadataForApp(context, app) : Promise.resolve([]),
   ])
-  return { application, workspaces, people, members, invitations, apiKeys, audit }
+  return { application, workspaces, people, members, invitations, apiKeys, audit, userMetadata }
 }
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -218,10 +223,13 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     if (!app) return { error: "This application has no app key yet." }
     const origin = new URL(request.url).origin
 
+    const catalog = application?.permissions ?? []
     const readRole = (v: FormDataEntryValue | null): AppRole =>
       String(v) === "admin" ? "admin" : "member"
     const readPermissions = () =>
       form.getAll("permissions").map(String).filter(Boolean)
+    const readProductPermissions = () =>
+      form.getAll("productPermissions").map(String).filter(Boolean)
 
     if (intent === "invite-member") {
       const access = await requireAppPermission(request, context, auth, app, "member:invite")
@@ -233,6 +241,8 @@ export async function action({ request, context, params }: Route.ActionArgs) {
         email,
         role: readRole(form.get("role")),
         permissions: readPermissions(),
+        productPermissions: readProductPermissions(),
+        catalog,
         invitedByUserId: access.user.id,
         origin,
       })
@@ -257,6 +267,8 @@ export async function action({ request, context, params }: Route.ActionArgs) {
         userId,
         role,
         permissions: readPermissions(),
+        productPermissions: readProductPermissions(),
+        catalog,
       })
       if ("error" in res) return { error: res.error }
       await recordAudit(context, {
@@ -265,7 +277,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
         operation: "update",
         applicationId: app,
         rowId: userId,
-        after: { role, permissions: readPermissions() },
+        after: { role, permissions: readPermissions(), productPermissions: readProductPermissions() },
       })
       return { ok: "member-updated" }
     }
@@ -302,11 +314,54 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     }
   }
 
+  if (intent === "update-app-metadata") {
+    const application = await getApplication(context, clientId)
+    const app = application?.app
+    if (!app) return { error: "This application has no app key yet." }
+    await requireAppPermission(request, context, auth, app, "app:update")
+    const parsed = appConfigSchema.safeParse({
+      allow_signup: form.get("allow_signup") === "on",
+      permissions: parseUriList(String(form.get("permissions") ?? "")),
+    })
+    if (!parsed.success) return { error: "Invalid app settings.", field: "app-metadata" }
+    await updateApplicationMetadata(context, clientId, parsed.data)
+    await recordAudit(context, {
+      actor,
+      table: "oauth_client",
+      operation: "update",
+      applicationId: app,
+      after: parsed.data,
+    })
+    return { ok: "app-metadata" }
+  }
+
+  if (intent === "set-user-metadata") {
+    const application = await getApplication(context, clientId)
+    const app = application?.app
+    if (!app) return { error: "This application has no app key yet." }
+    await requireAppPermission(request, context, auth, app, "member:manage")
+    const userId = String(form.get("userId") ?? "")
+    const parsed = parseJsonObject(String(form.get("metadata") ?? "{}"))
+    if (!parsed.ok) return { error: parsed.error, field: `user-meta-${userId}` }
+    await setUserAppMetadata(context, app, userId, parsed.value)
+    await recordAudit(context, {
+      actor,
+      table: "user_app_metadata",
+      operation: "update",
+      applicationId: app,
+      rowId: userId,
+    })
+    return { ok: "user-metadata" }
+  }
+
   return { error: "Unknown action" }
 }
 
 export default function AppDetail({ loaderData }: Route.ComponentProps) {
-  const { application, workspaces, people, members, invitations, apiKeys, audit } = loaderData
+  const { application, workspaces, people, members, invitations, apiKeys, audit, userMetadata } =
+    loaderData
+  const catalog = application.permissions
+  const metaByUser = new Map(userMetadata.map((m) => [m.userId, m.data]))
   const actionData = useActionData<typeof action>()
   const nav = useNavigation()
   const submit = useSubmit()
@@ -457,6 +512,56 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
         </CardContent>
       </Card>
 
+      {/* App settings — product config stored in the app's metadata */}
+      <Card>
+        <CardHeader>
+          <CardTitle>App settings</CardTitle>
+          <CardDescription>
+            Product config the app declares. <code>allow_signup</code> gates open vs invite-only;
+            the permission catalog is what members can be granted and what's emitted downstream.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form method="post" className="flex flex-col gap-4">
+            <input type="hidden" name="intent" value="update-app-metadata" />
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="allow_signup"
+                defaultChecked={application.allowSignup}
+                disabled={busy}
+                className="size-4"
+              />
+              Allow open signup (otherwise invite-only)
+            </label>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="app-permissions">Product permission catalog</Label>
+              <textarea
+                id="app-permissions"
+                name="permissions"
+                rows={4}
+                defaultValue={application.permissions.join("\n")}
+                placeholder={"posts:read\nposts:write\nbilling:manage"}
+                disabled={busy}
+                className="border-input bg-transparent placeholder:text-muted-foreground focus-visible:ring-ring/50 min-h-16 w-full rounded-md border px-3 py-2 font-mono text-xs shadow-xs focus-visible:ring-[3px] focus-visible:outline-none"
+              />
+              <p className="text-muted-foreground text-xs">
+                One permission per line. Duplicates are removed.
+              </p>
+            </div>
+            {field === "app-metadata" && error ? (
+              <p role="alert" className="text-destructive text-sm">
+                {error}
+              </p>
+            ) : null}
+            <Button type="submit" variant="outline" disabled={busy} className="self-start">
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              Save app settings
+            </Button>
+          </Form>
+        </CardContent>
+      </Card>
+
       {/* App access — admins & members (IdP-level) */}
       <Card>
         <CardHeader>
@@ -470,7 +575,11 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          <InviteMemberForm busy={busy} error={field === "invite-email" ? (error ?? null) : null} />
+          <InviteMemberForm
+            busy={busy}
+            error={field === "invite-email" ? (error ?? null) : null}
+            catalog={catalog}
+          />
 
           {memberError && field !== "invite-email" ? (
             <p role="alert" className="text-destructive text-sm">
@@ -492,7 +601,13 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               </TableHeader>
               <TableBody>
                 {members.map((m) => (
-                  <MemberRow key={m.userId} member={m} busy={busy} />
+                  <MemberRow
+                    key={m.userId}
+                    member={m}
+                    busy={busy}
+                    catalog={catalog}
+                    userMetadata={metaByUser.get(m.userId) ?? {}}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -740,21 +855,27 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
 const selectClass =
   "border-input bg-transparent focus-visible:ring-ring/50 h-8 rounded-md border px-2 text-sm shadow-xs focus-visible:ring-[3px] focus-visible:outline-none"
 
-/** Checkboxes for the IdP management permission catalog (members only). */
+/** Checkboxes for a permission catalog. `name` is the form field the values post under. */
 function PermissionPicker({
+  name,
+  options,
   selected,
   disabled,
 }: {
+  name: string
+  options: readonly string[]
   selected: string[]
   disabled?: boolean
 }) {
+  if (options.length === 0)
+    return <p className="text-muted-foreground text-xs">No permissions declared.</p>
   return (
     <fieldset className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
-      {APP_PERMISSIONS.map((p) => (
+      {options.map((p) => (
         <label key={p} className="flex items-center gap-2 text-xs">
           <input
             type="checkbox"
-            name="permissions"
+            name={name}
             value={p}
             defaultChecked={selected.includes(p)}
             disabled={disabled}
@@ -768,7 +889,15 @@ function PermissionPicker({
 }
 
 /** Invite by email: existing user → added now; new email → invitation sent. */
-function InviteMemberForm({ busy, error }: { busy: boolean; error: string | null }) {
+function InviteMemberForm({
+  busy,
+  error,
+  catalog,
+}: {
+  busy: boolean
+  error: string | null
+  catalog: string[]
+}) {
   const [role, setRole] = useState<AppRole>("member")
   return (
     <Form method="post" className="flex flex-col gap-3 rounded-lg border p-4">
@@ -806,9 +935,15 @@ function InviteMemberForm({ busy, error }: { busy: boolean; error: string | null
         </Button>
       </div>
       {role === "member" ? (
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-muted-foreground text-xs">Permissions</Label>
-          <PermissionPicker selected={[]} disabled={busy} />
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-muted-foreground text-xs">IdP management permissions</Label>
+            <PermissionPicker name="permissions" options={APP_PERMISSIONS} selected={[]} disabled={busy} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-muted-foreground text-xs">Product permissions</Label>
+            <PermissionPicker name="productPermissions" options={catalog} selected={[]} disabled={busy} />
+          </div>
         </div>
       ) : (
         <p className="text-muted-foreground text-xs">Admins get all permissions.</p>
@@ -828,10 +963,21 @@ type MemberRowData = {
   name: string | null
   role: "admin" | "member"
   permissions: string[] | null
+  productPermissions: string[] | null
 }
 
-/** A member row, collapsible into an inline role + permission editor. */
-function MemberRow({ member, busy }: { member: MemberRowData; busy: boolean }) {
+/** A member row, collapsible into an inline role + permission + metadata editor. */
+function MemberRow({
+  member,
+  busy,
+  catalog,
+  userMetadata,
+}: {
+  member: MemberRowData
+  busy: boolean
+  catalog: string[]
+  userMetadata: Record<string, unknown>
+}) {
   const submit = useSubmit()
   const [editing, setEditing] = useState(false)
   const [role, setRole] = useState<AppRole>(member.role)
@@ -861,7 +1007,26 @@ function MemberRow({ member, busy }: { member: MemberRowData; busy: boolean }) {
               </select>
             </div>
             {role === "member" ? (
-              <PermissionPicker selected={member.permissions ?? []} disabled={busy} />
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-muted-foreground text-xs">IdP management permissions</Label>
+                  <PermissionPicker
+                    name="permissions"
+                    options={APP_PERMISSIONS}
+                    selected={member.permissions ?? []}
+                    disabled={busy}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-muted-foreground text-xs">Product permissions</Label>
+                  <PermissionPicker
+                    name="productPermissions"
+                    options={catalog}
+                    selected={member.productPermissions ?? []}
+                    disabled={busy}
+                  />
+                </div>
+              </div>
             ) : (
               <p className="text-muted-foreground text-xs">Admins get all permissions.</p>
             )}
@@ -882,6 +1047,26 @@ function MemberRow({ member, busy }: { member: MemberRowData; busy: boolean }) {
                 Cancel
               </Button>
             </div>
+          </Form>
+
+          {/* Per-app user metadata — free-form JSON */}
+          <Form method="post" className="mt-3 flex flex-col gap-1.5 border-t pt-3">
+            <input type="hidden" name="intent" value="set-user-metadata" />
+            <input type="hidden" name="userId" value={member.userId} />
+            <Label htmlFor={`meta-${member.userId}`} className="text-muted-foreground text-xs">
+              User metadata (JSON, for this app)
+            </Label>
+            <textarea
+              id={`meta-${member.userId}`}
+              name="metadata"
+              rows={3}
+              defaultValue={JSON.stringify(userMetadata, null, 2)}
+              disabled={busy}
+              className="border-input bg-transparent focus-visible:ring-ring/50 min-h-16 w-full rounded-md border px-3 py-2 font-mono text-xs shadow-xs focus-visible:ring-[3px] focus-visible:outline-none"
+            />
+            <Button type="submit" size="sm" variant="outline" disabled={busy} className="self-start">
+              Save metadata
+            </Button>
           </Form>
         </TableCell>
       </TableRow>
@@ -996,7 +1181,12 @@ function CreateApiKeyForm({
       </div>
       <div className="flex flex-col gap-1.5">
         <Label className="text-muted-foreground text-xs">Permissions</Label>
-        <PermissionPicker selected={[]} disabled={busy || disabled} />
+        <PermissionPicker
+          name="permissions"
+          options={APP_PERMISSIONS}
+          selected={[]}
+          disabled={busy || disabled}
+        />
       </div>
       {error ? (
         <p role="alert" className="text-destructive text-sm">

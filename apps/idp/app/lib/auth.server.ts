@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm"
+import { and, eq, gt, isNotNull } from "drizzle-orm"
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { admin } from "better-auth/plugins/admin"
@@ -11,6 +11,7 @@ import { Resend } from "resend"
 
 import * as schema from "../db/schema"
 import { claimInvitationsForUser } from "./members.server"
+import { parseAppMetadata } from "./metadata"
 import type { BaseServiceContext } from "./services"
 
 /**
@@ -32,6 +33,71 @@ function renderOtpEmail(baseUrl: string, email: string, otp: string) {
 }
 
 const WORKSPACES_CLAIM = "https://willy.im/workspaces"
+const PERMISSIONS_CLAIM = "https://willy.im/permissions"
+
+/**
+ * The caller's resolved *product* permissions for one app, read at token-mint
+ * (never from the client). Admins resolve to the app's full declared catalog;
+ * members to their granted product permissions (intersected with the catalog,
+ * in case the catalog shrank since the grant). App-scoped via metadata.app.
+ */
+async function productPermissionsFor(
+  db: BaseServiceContext["db"],
+  userId: string,
+  app: string | undefined,
+  catalog: string[],
+): Promise<string[]> {
+  if (!app) return []
+  const [member] = await db
+    .select({
+      role: schema.applicationMember.role,
+      productPermissions: schema.applicationMember.productPermissions,
+    })
+    .from(schema.applicationMember)
+    .where(
+      and(
+        eq(schema.applicationMember.applicationId, app),
+        eq(schema.applicationMember.userId, userId),
+      ),
+    )
+    .limit(1)
+  if (!member) return []
+  if (member.role === "admin") return catalog
+  const allowed = new Set(catalog)
+  return (member.productPermissions ?? []).filter((p) => allowed.has(p))
+}
+
+/**
+ * RFC 8693 `act` (actor) claim. If this user has an active impersonated session,
+ * the token is being minted on behalf of an admin acting as them — surface the
+ * admin so downstream apps can AUDIT it (they aren't expected to act on it). The
+ * claim hook has no session context, so we look up the live impersonated session
+ * by user; best-effort, audit-only.
+ */
+async function actClaimFor(
+  db: BaseServiceContext["db"],
+  userId: string,
+): Promise<{ sub: string; email?: string } | null> {
+  const [s] = await db
+    .select({ impersonatedBy: schema.session.impersonatedBy })
+    .from(schema.session)
+    .where(
+      and(
+        eq(schema.session.userId, userId),
+        isNotNull(schema.session.impersonatedBy),
+        gt(schema.session.expiresAt, new Date()),
+      ),
+    )
+    .limit(1)
+  const adminId = s?.impersonatedBy
+  if (!adminId) return null
+  const [admin] = await db
+    .select({ email: schema.user.email })
+    .from(schema.user)
+    .where(eq(schema.user.id, adminId))
+    .limit(1)
+  return { sub: adminId, ...(admin?.email ? { email: admin.email } : {}) }
+}
 
 /**
  * The workspaces (organizations) the user belongs to *within one application*,
@@ -176,9 +242,18 @@ export function createAuthService(context: BaseServiceContext) {
         // Each OAuth client is tagged with metadata.app (its application key).
         // We surface only that application's workspaces + roles as a claim.
         customIdTokenClaims: async ({ user, metadata }) => {
-          const app = (metadata as { app?: string } | undefined)?.app
-          const workspaces = await workspaceClaimsFor(context.db, user.id, app)
-          return workspaces.length ? { [WORKSPACES_CLAIM]: workspaces } : {}
+          const meta = parseAppMetadata(metadata)
+          const app = meta.app ?? undefined
+          const [workspaces, permissions, act] = await Promise.all([
+            workspaceClaimsFor(context.db, user.id, app),
+            productPermissionsFor(context.db, user.id, app, meta.permissions),
+            actClaimFor(context.db, user.id),
+          ])
+          return {
+            ...(workspaces.length ? { [WORKSPACES_CLAIM]: workspaces } : {}),
+            ...(permissions.length ? { [PERMISSIONS_CLAIM]: permissions } : {}),
+            ...(act ? { act } : {}),
+          }
         },
       }),
       // Impersonation. Only users with the `admin` role (= superadmin allowlist,

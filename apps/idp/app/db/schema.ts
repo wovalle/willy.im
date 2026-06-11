@@ -23,7 +23,13 @@ export const applicationMember = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     role: text("role", { enum: ["admin", "member"] }).notNull().default("member"),
+    // IdP-management permissions (what this principal may do *to the app in the
+    // IdP*). Distinct from productPermissions below.
     permissions: text("permissions", { mode: "json" }).$type<string[]>().default([]),
+    // The app's own product permissions, granted from the catalog the app
+    // declares in its metadata. Emitted downstream in the id_token; the app
+    // enforces them. Admins resolve to the full declared catalog.
+    productPermissions: text("product_permissions", { mode: "json" }).$type<string[]>().default([]),
     createdAt: integer("created_at", { mode: "timestamp" })
       .$defaultFn(() => new Date())
       .notNull(),
@@ -52,6 +58,8 @@ export const applicationInvitation = sqliteTable(
     email: text("email").notNull(),
     role: text("role", { enum: ["admin", "member"] }).notNull().default("member"),
     permissions: text("permissions", { mode: "json" }).$type<string[]>().default([]),
+    // Product-permission grants carried to the application_member row on accept.
+    productPermissions: text("product_permissions", { mode: "json" }).$type<string[]>().default([]),
     // Unguessable token for the branded accept link. Not the security boundary;
     // conversion is by verified-email match, the token only picks the landing UX.
     token: text("token").notNull().unique(),

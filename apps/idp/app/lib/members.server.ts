@@ -21,6 +21,21 @@ function sanitizePermissions(role: AppRole, permissions: string[]): AppPermissio
   )
 }
 
+/**
+ * Keep only product permissions the app actually declares (its `catalog`).
+ * Admins resolve to the full catalog downstream, so we don't store grants for
+ * them — the empty list keeps the column clean and unambiguous.
+ */
+function sanitizeProductPermissions(
+  role: AppRole,
+  productPermissions: string[],
+  catalog: string[],
+): string[] {
+  if (role === "admin") return []
+  const allowed = new Set(catalog)
+  return [...new Set(productPermissions)].filter((p) => allowed.has(p))
+}
+
 /** Look up a user by (normalized) email, or null. */
 export async function resolveUserByEmail(ctx: BaseServiceContext, email: string) {
   const [u] = await ctx.db
@@ -62,6 +77,9 @@ export async function addOrInviteAppMember(
     email: string
     role: AppRole
     permissions: string[]
+    // Product-permission grants + the app's declared catalog to validate against.
+    productPermissions?: string[]
+    catalog?: string[]
     // Null for machine callers (a scoped API key / superadmin token has no user).
     invitedByUserId: string | null
     origin: string
@@ -69,6 +87,11 @@ export async function addOrInviteAppMember(
 ): Promise<InviteResult> {
   const email = normalizeEmail(args.email)
   const permissions = sanitizePermissions(args.role, args.permissions)
+  const productPermissions = sanitizeProductPermissions(
+    args.role,
+    args.productPermissions ?? [],
+    args.catalog ?? [],
+  )
 
   const existing = await resolveUserByEmail(ctx, email)
   if (existing) {
@@ -89,6 +112,7 @@ export async function addOrInviteAppMember(
       userId: existing.id,
       role: args.role,
       permissions,
+      productPermissions,
     })
     return { kind: "added" }
   }
@@ -103,6 +127,7 @@ export async function addOrInviteAppMember(
       email,
       role: args.role,
       permissions,
+      productPermissions,
       token,
       invitedByUserId: args.invitedByUserId,
       expiresAt,
@@ -112,7 +137,7 @@ export async function addOrInviteAppMember(
         schema.applicationInvitation.applicationId,
         schema.applicationInvitation.email,
       ],
-      set: { role: args.role, permissions, token, expiresAt },
+      set: { role: args.role, permissions, productPermissions, token, expiresAt },
     })
 
   await sendInviteEmail(ctx, { origin: args.origin, email, token, app: args.app, role: args.role })
@@ -122,7 +147,14 @@ export async function addOrInviteAppMember(
 /** Update an existing member's role + permissions. Guards the last admin. */
 export async function updateAppMember(
   ctx: BaseServiceContext,
-  args: { app: string; userId: string; role: AppRole; permissions: string[] },
+  args: {
+    app: string
+    userId: string
+    role: AppRole
+    permissions: string[]
+    productPermissions?: string[]
+    catalog?: string[]
+  },
 ): Promise<{ ok: true } | { error: string }> {
   const [current] = await ctx.db
     .select({ role: schema.applicationMember.role })
@@ -143,7 +175,15 @@ export async function updateAppMember(
 
   await ctx.db
     .update(schema.applicationMember)
-    .set({ role: args.role, permissions: sanitizePermissions(args.role, args.permissions) })
+    .set({
+      role: args.role,
+      permissions: sanitizePermissions(args.role, args.permissions),
+      productPermissions: sanitizeProductPermissions(
+        args.role,
+        args.productPermissions ?? [],
+        args.catalog ?? [],
+      ),
+    })
     .where(
       and(
         eq(schema.applicationMember.applicationId, args.app),
@@ -288,6 +328,7 @@ export async function claimInvitationsForUser(
         userId: user.id,
         role: inv.role,
         permissions: inv.permissions ?? [],
+        productPermissions: inv.productPermissions ?? [],
       })
       .onConflictDoNothing()
     await ctx.db
