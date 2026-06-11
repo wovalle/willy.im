@@ -64,6 +64,25 @@ User (global)
   so they can fully replace app-managed key systems (e.g. tracker ingestion keys).
 - A management API (OpenAPI) so agents can provision users/workspaces on your behalf.
 
+### Custom domains (later)
+
+`idp.willy.im` is the one canonical IdP. A per-app domain (e.g. `idp.kasso.do`) is
+not a separate identity store — it's the same IdP served under the app's own
+origin so its session cookie is **first-party** (no third-party-cookie blocking).
+Two consequences to design around:
+
+- **Claim keys are host-independent.** Custom claims use a fixed `willy.im`
+  namespace (e.g. `https://willy.im/workspaces`), never the issuer host. The key
+  is a unique identifier, not a URL that's fetched, so it must stay constant no
+  matter which front served the token. Only `iss` reflects the actual host (clients
+  validate JWKS/discovery against it).
+- **Cookies are per-domain, so SSO is per-domain.** A session on `idp.kasso.do` is
+  a separate cookie jar from `idp.willy.im`. The trade is deliberate: first-party
+  cookies per app, at the cost of a shared sign-in not carrying across custom
+  domains. The OIDC flow itself is unaffected. To get both first-party cookies and
+  cross-app SSO later, the custom-domain fronts would silently authorize against a
+  canonical `idp.willy.im` session (`prompt=none`) — deferred.
+
 ## Status
 
 Built: email (magic-link + OTP) and passkey sign-in · OIDC provider
