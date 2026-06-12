@@ -14,7 +14,7 @@ management key with the `userkey:*` permissions.
 import { createIdpClient } from "@willyim/idp-client"
 
 const idp = createIdpClient({
-  issuer: "https://idp.willy.im",        // or a vanity domain: https://idp.kasso.do
+  issuer: "https://idp.willy.im/auth",   // note the /auth basepath; vanity: https://idp.kasso.do/auth
   clientId: env.IDP_CLIENT_ID,
   clientSecret: env.IDP_CLIENT_SECRET,
   app: "invoices",                       // your app key
@@ -48,7 +48,7 @@ genericOAuth({
     providerId: "willyim",
     clientId: env.IDP_CLIENT_ID,
     clientSecret: env.IDP_CLIENT_SECRET,
-    discoveryUrl: "https://idp.willy.im/.well-known/openid-configuration",
+    discoveryUrl: "https://idp.willy.im/auth/.well-known/openid-configuration",
     scopes: ["openid", "profile", "email"],
   }],
 })
@@ -91,6 +91,6 @@ if (!v.valid) return new Response("unauthorized", { status: 401 })
   token arrives over TLS directly from the token endpoint, authenticated with
   the client secret, where OIDC core makes verification optional. If you pass
   id_tokens across trust boundaries, verify against
-  `{issuer}/auth/oauth/jwks` first.
+  the `jwks_uri` from discovery (`{issuer}/jwks`) first.
 - Sessions stay yours. The IdP authenticates; your app authorizes and keeps
   its own cookie.
