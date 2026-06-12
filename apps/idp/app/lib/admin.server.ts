@@ -297,6 +297,7 @@ export async function listWorkspacesForApp(ctx: BaseServiceContext, app: string)
       id: schema.organization.id,
       name: schema.organization.name,
       slug: schema.organization.slug,
+      domain: schema.organization.domain,
       createdAt: schema.organization.createdAt,
     })
     .from(schema.organization)
@@ -370,10 +371,11 @@ export async function createWorkspace(
  */
 export async function createWorkspaceForApp(
   ctx: BaseServiceContext,
-  input: { app: string; name: string; slug: string },
-): Promise<{ id: string; name: string; slug: string } | { error: string }> {
+  input: { app: string; name: string; slug: string; domain?: string | null },
+): Promise<{ id: string; name: string; slug: string; domain: string | null } | { error: string }> {
   const slug = input.slug.trim().toLowerCase()
   const name = input.name.trim()
+  const domain = input.domain?.trim().toLowerCase() || null
   if (!name || !slug) return { error: "Workspace name and slug are required." }
 
   const [clash] = await ctx.db
@@ -388,8 +390,9 @@ export async function createWorkspaceForApp(
     id,
     name,
     slug,
+    domain,
     applicationId: input.app,
     createdAt: new Date(),
   })
-  return { id, name, slug }
+  return { id, name, slug, domain }
 }

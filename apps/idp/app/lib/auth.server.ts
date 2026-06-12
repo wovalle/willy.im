@@ -111,6 +111,7 @@ async function workspaceClaimsFor(db: BaseServiceContext["db"], userId: string, 
       id: schema.organization.id,
       slug: schema.organization.slug,
       name: schema.organization.name,
+      domain: schema.organization.domain,
       role: schema.member.role,
     })
     .from(schema.member)
@@ -273,6 +274,8 @@ export function createAuthService(context: BaseServiceContext, requestUrl?: stri
           organization: {
             additionalFields: {
               applicationId: { type: "string", required: false, input: true },
+              // Hostname this workspace is served on (multi-domain apps).
+              domain: { type: "string", required: false, input: true },
             },
           },
         },

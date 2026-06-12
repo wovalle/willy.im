@@ -78,6 +78,13 @@
       "when": 1781251252126,
       "tag": "0010_free_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1781251712282,
+      "tag": "0011_fixed_warhawk",
+      "breakpoints": true
     }
   ]
 }

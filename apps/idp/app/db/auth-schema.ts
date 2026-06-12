@@ -132,6 +132,7 @@ export const organization = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     metadata: text("metadata"),
     applicationId: text("application_id"),
+    domain: text("domain"),
   },
   (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
 );
