@@ -127,6 +127,30 @@ async function workspaceClaimsFor(db: BaseServiceContext["db"], userId: string, 
  * store are shared, so an account works on every domain; sessions and passkeys
  * are per-domain by design (no cross-domain SSO).
  */
+/**
+ * The custom claim set we attach for one app: workspaces + product permissions
+ * + the `act` impersonation marker. Shared by the id_token and userinfo hooks
+ * so downstream apps see the same picture wherever they look.
+ */
+async function customClaimsFor(
+  db: BaseServiceContext["db"],
+  userId: string,
+  metadata: unknown,
+): Promise<Record<string, unknown>> {
+  const meta = parseAppMetadata(metadata)
+  const app = meta.app ?? undefined
+  const [workspaces, permissions, act] = await Promise.all([
+    workspaceClaimsFor(db, userId, app),
+    productPermissionsFor(db, userId, app, meta.permissions),
+    actClaimFor(db, userId),
+  ])
+  return {
+    ...(workspaces.length ? { [WORKSPACES_CLAIM]: workspaces } : {}),
+    ...(permissions.length ? { [PERMISSIONS_CLAIM]: permissions } : {}),
+    ...(act ? { act } : {}),
+  }
+}
+
 export function createAuthService(context: BaseServiceContext, requestUrl?: string) {
   const env = context.getAppEnv()
   const isProd = env.APP_ENV === "production"
@@ -266,19 +290,31 @@ export function createAuthService(context: BaseServiceContext, requestUrl?: stri
         silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
         // Each OAuth client is tagged with metadata.app (its application key).
         // We surface only that application's workspaces + roles as a claim.
-        customIdTokenClaims: async ({ user, metadata }) => {
-          const meta = parseAppMetadata(metadata)
-          const app = meta.app ?? undefined
-          const [workspaces, permissions, act] = await Promise.all([
-            workspaceClaimsFor(context.db, user.id, app),
-            productPermissionsFor(context.db, user.id, app, meta.permissions),
-            actClaimFor(context.db, user.id),
-          ])
-          return {
-            ...(workspaces.length ? { [WORKSPACES_CLAIM]: workspaces } : {}),
-            ...(permissions.length ? { [PERMISSIONS_CLAIM]: permissions } : {}),
-            ...(act ? { act } : {}),
+        customIdTokenClaims: ({ user, metadata }) => customClaimsFor(context.db, user.id, metadata),
+        // Same claims on /userinfo, so apps that refresh server-side (or skip
+        // id_token parsing) still see workspaces/permissions and — crucially —
+        // a LIVE `act` claim while an admin is impersonating the user, letting
+        // them tag audit logs per-request. The hook has no client metadata, so
+        // resolve the client from the access token's client_id/azp/aud.
+        customUserInfoClaims: async ({ user, jwt }) => {
+          const raw = jwt.client_id ?? jwt.azp ?? jwt.aud
+          const clientId = Array.isArray(raw) ? raw[0] : raw
+          if (typeof clientId !== "string" || !clientId) return {}
+          const [client] = await context.db
+            .select({ metadata: schema.oauthClient.metadata })
+            .from(schema.oauthClient)
+            .where(eq(schema.oauthClient.clientId, clientId))
+            .limit(1)
+          if (!client) return {}
+          let metadata: unknown = client.metadata
+          if (typeof metadata === "string") {
+            try {
+              metadata = JSON.parse(metadata)
+            } catch {
+              return {}
+            }
           }
+          return customClaimsFor(context.db, user.id, metadata)
         },
       }),
       // Impersonation. Only users with the `admin` role (= superadmin allowlist,
