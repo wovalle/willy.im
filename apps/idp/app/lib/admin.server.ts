@@ -142,6 +142,28 @@ export async function updateApplicationMetadata(
     .where(eq(schema.oauthClient.clientId, clientId))
 }
 
+/**
+ * Replace an app's product-permission catalog, preserving the rest of its
+ * metadata (immutable `app` key + allow_signup). Catalog entries are the
+ * vocabulary members can be granted and what's emitted in the permissions claim.
+ */
+export async function updateApplicationPermissions(
+  ctx: BaseServiceContext,
+  clientId: string,
+  permissions: string[],
+) {
+  const [row] = await ctx.db
+    .select({ metadata: schema.oauthClient.metadata })
+    .from(schema.oauthClient)
+    .where(eq(schema.oauthClient.clientId, clientId))
+    .limit(1)
+  const meta = parseAppMetadata(unwrap(row?.metadata))
+  await ctx.db
+    .update(schema.oauthClient)
+    .set({ metadata: { app: meta.app, allow_signup: meta.allow_signup, permissions } })
+    .where(eq(schema.oauthClient.clientId, clientId))
+}
+
 /** Per-app free-form metadata stored for one user. */
 export async function getUserAppMetadata(
   ctx: BaseServiceContext,
