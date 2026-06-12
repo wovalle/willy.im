@@ -4,13 +4,18 @@ import type { Route } from "./+types/openapi"
 import {
   ApplicationListSchema,
   AuditListSchema,
+  CreateUserApiKeyInput,
   CreateWorkspaceInput,
   InviteMemberInput,
   InviteMemberResult,
   MemberListSchema,
   OkSchema,
   UpdateMemberInput,
+  UserApiKeyCreatedSchema,
+  UserApiKeyListSchema,
+  UserApiKeyValidationSchema,
   UserListSchema,
+  ValidateUserApiKeyInput,
   WorkspaceCreatedSchema,
   WorkspaceListSchema,
 } from "~/lib/api-schemas"
@@ -141,6 +146,35 @@ export async function loader({ context }: Route.LoaderArgs) {
           permission: "workspace:create",
           input: CreateWorkspaceInput,
           success: { code: "201", schema: WorkspaceCreatedSchema },
+        }),
+      },
+      "/api/v1/apps/{app}/user-keys": {
+        get: scopedGet(
+          "List end-user API keys (filter: ?userId=&workspaceId=)",
+          "userkey:read",
+          UserApiKeyListSchema,
+        ),
+        post: scopedWrite({
+          summary: "Mint an end-user API key (plaintext returned once)",
+          permission: "userkey:create",
+          input: CreateUserApiKeyInput,
+          success: { code: "201", schema: UserApiKeyCreatedSchema },
+        }),
+      },
+      "/api/v1/apps/{app}/user-keys/validate": {
+        post: scopedWrite({
+          summary: "Validate a presented end-user key (200 + valid discriminator)",
+          permission: "userkey:validate",
+          input: ValidateUserApiKeyInput,
+          success: { code: "200", schema: UserApiKeyValidationSchema },
+        }),
+      },
+      "/api/v1/apps/{app}/user-keys/{id}": {
+        delete: scopedWrite({
+          summary: "Revoke an end-user API key (idempotent)",
+          permission: "userkey:revoke",
+          success: { code: "200", schema: OkSchema },
+          extraParams: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         }),
       },
       "/api/v1/apps/{app}/audit": {

@@ -24,11 +24,11 @@ function base64url(bytes: Uint8Array): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
-/** A fresh opaque token, e.g. `wim_X8f...`. */
-function generateToken(): string {
+/** A fresh opaque token, e.g. `wim_X8f...`. Shared with user-api-keys (wak_). */
+export function generateToken(prefix: string = TOKEN_PREFIX): string {
   const bytes = new Uint8Array(TOKEN_BYTES)
   crypto.getRandomValues(bytes)
-  return TOKEN_PREFIX + base64url(bytes)
+  return prefix + base64url(bytes)
 }
 
 /** SHA-256(token) as lowercase hex. The stored lookup key. */

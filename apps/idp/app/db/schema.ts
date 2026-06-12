@@ -140,6 +140,53 @@ export const apiKey = sqliteTable(
 export type ApiKey = typeof apiKey.$inferSelect
 
 /**
+ * User API key: a credential an *app's end user* creates to call that app's own
+ * API (e.g. an invoices API token). The IdP centralizes minting and validation
+ * so consumer apps don't each grow their own key store: the app mints/validates
+ * via the management API (authenticated with its scoped `wim_` key), shows the
+ * plaintext to the user once, and never stores it. Distinct from `api_key`,
+ * which administers the IdP itself. Scopes come from the app's declared product
+ * permission catalog; the app enforces them.
+ */
+export const userApiKey = sqliteTable(
+  "user_api_key",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    // The app whose API this key calls — oauth_client.metadata.app.
+    applicationId: text("application_id").notNull(),
+    // The end user who owns the key.
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Optional tenant binding (organization.id) for workspace-scoped keys.
+    workspaceId: text("workspace_id"),
+    name: text("name").notNull(),
+    // First chars of the token (e.g. "wak_a1b2c3d4") for identification. Not secret.
+    prefix: text("prefix").notNull(),
+    // SHA-256 (hex) of the full token — the lookup key on validation.
+    keyHash: text("key_hash").notNull().unique(),
+    // Granted scopes, a subset of the app's product permission catalog.
+    scopes: text("scopes", { mode: "json" }).$type<string[]>().default([]),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+    // Null = never expires.
+    expiresAt: integer("expires_at", { mode: "timestamp" }),
+    // Set on revoke; kept (not deleted) for UI visibility + audit history.
+    revokedAt: integer("revoked_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("user_api_key_app_idx").on(t.applicationId),
+    index("user_api_key_app_user_idx").on(t.applicationId, t.userId),
+  ],
+)
+
+export type UserApiKey = typeof userApiKey.$inferSelect
+
+/**
  * Audit trail for privileged actions (member/key/workspace/app writes,
  * impersonation). Mirrors the D1 `audit_logs` shape from @willyim/drizzle-audit
  * (so it can be swapped to that package once it's a workspace dependency — same

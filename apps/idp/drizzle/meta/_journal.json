@@ -71,6 +71,13 @@
       "when": 1781145424467,
       "tag": "0009_amusing_garia",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1781251252126,
+      "tag": "0010_free_supernaut",
+      "breakpoints": true
     }
   ]
 }

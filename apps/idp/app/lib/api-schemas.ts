@@ -73,6 +73,48 @@ export const WorkspaceCreatedSchema = z.object({
 
 export const OkSchema = z.object({ ok: z.literal(true) })
 
+// --- End-user API keys (the app's own API credentials, stored in the IdP) ---
+
+export const UserApiKeySchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  workspaceId: z.string().nullable(),
+  name: z.string(),
+  prefix: z.string().describe("Non-secret token prefix (wak_…) for display"),
+  scopes: z.array(z.string()),
+  status: z.enum(["active", "expired", "revoked"]),
+  createdAt: z.string(),
+  lastUsedAt: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+})
+export const UserApiKeyListSchema = z.object({ keys: z.array(UserApiKeySchema) })
+
+export const CreateUserApiKeyInput = z.object({
+  userId: z.string().min(1),
+  name: z.string().min(1),
+  scopes: z.array(z.string()).default([]).describe("Subset of the app's product permission catalog"),
+  workspaceId: z.string().optional(),
+  expiresAt: z.iso.datetime().optional().describe("ISO 8601; omit for non-expiring"),
+})
+export const UserApiKeyCreatedSchema = z.object({
+  id: z.string(),
+  token: z.string().describe("Plaintext key — shown exactly once, never stored"),
+  prefix: z.string(),
+})
+
+export const ValidateUserApiKeyInput = z.object({ token: z.string().min(1) })
+export const UserApiKeyValidationSchema = z.union([
+  z.object({
+    valid: z.literal(true),
+    keyId: z.string(),
+    userId: z.string(),
+    workspaceId: z.string().nullable(),
+    scopes: z.array(z.string()),
+    name: z.string(),
+  }),
+  z.object({ valid: z.literal(false), reason: z.enum(["not_found", "revoked", "expired"]) }),
+])
+
 export const AuditEntrySchema = z.object({
   id: z.number(),
   tableName: z.string(),
