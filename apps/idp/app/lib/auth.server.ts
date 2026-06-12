@@ -118,10 +118,33 @@ async function workspaceClaimsFor(db: BaseServiceContext["db"], userId: string, 
     .where(and(eq(schema.member.userId, userId), eq(schema.organization.applicationId, app)))
 }
 
-export function createAuthService(context: BaseServiceContext) {
+/**
+ * Builds the auth service for one request. `requestUrl` makes the IdP
+ * host-aware: when the request arrives on a configured vanity domain
+ * (IDP_EXTRA_DOMAINS, e.g. idp.kasso.do CNAME'd here), that host becomes the
+ * issuer, cookie domain, and passkey RP — first-party auth per domain. Unknown
+ * hosts fall back to the canonical BETTER_AUTH_URL. Signing keys and the user
+ * store are shared, so an account works on every domain; sessions and passkeys
+ * are per-domain by design (no cross-domain SSO).
+ */
+export function createAuthService(context: BaseServiceContext, requestUrl?: string) {
   const env = context.getAppEnv()
   const isProd = env.APP_ENV === "production"
-  const url = new URL(env.BETTER_AUTH_URL)
+  const canonical = new URL(env.BETTER_AUTH_URL)
+
+  const extraHosts = env.IDP_EXTRA_DOMAINS.split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean)
+  const allowedHosts = new Set([canonical.host, ...extraHosts])
+
+  let url = canonical
+  if (requestUrl) {
+    const requested = new URL(requestUrl)
+    if (requested.host !== canonical.host && allowedHosts.has(requested.host.toLowerCase())) {
+      // Vanity domains are always https (Cloudflare/Caddy terminate TLS).
+      url = new URL(`https://${requested.host}`)
+    }
+  }
 
   // IdP-level superadmins (static allowlist). They — and only they — get the
   // Better Auth `admin` role, which is what gates impersonation. App-scoped
@@ -135,10 +158,12 @@ export function createAuthService(context: BaseServiceContext) {
     !!email && superadminEmails.includes(email.toLowerCase())
 
   // In dev, trust common localhost ports so a default `npm run dev` (5173) works
-  // even if BETTER_AUTH_URL points elsewhere. Prod trusts only its own origin.
+  // even if BETTER_AUTH_URL points elsewhere. Prod trusts the resolved origin
+  // plus every configured IdP domain (a vanity-domain login posts to itself).
+  const prodOrigins = [...new Set([url.origin, ...extraHosts.map((h) => `https://${h}`)])]
   const trustedOrigins = isProd
-    ? [url.origin]
-    : [...new Set([url.origin, "http://localhost:5173", "http://localhost:9100"])]
+    ? prodOrigins
+    : [...new Set([...prodOrigins, "http://localhost:5173", "http://localhost:9100"])]
 
   return betterAuth({
     appName: "willy.im",
