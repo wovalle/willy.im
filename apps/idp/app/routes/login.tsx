@@ -162,6 +162,7 @@ export default function Login() {
                   onChange={(e) => setCode(e.target.value)}
                   required
                   disabled={busy}
+                  autoFocus
                 />
               </div>
               <Button type="submit" disabled={busy || code.length < 6}>
@@ -183,7 +184,11 @@ export default function Login() {
             </form>
           )}
 
-          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+          {error ? (
+            <p className="text-destructive text-sm" role="alert">
+              {error}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
     </main>
