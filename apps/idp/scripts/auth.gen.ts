@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { admin } from "better-auth/plugins/admin"
 import { emailOTP } from "better-auth/plugins/email-otp"
 import { jwt } from "better-auth/plugins/jwt"
 import { organization } from "better-auth/plugins/organization"
@@ -27,11 +28,17 @@ export const auth = betterAuth({
         organization: {
           additionalFields: {
             applicationId: { type: "string", required: false, input: true },
+            // Hostname this workspace is served on (multi-domain apps, e.g.
+            // invoices.willy.im vs invoices.mellen.do). Emitted in claims so
+            // the app can resolve the active workspace from the request host.
+            domain: { type: "string", required: false, input: true },
           },
         },
       },
     }),
     jwt(),
     oauthProvider({ loginPage: "/login", consentPage: "/consent", storeClientSecret: "hashed" }),
+    // Impersonation (+ role/ban columns). Superadmin-scoped; see auth.server.ts.
+    admin(),
   ],
 })

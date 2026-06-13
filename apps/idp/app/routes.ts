@@ -3,6 +3,8 @@ import { type RouteConfig, index, route } from "@react-router/dev/routes"
 export default [
   route("login", "routes/login.tsx"),
   route("login/verify", "routes/login.verify.tsx"),
+  route("invite/accept", "routes/invite.accept.tsx"),
+  route("impersonation/stop", "routes/impersonation.stop.ts"),
   route("consent", "routes/consent.tsx"),
   route("auth/*", "routes/auth/auth.$.ts"),
 
@@ -19,10 +21,20 @@ export default [
     route("account", "routes/app/account.tsx"),
   ]),
 
-  // Management API (Bearer ADMIN_API_TOKEN) + OpenAPI docs.
+  // Management API (Bearer: superadmin ADMIN_API_TOKEN or scoped API key) + docs.
+  // Cross-app reads (superadmin only):
   route("api/v1/applications", "routes/api/applications.ts"),
   route("api/v1/users", "routes/api/users.ts"),
   route("api/v1/workspaces", "routes/api/workspaces.ts"),
+  // Per-app writes/reads (scoped-key authenticated, permission-checked):
+  route("api/v1/apps/:app/members", "routes/api/apps.$app.members.ts"),
+  route("api/v1/apps/:app/members/:userId", "routes/api/apps.$app.members.$userId.ts"),
+  route("api/v1/apps/:app/workspaces", "routes/api/apps.$app.workspaces.ts"),
+  route("api/v1/apps/:app/audit", "routes/api/apps.$app.audit.ts"),
+  // End-user API keys for the app's own API (minted + validated by the IdP):
+  route("api/v1/apps/:app/user-keys", "routes/api/apps.$app.user-keys.ts"),
+  route("api/v1/apps/:app/user-keys/validate", "routes/api/apps.$app.user-keys.validate.ts"),
+  route("api/v1/apps/:app/user-keys/:id", "routes/api/apps.$app.user-keys.$id.ts"),
   route("api/openapi.json", "routes/api/openapi.ts"),
   route("api/docs", "routes/api/docs.tsx"),
 ] satisfies RouteConfig

@@ -15,6 +15,10 @@
   "vars": {
     "APP_ENV": "production",
     "BETTER_AUTH_URL": "https://idp.willy.im",
+    // Vanity IdP hostnames also served by this worker (see docs/custom-domains.md).
+    // Each needs DNS/TLS: a custom-domain route below (zone on this account),
+    // Cloudflare for SaaS, or a Host-preserving reverse proxy.
+    "IDP_EXTRA_DOMAINS": "idp.kasso.do",
   },
   "d1_databases": [
     {

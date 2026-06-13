@@ -36,6 +36,55 @@
       "when": 1781062883979,
       "tag": "0004_clean_lightspeed",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781065501025,
+      "tag": "0005_normal_korath",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781067098557,
+      "tag": "0006_massive_gauntlet",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1781067648157,
+      "tag": "0007_exotic_living_tribunal",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781068092007,
+      "tag": "0008_omniscient_joshua_kane",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1781145424467,
+      "tag": "0009_amusing_garia",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1781251252126,
+      "tag": "0010_free_supernaut",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1781251712282,
+      "tag": "0011_fixed_warhawk",
+      "breakpoints": true
     }
   ]
 }

@@ -47,7 +47,7 @@ export default function LoginVerify() {
         </CardHeader>
         <CardContent>
           {error ? (
-            <p className="text-destructive text-sm">
+            <p className="text-destructive text-sm" role="alert">
               {error}{" "}
               <a href="/login" className="underline">
                 Try again

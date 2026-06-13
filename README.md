@@ -52,7 +52,36 @@ User (global)
 - **Identity + profile**: `id_token` claims + `userinfo`, plus a server-to-server
   profile API. A "Manage profile" link sends users to the IdP and back.
 - **Per-app workspace + role + permission claims**, scoped to the requesting app.
+  A user may belong to multiple workspaces in an app; tokens are always scoped to
+  one workspace — the app resolves which (via a `workspace_id` authorize param or
+  a post-login selection screen) before requesting the token.
+- **`permissions[]` claim**: a static catalog of permission strings declared by the
+  app. The IdP resolves each user's granted permissions and emits them as a
+  `permissions` array in the token. Apps enforce access against this list (see
+  `@willyim/rbac`).
+- **API keys** with scoped permissions — machine-readable keys the IdP issues on
+  behalf of a workspace or user. Carry the same `permissions[]` model as tokens,
+  so they can fully replace app-managed key systems (e.g. tracker ingestion keys).
 - A management API (OpenAPI) so agents can provision users/workspaces on your behalf.
+
+### Custom domains (later)
+
+`idp.willy.im` is the one canonical IdP. A per-app domain (e.g. `idp.kasso.do`) is
+not a separate identity store — it's the same IdP served under the app's own
+origin so its session cookie is **first-party** (no third-party-cookie blocking).
+Two consequences to design around:
+
+- **Claim keys are host-independent.** Custom claims use a fixed `willy.im`
+  namespace (e.g. `https://willy.im/workspaces`), never the issuer host. The key
+  is a unique identifier, not a URL that's fetched, so it must stay constant no
+  matter which front served the token. Only `iss` reflects the actual host (clients
+  validate JWKS/discovery against it).
+- **Cookies are per-domain, so SSO is per-domain.** A session on `idp.kasso.do` is
+  a separate cookie jar from `idp.willy.im`. The trade is deliberate: first-party
+  cookies per app, at the cost of a shared sign-in not carrying across custom
+  domains. The OIDC flow itself is unaffected. To get both first-party cookies and
+  cross-app SSO later, the custom-domain fronts would silently authorize against a
+  canonical `idp.willy.im` session (`prompt=none`) — deferred.
 
 ## Status
 
@@ -62,8 +91,8 @@ role claims · admin console (apps, users, workspaces, app detail) · read-only
 management API + OpenAPI · client-secret rotation.
 
 In progress: `rbac`-backed security context · app admins/members + invitations ·
-per-app user metadata · scoped API keys + write management API · audit ·
-impersonation.
+per-app user metadata · API keys with scoped permissions + write management API ·
+audit · impersonation.
 
 Later: centralized profile editing · custom domains (`idp.kasso.do`) · MFA ·
 Organizations tier · SAML / SCIM.

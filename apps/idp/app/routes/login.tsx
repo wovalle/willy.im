@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useSearchParams } from "react-router"
 import { Fingerprint, Loader2, Mail } from "lucide-react"
 
 import { authClient } from "~/lib/auth-client"
@@ -21,8 +22,9 @@ export function meta() {
 type Step = "email" | "otp"
 
 export default function Login() {
+  const [searchParams] = useSearchParams()
   const [step, setStep] = useState<Step>("email")
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState(() => searchParams.get("email") ?? "")
   const [code, setCode] = useState("")
   const [pending, setPending] = useState<null | "email" | "otp" | "passkey">(null)
   const [error, setError] = useState<string | null>(null)
@@ -160,6 +162,7 @@ export default function Login() {
                   onChange={(e) => setCode(e.target.value)}
                   required
                   disabled={busy}
+                  autoFocus
                 />
               </div>
               <Button type="submit" disabled={busy || code.length < 6}>
@@ -181,7 +184,11 @@ export default function Login() {
             </form>
           )}
 
-          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+          {error ? (
+            <p className="text-destructive text-sm" role="alert">
+              {error}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
     </main>

@@ -1,8 +1,9 @@
 import type { Route } from "./+types/users"
-import { listUsers, requireAdminToken } from "~/lib/admin.server"
+import { listUsers } from "~/lib/admin.server"
+import { requireSuperadminApi } from "~/lib/api-keys.server"
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  requireAdminToken(request, context)
+  await requireSuperadminApi(request, context)
   const users = await listUsers(context)
   return Response.json({
     users: users.map((u) => ({ ...u, createdAt: new Date(u.createdAt).toISOString() })),

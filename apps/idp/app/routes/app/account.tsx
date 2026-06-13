@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { useNavigate } from "react-router"
+import { useState } from "react"
+import { useNavigate, useRevalidator } from "react-router"
 import { Fingerprint, Loader2, Plus, Trash2 } from "lucide-react"
 
 import type { Route } from "./+types/account"
@@ -13,29 +13,25 @@ export function meta() {
   return [{ title: "Account · willy.im" }]
 }
 
-export async function loader({ request, context }: Route.LoaderArgs) {
-  const session = await requireSession(request, context, context.services.auth)
-  return { user: { name: session.user.name, email: session.user.email } }
-}
-
 type Passkey = { id: string; name?: string | null }
 
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const session = await requireSession(request, context, context.services.auth)
+  // Server-rendered: passkeys come from the loader (session-authenticated), not a
+  // client fetch. Add/delete still run client-side (WebAuthn), then revalidate.
+  const passkeys = (await context.services.auth.api.listPasskeys({
+    headers: request.headers,
+  })) as Passkey[]
+  return { user: { name: session.user.name, email: session.user.email }, passkeys }
+}
+
 export default function Account({ loaderData }: Route.ComponentProps) {
-  const { user } = loaderData
+  const { user, passkeys } = loaderData
   const navigate = useNavigate()
+  const revalidator = useRevalidator()
   const [pending, setPending] = useState<null | "signout" | "add" | string>(null)
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState("")
-  const [passkeys, setPasskeys] = useState<Passkey[] | null>(null)
-
-  async function refreshPasskeys() {
-    const { data } = await authClient.passkey.listUserPasskeys()
-    setPasskeys((data as Passkey[]) ?? [])
-  }
-
-  useEffect(() => {
-    refreshPasskeys()
-  }, [])
 
   async function signOut() {
     setPending("signout")
@@ -59,7 +55,7 @@ export default function Account({ loaderData }: Route.ComponentProps) {
         return
       }
       setName("")
-      await refreshPasskeys()
+      await revalidator.revalidate()
     } catch {
       // User dismissed the system prompt — nothing to report.
     } finally {
@@ -72,7 +68,7 @@ export default function Account({ loaderData }: Route.ComponentProps) {
     setPending(id)
     try {
       await authClient.passkey.deletePasskey({ id })
-      await refreshPasskeys()
+      await revalidator.revalidate()
     } finally {
       setPending(null)
     }
@@ -93,9 +89,7 @@ export default function Account({ loaderData }: Route.ComponentProps) {
           <CardDescription>Sign in without a code, using your device or password manager.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {passkeys === null ? (
-            <Loader2 className="text-muted-foreground size-4 animate-spin" />
-          ) : passkeys.length === 0 ? (
+          {passkeys.length === 0 ? (
             <p className="text-muted-foreground text-sm">No passkeys yet. Add one below.</p>
           ) : (
             <ul className="flex flex-col gap-1">
