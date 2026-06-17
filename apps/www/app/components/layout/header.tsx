@@ -21,6 +21,8 @@ export const Header = () => {
         key={link.url}
         to={link.url}
         className={cn("leading-10", { active: currentPathIsActive(link.url) })}
+        data-luchy-event="nav-click"
+        data-luchy-prop-destination={link.name.toLowerCase()}
       >
         {link.name}
       </Link>

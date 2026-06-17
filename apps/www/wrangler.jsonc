@@ -7,10 +7,16 @@
   "name": "willy-im",
   "compatibility_date": "2025-04-04",
   "main": "./workers/app.ts",
+  "build": {
+    "command": "npm run build",
+  },
   "observability": {
     "enabled": true,
   },
   "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["0 8 * * *"]
+  },
   "vars": {
     "BETTER_AUTH_URL": "https://willy.im",
     "STATIC_ACCOUNT_ID": "Hxi8enx9WfrmuFWw2u0lpVjOhG3ofHhZ",

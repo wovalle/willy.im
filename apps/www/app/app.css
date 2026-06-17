@@ -79,6 +79,12 @@
   --animate-ping-2s: ping 2s linear infinite;
 }
 
+/* Remove backtick pseudo-elements that @tailwindcss/typography adds around inline code */
+.prose :where(code)::before,
+.prose :where(code)::after {
+  content: none !important;
+}
+
 @layer base {
   :root {
     --default-text-color: var(--color-gray-700);

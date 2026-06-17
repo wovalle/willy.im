@@ -15,4 +15,11 @@ export default defineConfig({
     tsconfigPaths(),
     contentCollections(),
   ],
+  resolve: {
+    // better-auth's drizzle adapter is hoisted to the repo root while drizzle-orm
+    // lives in this app's node_modules; without deduping, Vite can't resolve the
+    // adapter's optional drizzle-orm peer and the SSR build fails to bundle
+    // better-auth (e.g. "BetterAuthError is not exported").
+    dedupe: ["drizzle-orm"],
+  },
 })

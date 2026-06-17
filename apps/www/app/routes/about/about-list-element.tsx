@@ -36,7 +36,7 @@ export const AboutListElement: FC<AboutListElementProps> = ({
           target="_blank"
           rel="noopener noreferrer"
           data-luchy-event="about-link-click"
-          data-luchy-event-data={url}
+          data-luchy-prop-url={url}
         >
           {title} <IconExternalLink className="ml-1 self-center" size="1em" />
         </Link>

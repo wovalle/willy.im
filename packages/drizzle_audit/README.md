@@ -5,7 +5,7 @@ Automatic audit logging for [Drizzle ORM](https://orm.drizzle.team). Supports Po
 ## Install
 
 ```bash
-npm install @wovalle/drizzle-audit
+npm install @willyim/drizzle-audit
 ```
 
 Peer dependencies: `drizzle-orm`. Optional: `drizzle-kit` (for CLI), `tsx` (for TS config files).
@@ -20,7 +20,7 @@ import {
   createAuditInstallSql,
   createAttachAuditTriggersSql,
   withAuditedTransaction,
-} from "@wovalle/drizzle-audit/postgres"
+} from "@willyim/drizzle-audit/postgres"
 
 // 1. Add to your Drizzle schema
 export const auditLogs = pgAuditLogTable()
@@ -43,13 +43,13 @@ await withAuditedTransaction(db, currentUser.id, async (tx) => {
 
 Postgres triggers capture full row snapshots (`old_data`/`new_data` as JSONB) automatically.
 
-### D1/SQLite — App-Level Wrapper (recommended)
+### D1/SQLite — App-Level Wrapper
 
 For D1 and SQLite, the `withAudit` wrapper is the simplest approach. No triggers, no context tables — it intercepts operations in your JS code where you already have the user session.
 
 ```ts
-import { d1AuditLogTable } from "@wovalle/drizzle-audit/d1"
-import { withAudit } from "@wovalle/drizzle-audit/d1-runtime"
+import { d1AuditLogTable } from "@willyim/drizzle-audit/d1"
+import { withAudit } from "@willyim/drizzle-audit/d1-runtime"
 
 // 1. Add to your schema
 export const auditLogs = d1AuditLogTable()
@@ -69,15 +69,17 @@ export const auditLogs = d1AuditLogTable()
 // 3. Use in your app (e.g. React Router action)
 const audit = withAudit(db, auditLogs, { userId: session.userId })
 
-audit.insert(users, { id: "u1", name: "Ada" })
-audit.update(users, eq(users.id, "u1"), { name: "Ada Lovelace" })
-audit.delete(users, eq(users.id, "u1"))
+await audit.insert(users, { id: "u1", name: "Ada" })
+await audit.update(users, eq(users.id, "u1"), { name: "Ada Lovelace" })
+await audit.delete(users, eq(users.id, "u1"))
 
 // Non-audited access is still available
 audit.db.select().from(users).all()
 ```
 
-The wrapper auto-detects primary keys from your Drizzle table schema, captures old/new row data, and runs each operation + audit log insert in a transaction.
+The wrapper auto-detects primary keys from your Drizzle table schema and captures old/new row data. All methods return Promises and must be awaited.
+
+> **Note:** Each operation runs the data write and audit log insert as sequential statements with no transaction wrapper. This is required for D1 compatibility (D1 does not support `BEGIN`/`COMMIT` over the prepared-statement API). In the unlikely event of a failure between the two writes, one may succeed without the other. If you need atomic auditing, use the trigger-based approach instead (see below).
 
 ### D1/SQLite — Triggers
 
@@ -90,7 +92,7 @@ import {
   d1AuditLogTable,
   d1AuditContextTable,
   withD1AuditedTransaction,
-} from "@wovalle/drizzle-audit/d1"
+} from "@willyim/drizzle-audit/d1"
 
 // 1. Add to schema
 export const auditLogs = d1AuditLogTable()
@@ -192,7 +194,7 @@ Your config file exports a `createAuditSql()` function:
 
 ```ts
 // app/db/audit.ts
-import { createAuditInstallSql, createAttachAuditTriggersSql } from "@wovalle/drizzle-audit/postgres"
+import { createAuditInstallSql, createAttachAuditTriggersSql } from "@willyim/drizzle-audit/postgres"
 
 export function createAuditSql() {
   return [
@@ -207,7 +209,7 @@ export function createAuditSql() {
 
 ## API Reference
 
-### `@wovalle/drizzle-audit/postgres`
+### `@willyim/drizzle-audit/postgres`
 
 | Export | Description |
 |---|---|
@@ -219,7 +221,13 @@ export function createAuditSql() {
 | `setAuditContext(db, actorId, contextKey?, options?)` | Set actor context in current transaction |
 | `withAuditedTransaction(db, actorId, callback, contextKey?, options?)` | Transaction wrapper with actor context |
 
-### `@wovalle/drizzle-audit/d1`
+### `@willyim/drizzle-audit`
+
+| Export | Description |
+|---|---|
+| `computeDiff(operation, oldData, newData, options?)` | Compute field-by-field diff from old/new row data |
+
+### `@willyim/drizzle-audit/d1`
 
 | Export | Description |
 |---|---|
@@ -234,7 +242,7 @@ export function createAuditSql() {
 | `clearD1AuditContext(db, options?)` | Clear actor from `_audit_context` table |
 | `withD1AuditedTransaction(db, actorId, callback, options?)` | Transaction wrapper with context management |
 
-### `@wovalle/drizzle-audit/d1-runtime`
+### `@willyim/drizzle-audit/d1-runtime`
 
 | Export | Description |
 |---|---|
@@ -245,6 +253,43 @@ export function createAuditSql() {
 - `.update(table, where, data)` — Fetch old rows, update, audit log (per row)
 - `.delete(table, where)` — Fetch old rows, delete, audit log (per row)
 - `.db` — Raw Drizzle instance for non-audited operations
+
+## Computing Diffs
+
+The `computeDiff` utility produces field-by-field diffs from the `old_data`/`new_data` captured by audit triggers. It works with any operation type and requires no Drizzle dependency.
+
+```ts
+import { computeDiff } from "@willyim/drizzle-audit"
+
+const result = computeDiff(
+  "UPDATE",
+  { id: "u1", name: "Ada", email: "ada@example.com" },
+  { id: "u1", name: "Ada Lovelace", email: "ada@example.com" },
+)
+// {
+//   operation: "UPDATE",
+//   changes: [{ field: "name", old: "Ada", new: "Ada Lovelace" }]
+// }
+```
+
+For INSERT operations, pass `null` as `oldData` — all fields appear as additions. For DELETE, pass `null` as `newData` — all fields appear as removals.
+
+```ts
+// INSERT — every field is new
+computeDiff("INSERT", null, { id: "u1", name: "Ada" })
+
+// DELETE — every field is removed
+computeDiff("DELETE", { id: "u1", name: "Ada" }, null)
+```
+
+By default, `updated_at` and `created_at` fields are excluded. Override with `ignoreFields`:
+
+```ts
+computeDiff("UPDATE", oldData, newData, { ignoreFields: [] }) // include all fields
+computeDiff("UPDATE", oldData, newData, { ignoreFields: ["internal_note"] })
+```
+
+Nested objects are compared using deep equality. Fields are returned sorted alphabetically.
 
 ## Audit Log Schema
 

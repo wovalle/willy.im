@@ -9,7 +9,7 @@ export const RepositoryCard: FC<{
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between">
-        <Link to={repo.url} target="_blank" className="font-medium" rel="noopener noreferrer">
+        <Link to={repo.url} target="_blank" className="font-medium" rel="noopener noreferrer" data-luchy-event="repo-click" data-luchy-prop-name={repo.name}>
           {repo.name}
         </Link>
         <div className="text-gray-500 dark:text-gray-400 flex items-center text-xs font-bold leading-6">

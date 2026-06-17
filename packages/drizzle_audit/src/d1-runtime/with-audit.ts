@@ -1,6 +1,8 @@
 import {
   getTableColumns,
   getTableName,
+  type InferInsertModel,
+  type InferSelectModel,
   type SQL,
 } from "drizzle-orm"
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
@@ -32,7 +34,6 @@ export type DrizzleSQLiteDb = {
   update: (table: any) => any
   delete: (table: any) => any
   select: (fields?: any) => any
-  transaction: (cb: (tx: any) => any) => any
 }
 
 function getPrimaryKeyColumn(table: SQLiteTable): SQLiteColumn | null {
@@ -56,8 +57,8 @@ export type AuditedDb<TDb extends DrizzleSQLiteDb> = {
    */
   insert: <T extends SQLiteTable>(
     table: T,
-    data: Record<string, unknown>,
-  ) => JsonValue
+    data: InferInsertModel<T>,
+  ) => Promise<InferSelectModel<T>>
 
   /**
    * Update rows matching `where` and log an UPDATE audit event for each affected row.
@@ -67,8 +68,8 @@ export type AuditedDb<TDb extends DrizzleSQLiteDb> = {
   update: <T extends SQLiteTable>(
     table: T,
     where: SQL,
-    data: Record<string, unknown>,
-  ) => JsonValue[]
+    data: Partial<InferInsertModel<T>>,
+  ) => Promise<InferSelectModel<T>[]>
 
   /**
    * Delete rows matching `where` and log a DELETE audit event for each affected row.
@@ -78,7 +79,7 @@ export type AuditedDb<TDb extends DrizzleSQLiteDb> = {
   delete: <T extends SQLiteTable>(
     table: T,
     where: SQL,
-  ) => JsonValue[]
+  ) => Promise<InferSelectModel<T>[]>
 
   /** Access the underlying db for non-audited operations. */
   db: TDb
@@ -86,8 +87,12 @@ export type AuditedDb<TDb extends DrizzleSQLiteDb> = {
 
 /**
  * Creates an audited wrapper around a Drizzle SQLite database.
- * Each insert/update/delete is wrapped in a transaction that atomically
- * writes to both the target table and the audit_logs table.
+ * Each insert/update/delete runs the data write and audit log insert sequentially
+ * as individual statements (no transaction). This works with both D1 (async) and
+ * better-sqlite3 (sync), but writes are best-effort: a failure between the data
+ * write and the audit insert can leave one without the other.
+ *
+ * For atomic auditing on D1, use the trigger-based approach from `@willyim/drizzle-audit/d1`.
  *
  * @param db - A Drizzle SQLite database instance (D1, better-sqlite3, libsql)
  * @param auditTable - The Drizzle table definition for audit_logs
@@ -101,13 +106,13 @@ export type AuditedDb<TDb extends DrizzleSQLiteDb> = {
  * const audited = withAudit(db, auditLogs, { userId: session.userId })
  *
  * // Audited insert
- * audited.insert(users, { id: "u1", name: "Ada" })
+ * await audited.insert(users, { id: "u1", name: "Ada" })
  *
  * // Audited update — captures old + new data
- * audited.update(users, eq(users.id, "u1"), { name: "Ada Lovelace" })
+ * await audited.update(users, eq(users.id, "u1"), { name: "Ada Lovelace" })
  *
  * // Audited delete — captures deleted data
- * audited.delete(users, eq(users.id, "u1"))
+ * await audited.delete(users, eq(users.id, "u1"))
  *
  * // Non-audited access
  * audited.db.select().from(users).all()
@@ -163,80 +168,58 @@ export function withAudit<TDb extends DrizzleSQLiteDb>(
   return {
     db,
 
-    insert(table, data) {
+    async insert(table, data) {
       const tableName = getTableName(table)
       const pk = getPrimaryKeyColumn(table)
 
-      return db.transaction((tx: any) => {
-        const [row] = tx.insert(table).values(data).returning().all()
-        const rowId = getRowId(row, pk)
+      const [row] = await (db as any).insert(table).values(data).returning().all()
+      const rowId = getRowId(row, pk)
 
-        tx.insert(auditTable)
-          .values(buildAuditRow(tableName, "INSERT", rowId, null, row))
+      await (db as any)
+        .insert(auditTable)
+        .values(buildAuditRow(tableName, "INSERT", rowId, null, row))
+        .run()
+
+      return row
+    },
+
+    async update(table, where, data) {
+      const tableName = getTableName(table)
+      const pk = getPrimaryKeyColumn(table)
+
+      const oldRows: JsonValue[] = await (db as any).select().from(table).where(where).all()
+      const newRows: JsonValue[] = await (db as any).update(table).set(data).where(where).returning().all()
+
+      for (let i = 0; i < newRows.length; i++) {
+        const oldRow = oldRows[i] ?? null
+        const newRow = newRows[i]!
+        const rowId = getRowId(newRow, pk)
+
+        await (db as any)
+          .insert(auditTable)
+          .values(buildAuditRow(tableName, "UPDATE", rowId, oldRow, newRow))
           .run()
+      }
 
-        return row
-      })
+      return newRows as any
     },
 
-    update(table, where, data) {
+    async delete(table, where) {
       const tableName = getTableName(table)
       const pk = getPrimaryKeyColumn(table)
 
-      return db.transaction((tx: any) => {
-        const oldRows: JsonValue[] = tx
-          .select()
-          .from(table)
-          .where(where)
-          .all()
+      const oldRows: JsonValue[] = await (db as any).select().from(table).where(where).all()
+      await (db as any).delete(table).where(where).run()
 
-        const newRows: JsonValue[] = tx
-          .update(table)
-          .set(data)
-          .where(where)
-          .returning()
-          .all()
+      for (const oldRow of oldRows) {
+        const rowId = getRowId(oldRow, pk)
+        await (db as any)
+          .insert(auditTable)
+          .values(buildAuditRow(tableName, "DELETE", rowId, oldRow, null))
+          .run()
+      }
 
-        for (let i = 0; i < newRows.length; i++) {
-          const oldRow = oldRows[i] ?? null
-          const newRow = newRows[i]!
-          const rowId = getRowId(newRow, pk)
-
-          tx.insert(auditTable)
-            .values(
-              buildAuditRow(tableName, "UPDATE", rowId, oldRow, newRow),
-            )
-            .run()
-        }
-
-        return newRows
-      })
-    },
-
-    delete(table, where) {
-      const tableName = getTableName(table)
-      const pk = getPrimaryKeyColumn(table)
-
-      return db.transaction((tx: any) => {
-        const oldRows: JsonValue[] = tx
-          .select()
-          .from(table)
-          .where(where)
-          .all()
-
-        tx.delete(table).where(where).run()
-
-        for (const oldRow of oldRows) {
-          const rowId = getRowId(oldRow, pk)
-          tx.insert(auditTable)
-            .values(
-              buildAuditRow(tableName, "DELETE", rowId, oldRow, null),
-            )
-            .run()
-        }
-
-        return oldRows
-      })
+      return oldRows as any
     },
   }
 }

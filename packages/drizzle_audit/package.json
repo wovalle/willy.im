@@ -1,6 +1,6 @@
 {
-  "name": "@wovalle/drizzle-audit",
-  "version": "0.3.0",
+  "name": "@willyim/drizzle-audit",
+  "version": "0.5.0",
   "description": "Lightweight audit logging for Drizzle ORM using database triggers (Postgres + D1/SQLite)",
   "type": "module",
   "main": "./dist/src/index.js",
@@ -42,25 +42,22 @@
     "directory": "packages/drizzle_audit"
   },
   "peerDependencies": {
-    "drizzle-kit": ">=0.20.0",
-    "drizzle-orm": ">=0.30.0",
-    "tsx": ">=4.0.0"
+    "drizzle-kit": ">=1.0.0-0",
+    "drizzle-orm": ">=1.0.0-0"
   },
   "peerDependenciesMeta": {
     "drizzle-kit": {
-      "optional": true
-    },
-    "tsx": {
       "optional": true
     }
   },
   "devDependencies": {
     "@types/node": "^22.19.7",
     "drizzle-orm": "^1.0.0-beta.15-859cf75",
+    "miniflare": "^4.20260410.0",
     "typescript": "^5.9.3"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   },
   "optionalDependencies": {
     "@electric-sql/pglite": "^0.3.16",

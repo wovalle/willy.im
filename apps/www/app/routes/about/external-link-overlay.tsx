@@ -4,7 +4,7 @@ import { AboutItemOverlay, type AboutItemOverlayProps } from "./about-item-overl
 
 type ExternalLinkOverlayProps = Omit<
   AboutItemOverlayProps,
-  "overlay" | "analyticsEvent" | "analyticsEventData" | "extraElementClassName"
+  "overlay" | "analyticsEvent" | "analyticsUrl" | "extraElementClassName"
 > & {
   url: string
   isHovered: boolean
@@ -36,7 +36,7 @@ export const ExternalLinkOverlay = ({
         window.open(url, "_blank", "noopener,noreferrer")
       }}
       analyticsEvent="external-link-click"
-      analyticsEventData={url}
+      analyticsUrl={url}
     >
       {children}
     </AboutItemOverlay>

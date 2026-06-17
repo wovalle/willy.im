@@ -17,7 +17,7 @@ export const PostCard: FC<{
       />
     ) : null}
     <div>
-      <Link to={url} className="border-transparent text-xl font-bold" rel="noopener noreferrer">
+      <Link to={url} className="border-transparent text-xl font-bold" rel="noopener noreferrer" data-luchy-event="post-click" data-luchy-prop-slug={url}>
         {title}
       </Link>
     </div>

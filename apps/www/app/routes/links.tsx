@@ -34,15 +34,18 @@ interface LinkButtonProps {
   icon?: React.ReactNode
   badge?: React.ReactNode
   isExternal?: boolean
+  analyticsLabel?: string
 }
 
-const LinkButton = ({ href, children, icon, badge, isExternal = true }: LinkButtonProps) => {
+const LinkButton = ({ href, children, icon, badge, isExternal = true, analyticsLabel }: LinkButtonProps) => {
   return (
     <a
       href={href}
       target={isExternal ? "_blank" : undefined}
       rel={isExternal ? "noopener noreferrer" : undefined}
       className="group relative flex w-full max-w-sm items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white/80 px-6 py-4 text-gray-900 shadow-lg backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-gray-200/50 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-100 dark:hover:shadow-gray-800/50"
+      data-luchy-event="link-page-click"
+      data-luchy-prop-platform={analyticsLabel}
     >
       <div className="flex items-center gap-3">
         {icon && (
@@ -149,6 +152,7 @@ export default function Links() {
                 icon={link.icon}
                 badge={link.badge}
                 isExternal={link.isExternal}
+                analyticsLabel={link.label.toLowerCase()}
               >
                 {link.label}
               </LinkButton>
@@ -166,6 +170,8 @@ export default function Links() {
               rel="noopener noreferrer"
               aria-label={`${name} profile`}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/60 text-gray-600 shadow-lg backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:bg-white/80 hover:text-gray-900 dark:bg-gray-800/60 dark:text-gray-400 dark:hover:bg-gray-700/80 dark:hover:text-gray-100"
+              data-luchy-event="link-page-social-click"
+              data-luchy-prop-platform={name.toLowerCase()}
             >
               <Icon size="1.2em" aria-hidden />
             </a>
