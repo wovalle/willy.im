@@ -199,7 +199,9 @@ test("withAudit handles multi-row update", () => {
 
 test("withAudit with workspace_id", () => {
   const sqlite = new Database(":memory:")
-  const auditLogsWithWs = d1AuditLogTable({ workspaceIdColumn: "workspace_id" })
+  const auditLogsWithWs = d1AuditLogTable({
+    contextColumns: [{ column: "workspace_id" }],
+  })
   const db = drizzle({ client: sqlite, schema: { auditLogs: auditLogsWithWs, users } })
 
   try {
@@ -224,7 +226,7 @@ test("withAudit with workspace_id", () => {
 
     const audited = withAudit(db, auditLogsWithWs, {
       userId: "user_1",
-      workspaceId: "ws_1",
+      context: { workspace_id: "ws_1" },
     })
     audited.insert(users, { id: "u1", name: "Ada" })
 

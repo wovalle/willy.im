@@ -230,7 +230,9 @@ test("writes without audit context produce audit rows with user_id = NULL", asyn
 
 test("workspace_id column and context are stored when enabled", async () => {
   const client = new PGlite()
-  const auditLogsWithWorkspace = pgAuditLogTable({ workspaceIdColumn: "workspace_id" })
+  const auditLogsWithWorkspace = pgAuditLogTable({
+    contextColumns: [{ column: "workspace_id" }],
+  })
   const db = drizzle({
     client,
     schema: {
@@ -242,7 +244,7 @@ test("workspace_id column and context are stored when enabled", async () => {
 
   try {
     await client.exec(
-      createAuditInstallSql({ workspaceIdColumn: "workspace_id" }),
+      createAuditInstallSql({ contextColumns: [{ column: "workspace_id" }] }),
     )
     await client.exec(`
       CREATE TABLE users (
@@ -261,7 +263,7 @@ test("workspace_id column and context are stored when enabled", async () => {
         await tx.insert(users).values({ id: "u1", name: "Alice" })
       },
       "app.user_id",
-      { workspaceId: "ws_1" },
+      { context: { "app.workspace_id": "ws_1" } },
     )
 
     const logs = await db.select().from(auditLogsWithWorkspace)
@@ -282,9 +284,11 @@ test("workspace_id column and context are stored when enabled", async () => {
   }
 })
 
-test("custom workspace column name uses matching context key", async () => {
+test("custom context column name uses matching session key", async () => {
   const client = new PGlite()
-  const auditLogsWithTenant = pgAuditLogTable({ workspaceIdColumn: "tenant_id" })
+  const auditLogsWithTenant = pgAuditLogTable({
+    contextColumns: [{ column: "tenant_id" }],
+  })
   const db = drizzle({
     client,
     schema: {
@@ -295,7 +299,7 @@ test("custom workspace column name uses matching context key", async () => {
 
   try {
     await client.exec(
-      createAuditInstallSql({ workspaceIdColumn: "tenant_id" }),
+      createAuditInstallSql({ contextColumns: [{ column: "tenant_id" }] }),
     )
     await client.exec(`
       CREATE TABLE users (
@@ -307,7 +311,7 @@ test("custom workspace column name uses matching context key", async () => {
       createAttachAuditTriggersSql([{ table: "users" }]),
     )
 
-    // Use workspaceContextKey matching the trigger's "app.tenant_id"
+    // sessionKey defaults to "app.tenant_id"
     await withAuditedTransaction(
       db,
       "user_1",
@@ -315,7 +319,7 @@ test("custom workspace column name uses matching context key", async () => {
         await tx.insert(users).values({ id: "u1", name: "Alice" })
       },
       "app.user_id",
-      { workspaceId: "tenant_abc", workspaceContextKey: "app.tenant_id" },
+      { context: { "app.tenant_id": "tenant_abc" } },
     )
 
     const logs = await db.select().from(auditLogsWithTenant)
@@ -399,45 +403,6 @@ test("generic contextColumns populate and stay NULL without context", async () =
     assert.equal(last.workspace_id, null)
     assert.equal(last.tenant_id, null)
     assert.equal(last.request_id, null)
-  } finally {
-    await client.close()
-  }
-})
-
-test("deprecated workspaceIdColumn matches contextColumns equivalent", async () => {
-  const client = new PGlite()
-  const auditLogsDeprecated = pgAuditLogTable({ workspaceIdColumn: "workspace_id" })
-  const db = drizzle({
-    client,
-    schema: { auditLogs: auditLogsDeprecated, users },
-  })
-
-  try {
-    // Install via the deprecated alias.
-    await client.exec(createAuditInstallSql({ workspaceIdColumn: "workspace_id" }))
-    await client.exec(`
-      CREATE TABLE users (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL
-      );
-    `)
-    await client.exec(createAttachAuditTriggersSql([{ table: "users" }]))
-
-    // Drive it with the new generic `context` option.
-    await withAuditedTransaction(
-      db,
-      "user_1",
-      async (tx) => {
-        await tx.insert(users).values({ id: "u1", name: "Alice" })
-      },
-      "app.user_id",
-      { context: { "app.workspace_id": "ws_42" } },
-    )
-
-    const logs = await db.select().from(auditLogsDeprecated)
-    assert.equal(logs.length, 1)
-    assert.equal(logs[0]?.user_id, "user_1")
-    assert.equal((logs[0] as Record<string, unknown>).workspace_id, "ws_42")
   } finally {
     await client.close()
   }

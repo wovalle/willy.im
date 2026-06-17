@@ -134,9 +134,6 @@ type AuditContextColumn = {
 }
 ```
 
-> The legacy `workspaceIdColumn` / `workspaceId` options still work as a
-> **deprecated** alias for a single `{ column: "workspace_id" }` context column.
-
 ### Postgres
 
 ```ts
@@ -219,7 +216,6 @@ export function createAuditSql() {
 | `createAttachAuditTriggerSql(target, options?)` | SQL to attach audit trigger to one table |
 | `createAttachAuditTriggersSql(targets, options?)` | Same, for multiple tables |
 | `createAuditAddContextColumnsSql(options)` | SQL to add context columns + regenerate trigger on existing install |
-| `createAuditAddWorkspaceColumnSql(options)` | _Deprecated_ — thin wrapper over `createAuditAddContextColumnsSql` |
 | `setAuditContext(db, actorId, contextKey?, options?)` | Set actor context in current transaction |
 | `withAuditedTransaction(db, actorId, callback, contextKey?, options?)` | Transaction wrapper with actor context |
 
@@ -291,6 +287,27 @@ CREATE TABLE audit_logs (
 | **User context** | Native session vars | Available in JS | `_audit_context` table |
 | **Bypass risk** | Low (DB-level) | Medium (must use wrapper) | Low (DB-level) |
 | **Best for** | Postgres apps | D1/Cloudflare Workers | SQLite apps needing DB-level guarantees |
+
+## Migrating from 0.2.x → 0.3.0
+
+The `workspace_id`-specific options were removed in favor of the generic
+[Context Columns](#context-columns) API. Mechanical replacements:
+
+| Removed | Replacement |
+|---|---|
+| `pgAuditLogTable({ workspaceIdColumn: "workspace_id" })` | `pgAuditLogTable({ contextColumns: [{ column: "workspace_id" }] })` |
+| `d1AuditLogTable({ workspaceIdColumn: "workspace_id" })` | `d1AuditLogTable({ contextColumns: [{ column: "workspace_id" }] })` |
+| `createAuditInstallSql({ workspaceIdColumn: "workspace_id" })` | `createAuditInstallSql({ contextColumns: [{ column: "workspace_id" }] })` |
+| `createD1AuditInstallSql({ workspaceIdColumn })` | `createD1AuditInstallSql({ contextColumns: [{ column }] })` |
+| `createAttachD1AuditTriggersSql(targets, { workspaceIdColumn })` | `createAttachD1AuditTriggersSql(targets, { contextColumns: [{ column }] })` |
+| `createAuditAddWorkspaceColumnSql(options)` | `createAuditAddContextColumnsSql({ contextColumns: [...] })` |
+| Postgres runtime `{ workspaceId: v }` | `{ context: { "app.workspace_id": v } }` |
+| Postgres runtime `{ workspaceId: v, workspaceContextKey: "app.tenant_id" }` | `{ context: { "app.tenant_id": v } }` |
+| D1 runtime `{ workspaceId: v }` | `{ context: { workspace_id: v } }` |
+| `withAudit(db, table, { userId, workspaceId: v })` | `withAudit(db, table, { userId, context: { workspace_id: v } })` |
+
+The on-disk column name (`workspace_id`) is unchanged, so no data migration is
+needed — only call sites change.
 
 ## License
 

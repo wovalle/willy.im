@@ -11,8 +11,6 @@ export type AuditContext = {
   userId: string
   /** Map of extra audit context column name → value (matching contextColumns). */
   context?: Record<string, string>
-  /** @deprecated Use `context: { workspace_id: value }` instead. */
-  workspaceId?: string
 }
 
 export type AuditLogInsertShape = {
@@ -93,7 +91,7 @@ export type AuditedDb<TDb extends DrizzleSQLiteDb> = {
  *
  * @param db - A Drizzle SQLite database instance (D1, better-sqlite3, libsql)
  * @param auditTable - The Drizzle table definition for audit_logs
- * @param context - The audit context (userId, optional workspaceId)
+ * @param context - The audit context (userId, optional context columns)
  *
  * @example
  * import { withAudit } from "drizzle-audit/d1-runtime"
@@ -134,11 +132,7 @@ export function withAudit<TDb extends DrizzleSQLiteDb>(
     return Object.keys(cols).filter((k) => !known.has(k))
   })()
 
-  // Merge the deprecated workspaceId alias into the generic context map.
   const contextValues: Record<string, string> = { ...(context.context ?? {}) }
-  if (context.workspaceId !== undefined && context.workspaceId !== "") {
-    contextValues["workspace_id"] = context.workspaceId
-  }
 
   function buildAuditRow(
     tableName: string,

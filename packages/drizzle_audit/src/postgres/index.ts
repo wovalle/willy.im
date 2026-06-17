@@ -4,7 +4,6 @@ export {
   createAttachAuditTriggerSql,
   createAttachAuditTriggersSql,
   createAuditAddContextColumnsSql,
-  createAuditAddWorkspaceColumnSql,
   createAuditInstallSql,
 } from "./sql.js"
 export { setAuditContext, withAuditedTransaction } from "./runtime.js"

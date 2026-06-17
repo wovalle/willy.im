@@ -10,11 +10,6 @@ import type { AuditContextColumn } from "./types.js"
 export type D1AuditLogTableOptions = {
   /** Extra context columns to include in the table definition, matching the install. */
   contextColumns?: AuditContextColumn[]
-  /**
-   * @deprecated Use `contextColumns: [{ column: "workspace_id" }]` instead.
-   * When set (e.g. "workspace_id"), the table definition includes this optional column.
-   */
-  workspaceIdColumn?: string
 }
 
 function resolveColumns(options?: D1AuditLogTableOptions): string[] {
@@ -27,12 +22,6 @@ function resolveColumns(options?: D1AuditLogTableOptions): string[] {
       seen.add(column)
       columns.push(column)
     }
-  }
-
-  const workspaceIdColumn = options?.workspaceIdColumn?.trim()
-  if (workspaceIdColumn && !seen.has(workspaceIdColumn)) {
-    seen.add(workspaceIdColumn)
-    columns.push(workspaceIdColumn)
   }
 
   return columns

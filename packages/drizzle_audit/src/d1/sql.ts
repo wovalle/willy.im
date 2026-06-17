@@ -30,24 +30,15 @@ type ResolvedContextColumn = {
 }
 
 /**
- * Normalizes the context columns from the install options, folding the
- * deprecated `workspaceIdColumn` alias into the generic `contextColumns` list
- * and de-duplicating by column name. For D1 the KV key defaults to the column
- * name itself.
+ * Normalizes the context columns from the install options, de-duplicating by
+ * column name. For D1 the KV key defaults to the column name itself.
  */
 function normalizeContextColumns(
-  options: { contextColumns?: AuditContextColumn[]; workspaceIdColumn?: string },
+  options: { contextColumns?: AuditContextColumn[] },
 ): ResolvedContextColumn[] {
-  const raw: AuditContextColumn[] = [...(options.contextColumns ?? [])]
-
-  const workspaceIdColumn = options.workspaceIdColumn?.trim()
-  if (workspaceIdColumn) {
-    raw.push({ column: workspaceIdColumn })
-  }
-
   const resolved: ResolvedContextColumn[] = []
   const seen = new Set<string>()
-  for (const entry of raw) {
+  for (const entry of options.contextColumns ?? []) {
     const column = entry.column?.trim()
     if (!column) {
       throw new Error("contextColumns[].column must not be empty")
@@ -87,8 +78,8 @@ function contextValuesClause(
 /**
  * Generates SQL to install the audit_logs table and _audit_context table.
  *
- * The _audit_context table stores user_id (and optionally workspace_id) for
- * the current transaction. Since D1/SQLite has no session variables, triggers
+ * The _audit_context table stores user_id (and any configured context columns)
+ * for the current transaction. Since D1/SQLite has no session variables, triggers
  * read context from this table instead.
  */
 export function createD1AuditInstallSql(options: D1AuditInstallOptions = {}) {

@@ -24,11 +24,6 @@ export type D1AuditInstallOptions = {
   contextTable?: string
   /** Extra context columns added to the audit table and populated by triggers from the _audit_context KV table. */
   contextColumns?: AuditContextColumn[]
-  /**
-   * @deprecated Use `contextColumns: [{ column: "workspace_id" }]` instead.
-   * Optional workspace column name (e.g. "workspace_id").
-   */
-  workspaceIdColumn?: string
 }
 
 export type D1AuditTriggerTarget = {

@@ -13,15 +13,12 @@ function assertActorId(actorId: string) {
 export type D1AuditContextOptions = {
   /** Map of context key → value written as KV rows the triggers read. */
   context?: Record<string, string>
-  /** @deprecated Use `context: { workspace_id: value }` instead. */
-  workspaceId?: string
   contextTable?: string
 }
 
 /**
- * Builds the KV map (key → value) to write, folding the deprecated `workspaceId`
- * alias into the generic `context` record. Empty/undefined values are dropped so
- * the corresponding column stays NULL.
+ * Builds the KV map (key → value) to write. Empty/undefined values are dropped
+ * so the corresponding column stays NULL.
  */
 function resolveContext(options?: D1AuditContextOptions): Record<string, string> {
   const context: Record<string, string> = {}
@@ -30,10 +27,6 @@ function resolveContext(options?: D1AuditContextOptions): Record<string, string>
     if (value !== undefined && value !== "") {
       context[key] = value
     }
-  }
-
-  if (options?.workspaceId !== undefined && options.workspaceId !== "") {
-    context["workspace_id"] = options.workspaceId
   }
 
   return context
@@ -79,15 +72,15 @@ export function setD1AuditContext(
  * Clears the audit context after a transaction completes.
  * Called automatically by withD1AuditedTransaction.
  *
- * Clears `user_id` plus any keys set via `context`/`workspaceId` so the next
- * transaction starts clean.
+ * Clears `user_id` plus any keys set via `context` so the next transaction
+ * starts clean.
  */
 export function clearD1AuditContext(
   db: D1AuditSqlExecutor,
   options?: D1AuditContextOptions,
 ) {
   const table = options?.contextTable ?? DEFAULT_CONTEXT_TABLE
-  const keys = ["user_id", "workspace_id", ...Object.keys(options?.context ?? {})]
+  const keys = ["user_id", ...Object.keys(options?.context ?? {})]
   const uniqueKeys = [...new Set(keys)]
   const keyList = sql.join(
     uniqueKeys.map((k) => sql`${k}`),

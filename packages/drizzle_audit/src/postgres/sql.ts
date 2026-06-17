@@ -41,23 +41,15 @@ type ResolvedContextColumn = {
 }
 
 /**
- * Normalizes the context columns from the install options, folding the
- * deprecated `workspaceIdColumn` alias into the generic `contextColumns` list
- * and de-duplicating by column name.
+ * Normalizes the context columns from the install options, de-duplicating by
+ * column name and applying defaults for `sessionKey` / `index`.
  */
 function normalizeContextColumns(
-  options: { contextColumns?: AuditContextColumn[]; workspaceIdColumn?: string },
+  options: { contextColumns?: AuditContextColumn[] },
 ): ResolvedContextColumn[] {
-  const raw: AuditContextColumn[] = [...(options.contextColumns ?? [])]
-
-  const workspaceIdColumn = options.workspaceIdColumn?.trim()
-  if (workspaceIdColumn) {
-    raw.push({ column: workspaceIdColumn })
-  }
-
   const resolved: ResolvedContextColumn[] = []
   const seen = new Set<string>()
-  for (const entry of raw) {
+  for (const entry of options.contextColumns ?? []) {
     const column = entry.column?.trim()
     if (!column) {
       throw new Error("contextColumns[].column must not be empty")
@@ -324,15 +316,4 @@ export function createAuditAddContextColumnsSql(options: AuditInstallOptions = {
       contextColumns,
     ),
   ].join("\n\n")
-}
-
-/**
- * @deprecated Use `createAuditAddContextColumnsSql({ contextColumns: [...] })` instead.
- * Thin backward-compat wrapper that adds a single workspace column.
- */
-export function createAuditAddWorkspaceColumnSql(
-  options: AuditInstallOptions & { workspaceIdColumn: string },
-) {
-  assertNonEmpty(options.workspaceIdColumn.trim(), "workspaceIdColumn")
-  return createAuditAddContextColumnsSql(options)
 }

@@ -26,11 +26,6 @@ export type AuditInstallOptions = {
   triggerFunctionName?: string
   /** Extra context columns added to the audit table and populated by the trigger from session GUCs. */
   contextColumns?: AuditContextColumn[]
-  /**
-   * @deprecated Use `contextColumns: [{ column: "workspace_id" }]` instead.
-   * When set, the audit table and trigger include this column; trigger reads from session variable app.${workspaceIdColumn}.
-   */
-  workspaceIdColumn?: string
 }
 
 export type AuditTriggerTarget = {

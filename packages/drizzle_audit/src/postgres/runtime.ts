@@ -12,9 +12,8 @@ function assertActorId(actorId: string) {
 }
 
 /**
- * Builds the `context` GUC map from a set of options, folding the deprecated
- * `workspaceId`/`workspaceContextKey` aliases into a generic `context` record.
- * Empty/undefined values are dropped so the trigger's NULLIF yields NULL.
+ * Builds the `context` GUC map from a set of options. Empty/undefined values
+ * are dropped so the trigger's NULLIF yields NULL.
  */
 function resolveContext(options?: AuditContextOptions): Record<string, string> {
   const context: Record<string, string> = {}
@@ -25,21 +24,12 @@ function resolveContext(options?: AuditContextOptions): Record<string, string> {
     }
   }
 
-  if (options?.workspaceId !== undefined && options.workspaceId !== "") {
-    const wsKey = options.workspaceContextKey ?? "app.workspace_id"
-    context[wsKey] = options.workspaceId
-  }
-
   return context
 }
 
 export type AuditContextOptions = {
   /** Map of session GUC name → value to set for the transaction. */
   context?: Record<string, string>
-  /** @deprecated Use `context: { "app.workspace_id": value }` instead. */
-  workspaceId?: string
-  /** @deprecated Use `context` instead. GUC name for the deprecated workspaceId. */
-  workspaceContextKey?: string
 }
 
 export async function setAuditContext(

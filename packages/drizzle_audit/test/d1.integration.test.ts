@@ -157,11 +157,13 @@ test("d1 column-aware triggers capture full row data", () => {
 
 test("d1 workspace_id column and context are stored when enabled", () => {
   const sqlite = new Database(":memory:")
-  const auditLogsWithWorkspace = d1AuditLogTable({ workspaceIdColumn: "workspace_id" })
+  const auditLogsWithWorkspace = d1AuditLogTable({
+    contextColumns: [{ column: "workspace_id" }],
+  })
   const db = drizzle({ client: sqlite, schema: { auditLogs: auditLogsWithWorkspace, auditContext, users } })
 
   try {
-    sqlite.exec(createD1AuditInstallSql({ workspaceIdColumn: "workspace_id" }))
+    sqlite.exec(createD1AuditInstallSql({ contextColumns: [{ column: "workspace_id" }] }))
     sqlite.exec(`
       CREATE TABLE users (
         id TEXT PRIMARY KEY,
@@ -171,7 +173,7 @@ test("d1 workspace_id column and context are stored when enabled", () => {
     sqlite.exec(
       createAttachD1AuditTriggersSql(
         [{ table: "users" }],
-        { workspaceIdColumn: "workspace_id" },
+        { contextColumns: [{ column: "workspace_id" }] },
       ),
     )
 
@@ -181,7 +183,7 @@ test("d1 workspace_id column and context are stored when enabled", () => {
       (tx) => {
         tx.insert(users).values({ id: "u1", name: "Alice" }).run()
       },
-      { workspaceId: "ws_1" },
+      { context: { workspace_id: "ws_1" } },
     )
 
     const logs = db.select().from(auditLogsWithWorkspace).all()
@@ -278,48 +280,6 @@ test("d1 generic contextColumns populate and stay NULL without context", () => {
     assert.equal(last.workspace_id, null)
     assert.equal(last.tenant_id, null)
     assert.equal(last.request_id, null)
-  } finally {
-    sqlite.close()
-  }
-})
-
-test("d1 deprecated workspaceIdColumn matches contextColumns equivalent", () => {
-  const sqlite = new Database(":memory:")
-  const auditLogsDeprecated = d1AuditLogTable({ workspaceIdColumn: "workspace_id" })
-  const db = drizzle({
-    client: sqlite,
-    schema: { auditLogs: auditLogsDeprecated, auditContext, users },
-  })
-
-  try {
-    sqlite.exec(createD1AuditInstallSql({ workspaceIdColumn: "workspace_id" }))
-    sqlite.exec(`
-      CREATE TABLE users (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL
-      );
-    `)
-    sqlite.exec(
-      createAttachD1AuditTriggersSql(
-        [{ table: "users" }],
-        { workspaceIdColumn: "workspace_id" },
-      ),
-    )
-
-    // Drive with the new generic `context` option.
-    withD1AuditedTransaction(
-      db,
-      "user_1",
-      (tx) => {
-        tx.insert(users).values({ id: "u1", name: "Alice" }).run()
-      },
-      { context: { workspace_id: "ws_42" } },
-    )
-
-    const logs = db.select().from(auditLogsDeprecated).all()
-    assert.equal(logs.length, 1)
-    assert.equal(logs[0]?.user_id, "user_1")
-    assert.equal((logs[0] as Record<string, unknown>).workspace_id, "ws_42")
   } finally {
     sqlite.close()
   }
