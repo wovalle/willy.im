@@ -5,22 +5,37 @@ import {
   text,
 } from "drizzle-orm/sqlite-core"
 
+import type { AuditContextColumn } from "./types.js"
+
 export type D1AuditLogTableOptions = {
-  /** When set (e.g. "workspace_id"), the table definition includes this optional column. */
-  workspaceIdColumn?: string
+  /** Extra context columns to include in the table definition, matching the install. */
+  contextColumns?: AuditContextColumn[]
+}
+
+function resolveColumns(options?: D1AuditLogTableOptions): string[] {
+  const columns: string[] = []
+  const seen = new Set<string>()
+
+  for (const entry of options?.contextColumns ?? []) {
+    const column = entry.column?.trim()
+    if (column && !seen.has(column)) {
+      seen.add(column)
+      columns.push(column)
+    }
+  }
+
+  return columns
 }
 
 export function d1AuditLogTable(options?: D1AuditLogTableOptions) {
-  const workspaceIdColumn = options?.workspaceIdColumn?.trim()
+  const contextColumns = resolveColumns(options)
   const columns = {
     id: integer("id").primaryKey({ autoIncrement: true }),
     table_name: text("table_name").notNull(),
     operation: text("operation").notNull(),
     row_id: text("row_id"),
     user_id: text("user_id"),
-    ...(workspaceIdColumn
-      ? { [workspaceIdColumn]: text(workspaceIdColumn) }
-      : {}),
+    ...Object.fromEntries(contextColumns.map((c) => [c, text(c)])),
     old_data: text("old_data"),
     new_data: text("new_data"),
     created_at: text("created_at").notNull().default("(datetime('now'))"),

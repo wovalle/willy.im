@@ -3,12 +3,14 @@ export type { PgAuditLogTableOptions } from "./audit-log-schema.js"
 export {
   createAttachAuditTriggerSql,
   createAttachAuditTriggersSql,
-  createAuditAddWorkspaceColumnSql,
+  createAuditAddContextColumnsSql,
   createAuditInstallSql,
 } from "./sql.js"
 export { setAuditContext, withAuditedTransaction } from "./runtime.js"
+export type { AuditContextOptions } from "./runtime.js"
 
 export type {
+  AuditContextColumn,
   AuditInstallOptions,
   AuditSqlExecutor,
   AuditTransactionCapable,

@@ -10,6 +10,28 @@ function assertActorId(actorId: string) {
   }
 }
 
+export type D1AuditContextOptions = {
+  /** Map of context key → value written as KV rows the triggers read. */
+  context?: Record<string, string>
+  contextTable?: string
+}
+
+/**
+ * Builds the KV map (key → value) to write. Empty/undefined values are dropped
+ * so the corresponding column stays NULL.
+ */
+function resolveContext(options?: D1AuditContextOptions): Record<string, string> {
+  const context: Record<string, string> = {}
+
+  for (const [key, value] of Object.entries(options?.context ?? {})) {
+    if (value !== undefined && value !== "") {
+      context[key] = value
+    }
+  }
+
+  return context
+}
+
 /**
  * Sets the audit context for the current transaction by writing to the
  * _audit_context table. Must be called inside a transaction before any
@@ -20,44 +42,52 @@ function assertActorId(actorId: string) {
 export function setD1AuditContext(
   db: D1AuditSqlExecutor,
   actorId: string,
-  options?: { workspaceId?: string; contextTable?: string },
+  options?: D1AuditContextOptions,
 ) {
   assertActorId(actorId)
   const table = options?.contextTable ?? DEFAULT_CONTEXT_TABLE
+  const context = resolveContext(options)
 
-  const result = db.run(
-    sql`INSERT OR REPLACE INTO ${sql.identifier(table)} (key, value) VALUES ('user_id', ${actorId})`,
-  )
+  const writeKv = (key: string, value: string) =>
+    db.run(
+      sql`INSERT OR REPLACE INTO ${sql.identifier(table)} (key, value) VALUES (${key}, ${value})`,
+    )
+
+  const result = writeKv("user_id", actorId)
 
   // Handle async drivers (D1) by chaining if result is a Promise
   if (result && typeof (result as Promise<unknown>).then === "function") {
-    return (result as Promise<unknown>).then(() => {
-      if (options?.workspaceId !== undefined && options.workspaceId !== "") {
-        return db.run(
-          sql`INSERT OR REPLACE INTO ${sql.identifier(table)} (key, value) VALUES ('workspace_id', ${options.workspaceId})`,
-        )
-      }
-    })
+    return Object.entries(context).reduce<Promise<unknown>>(
+      (prev, [key, value]) => prev.then(() => writeKv(key, value)),
+      result as Promise<unknown>,
+    )
   }
 
-  if (options?.workspaceId !== undefined && options.workspaceId !== "") {
-    db.run(
-      sql`INSERT OR REPLACE INTO ${sql.identifier(table)} (key, value) VALUES ('workspace_id', ${options.workspaceId})`,
-    )
+  for (const [key, value] of Object.entries(context)) {
+    writeKv(key, value)
   }
 }
 
 /**
  * Clears the audit context after a transaction completes.
  * Called automatically by withD1AuditedTransaction.
+ *
+ * Clears `user_id` plus any keys set via `context` so the next transaction
+ * starts clean.
  */
 export function clearD1AuditContext(
   db: D1AuditSqlExecutor,
-  options?: { contextTable?: string },
+  options?: D1AuditContextOptions,
 ) {
   const table = options?.contextTable ?? DEFAULT_CONTEXT_TABLE
+  const keys = ["user_id", ...Object.keys(options?.context ?? {})]
+  const uniqueKeys = [...new Set(keys)]
+  const keyList = sql.join(
+    uniqueKeys.map((k) => sql`${k}`),
+    sql`, `,
+  )
   return db.run(
-    sql`DELETE FROM ${sql.identifier(table)} WHERE key IN ('user_id', 'workspace_id')`,
+    sql`DELETE FROM ${sql.identifier(table)} WHERE key IN (${keyList})`,
   )
 }
 
@@ -83,7 +113,7 @@ export function withD1AuditedTransaction<TDb extends D1AuditSqlExecutor, TResult
   db: TDb & { transaction: (cb: (tx: any) => TResult) => TResult },
   actorId: string,
   callback: (tx: TDb) => TResult,
-  options?: { workspaceId?: string; contextTable?: string },
+  options?: D1AuditContextOptions,
 ): TResult {
   assertActorId(actorId)
 

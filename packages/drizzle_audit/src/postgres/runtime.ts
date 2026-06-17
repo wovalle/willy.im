@@ -11,21 +11,42 @@ function assertActorId(actorId: string) {
   }
 }
 
+/**
+ * Builds the `context` GUC map from a set of options. Empty/undefined values
+ * are dropped so the trigger's NULLIF yields NULL.
+ */
+function resolveContext(options?: AuditContextOptions): Record<string, string> {
+  const context: Record<string, string> = {}
+
+  for (const [key, value] of Object.entries(options?.context ?? {})) {
+    if (value !== undefined && value !== "") {
+      context[key] = value
+    }
+  }
+
+  return context
+}
+
+export type AuditContextOptions = {
+  /** Map of session GUC name → value to set for the transaction. */
+  context?: Record<string, string>
+}
+
 export async function setAuditContext(
   db: AuditSqlExecutor,
   actorId: string,
   contextKey = "app.user_id",
-  options?: { workspaceId?: string; workspaceContextKey?: string },
+  options?: AuditContextOptions,
 ) {
   assertActorId(actorId)
 
   await db.execute(
     sql`select set_config(${contextKey}, ${actorId}, true) as audit_context`,
   )
-  if (options?.workspaceId !== undefined && options.workspaceId !== "") {
-    const wsKey = options.workspaceContextKey ?? "app.workspace_id"
+
+  for (const [key, value] of Object.entries(resolveContext(options))) {
     await db.execute(
-      sql`select set_config(${wsKey}, ${options.workspaceId}, true) as workspace_context`,
+      sql`select set_config(${key}, ${value}, true) as audit_context`,
     )
   }
 }
@@ -38,7 +59,7 @@ export async function withAuditedTransaction<
   actorId: string,
   callback: (tx: TTransaction) => Promise<TResult> | TResult,
   contextKey = "app.user_id",
-  options?: { workspaceId?: string; workspaceContextKey?: string },
+  options?: AuditContextOptions,
 ) {
   assertActorId(actorId)
 

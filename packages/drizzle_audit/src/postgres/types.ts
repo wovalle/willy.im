@@ -10,13 +10,22 @@ export type AuditTransactionCapable<TTransaction extends AuditSqlExecutor> = {
   ) => Promise<TResult>
 }
 
+export type AuditContextColumn = {
+  /** Column added to the audit table (TEXT, nullable). */
+  column: string
+  /** Session GUC the trigger reads. Default `app.${column}`. */
+  sessionKey?: string
+  /** Create an index on the column. Default true. */
+  index?: boolean
+}
+
 export type AuditInstallOptions = {
   auditSchema?: string
   auditTable?: string
   contextKey?: string
   triggerFunctionName?: string
-  /** When set (e.g. "workspace_id"), the audit table and trigger include this column; trigger reads from session variable app.${workspaceIdColumn}. */
-  workspaceIdColumn?: string
+  /** Extra context columns added to the audit table and populated by the trigger from session GUCs. */
+  contextColumns?: AuditContextColumn[]
 }
 
 export type AuditTriggerTarget = {

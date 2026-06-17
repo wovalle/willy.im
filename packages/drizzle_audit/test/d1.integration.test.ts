@@ -157,11 +157,13 @@ test("d1 column-aware triggers capture full row data", () => {
 
 test("d1 workspace_id column and context are stored when enabled", () => {
   const sqlite = new Database(":memory:")
-  const auditLogsWithWorkspace = d1AuditLogTable({ workspaceIdColumn: "workspace_id" })
+  const auditLogsWithWorkspace = d1AuditLogTable({
+    contextColumns: [{ column: "workspace_id" }],
+  })
   const db = drizzle({ client: sqlite, schema: { auditLogs: auditLogsWithWorkspace, auditContext, users } })
 
   try {
-    sqlite.exec(createD1AuditInstallSql({ workspaceIdColumn: "workspace_id" }))
+    sqlite.exec(createD1AuditInstallSql({ contextColumns: [{ column: "workspace_id" }] }))
     sqlite.exec(`
       CREATE TABLE users (
         id TEXT PRIMARY KEY,
@@ -171,7 +173,7 @@ test("d1 workspace_id column and context are stored when enabled", () => {
     sqlite.exec(
       createAttachD1AuditTriggersSql(
         [{ table: "users" }],
-        { workspaceIdColumn: "workspace_id" },
+        { contextColumns: [{ column: "workspace_id" }] },
       ),
     )
 
@@ -181,7 +183,7 @@ test("d1 workspace_id column and context are stored when enabled", () => {
       (tx) => {
         tx.insert(users).values({ id: "u1", name: "Alice" }).run()
       },
-      { workspaceId: "ws_1" },
+      { context: { workspace_id: "ws_1" } },
     )
 
     const logs = db.select().from(auditLogsWithWorkspace).all()
@@ -202,6 +204,82 @@ test("d1 workspace_id column and context are stored when enabled", () => {
     assert.equal(logs2.length, 2)
     assert.equal(logs2[1]?.user_id, "user_2")
     assert.equal((logs2[1] as Record<string, unknown>).workspace_id, null)
+  } finally {
+    sqlite.close()
+  }
+})
+
+test("d1 generic contextColumns populate and stay NULL without context", () => {
+  const sqlite = new Database(":memory:")
+  const contextColumns = [
+    { column: "workspace_id" },
+    { column: "tenant_id" },
+    { column: "request_id" },
+  ]
+  const auditLogsWithCtx = d1AuditLogTable({ contextColumns })
+  const db = drizzle({
+    client: sqlite,
+    schema: { auditLogs: auditLogsWithCtx, auditContext, users },
+  })
+
+  try {
+    sqlite.exec(createD1AuditInstallSql({ contextColumns }))
+    sqlite.exec(`
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL
+      );
+    `)
+    sqlite.exec(
+      createAttachD1AuditTriggersSql([{ table: "users" }], { contextColumns }),
+    )
+
+    withD1AuditedTransaction(
+      db,
+      "user_1",
+      (tx) => {
+        tx.insert(users).values({ id: "u1", name: "Alice" }).run()
+        tx.update(users).set({ name: "Alice Updated" }).where(eq(users.id, "u1")).run()
+        tx.delete(users).where(eq(users.id, "u1")).run()
+      },
+      {
+        context: {
+          workspace_id: "ws_1",
+          tenant_id: "tenant_1",
+          request_id: "req_1",
+        },
+      },
+    )
+
+    const logs = db
+      .select()
+      .from(auditLogsWithCtx)
+      .orderBy(asc(auditLogsWithCtx.id))
+      .all()
+    assert.equal(logs.length, 3)
+    for (const log of logs) {
+      const row = log as Record<string, unknown>
+      assert.equal(row.user_id, "user_1")
+      assert.equal(row.workspace_id, "ws_1")
+      assert.equal(row.tenant_id, "tenant_1")
+      assert.equal(row.request_id, "req_1")
+    }
+    assert.equal(logs[0]?.operation, "INSERT")
+    assert.equal(logs[1]?.operation, "UPDATE")
+    assert.equal(logs[2]?.operation, "DELETE")
+
+    // No context: all context columns NULL.
+    db.insert(users).values({ id: "u2", name: "No Context" }).run()
+    const all = db
+      .select()
+      .from(auditLogsWithCtx)
+      .orderBy(asc(auditLogsWithCtx.id))
+      .all()
+    const last = all[all.length - 1] as Record<string, unknown>
+    assert.equal(last.user_id, null)
+    assert.equal(last.workspace_id, null)
+    assert.equal(last.tenant_id, null)
+    assert.equal(last.request_id, null)
   } finally {
     sqlite.close()
   }
