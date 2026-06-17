@@ -1,4 +1,8 @@
-import type { AuditInstallOptions, AuditTriggerTarget } from "./types.js"
+import type {
+  AuditContextColumn,
+  AuditInstallOptions,
+  AuditTriggerTarget,
+} from "./types.js"
 
 const DEFAULT_AUDIT_SCHEMA = "public"
 const DEFAULT_AUDIT_TABLE = "audit_logs"
@@ -30,52 +34,89 @@ function assertNonEmpty(value: string, label: string) {
   return value
 }
 
+type ResolvedContextColumn = {
+  column: string
+  sessionKey: string
+  index: boolean
+}
+
+/**
+ * Normalizes the context columns from the install options, folding the
+ * deprecated `workspaceIdColumn` alias into the generic `contextColumns` list
+ * and de-duplicating by column name.
+ */
+function normalizeContextColumns(
+  options: { contextColumns?: AuditContextColumn[]; workspaceIdColumn?: string },
+): ResolvedContextColumn[] {
+  const raw: AuditContextColumn[] = [...(options.contextColumns ?? [])]
+
+  const workspaceIdColumn = options.workspaceIdColumn?.trim()
+  if (workspaceIdColumn) {
+    raw.push({ column: workspaceIdColumn })
+  }
+
+  const resolved: ResolvedContextColumn[] = []
+  const seen = new Set<string>()
+  for (const entry of raw) {
+    const column = entry.column?.trim()
+    if (!column) {
+      throw new Error("contextColumns[].column must not be empty")
+    }
+    if (seen.has(column)) {
+      continue
+    }
+    seen.add(column)
+    resolved.push({
+      column,
+      sessionKey: entry.sessionKey?.trim() || `app.${column}`,
+      index: entry.index ?? true,
+    })
+  }
+
+  return resolved
+}
+
 function buildTriggerFunctionSql(
   qualifiedAuditTable: string,
   qualifiedTriggerFunction: string,
   contextLiteral: string,
-  options: { workspaceIdColumn?: string },
+  contextColumns: ResolvedContextColumn[],
 ): string {
-  const workspaceIdColumn = options.workspaceIdColumn?.trim()
-  const hasWorkspace = Boolean(workspaceIdColumn)
-  const workspaceContextLiteral = hasWorkspace
-    ? quoteLiteral("app." + workspaceIdColumn)
-    : ""
-  const workspaceCol = hasWorkspace ? quoteIdent(workspaceIdColumn!) : ""
-  const declWorkspace = hasWorkspace ? "\n  audit_workspace TEXT;" : ""
-  const readWorkspace = hasWorkspace
-    ? `\n  audit_workspace := NULLIF(current_setting(${workspaceContextLiteral}, true), '');`
-    : ""
+  const declContext = contextColumns
+    .map((_, i) => `\n  audit_ctx_${i} TEXT;`)
+    .join("")
+  const readContext = contextColumns
+    .map(
+      (col, i) =>
+        `\n  audit_ctx_${i} := NULLIF(current_setting(${quoteLiteral(
+          col.sessionKey,
+        )}, true), '');`,
+    )
+    .join("")
+
+  const ctxColIdents = contextColumns.map((col) => quoteIdent(col.column))
+  const ctxColPrefix = ctxColIdents.length ? `, ${ctxColIdents.join(", ")}` : ""
+  const ctxValExprs = contextColumns.map((_, i) => `audit_ctx_${i}`)
+  const ctxValPrefix = ctxValExprs.length ? `, ${ctxValExprs.join(", ")}` : ""
+
   const insertColsBase = "table_name, operation, row_id, user_id"
-  const insertColsInsert = hasWorkspace
-    ? `${insertColsBase}, ${workspaceCol}, new_data`
-    : `${insertColsBase}, new_data`
-  const insertColsUpdate = hasWorkspace
-    ? `${insertColsBase}, ${workspaceCol}, old_data, new_data`
-    : `${insertColsBase}, old_data, new_data`
-  const insertColsDelete = hasWorkspace
-    ? `${insertColsBase}, ${workspaceCol}, old_data`
-    : `${insertColsBase}, old_data`
-  const valuesInsert = hasWorkspace
-    ? `TG_TABLE_NAME, TG_OP, current_row_id, audit_user, audit_workspace, to_jsonb(NEW)`
-    : `TG_TABLE_NAME, TG_OP, current_row_id, audit_user, to_jsonb(NEW)`
-  const valuesUpdate = hasWorkspace
-    ? `TG_TABLE_NAME, TG_OP, current_row_id, audit_user, audit_workspace, to_jsonb(OLD), to_jsonb(NEW)`
-    : `TG_TABLE_NAME, TG_OP, current_row_id, audit_user, to_jsonb(OLD), to_jsonb(NEW)`
-  const valuesDelete = hasWorkspace
-    ? `TG_TABLE_NAME, TG_OP, current_row_id, audit_user, audit_workspace, to_jsonb(OLD)`
-    : `TG_TABLE_NAME, TG_OP, current_row_id, audit_user, to_jsonb(OLD)`
+  const insertColsInsert = `${insertColsBase}${ctxColPrefix}, new_data`
+  const insertColsUpdate = `${insertColsBase}${ctxColPrefix}, old_data, new_data`
+  const insertColsDelete = `${insertColsBase}${ctxColPrefix}, old_data`
+  const valuesInsert = `TG_TABLE_NAME, TG_OP, current_row_id, audit_user${ctxValPrefix}, to_jsonb(NEW)`
+  const valuesUpdate = `TG_TABLE_NAME, TG_OP, current_row_id, audit_user${ctxValPrefix}, to_jsonb(OLD), to_jsonb(NEW)`
+  const valuesDelete = `TG_TABLE_NAME, TG_OP, current_row_id, audit_user${ctxValPrefix}, to_jsonb(OLD)`
 
   return `
 CREATE OR REPLACE FUNCTION ${qualifiedTriggerFunction}()
 RETURNS TRIGGER AS $$
 DECLARE
-  audit_user TEXT;${declWorkspace}
+  audit_user TEXT;${declContext}
   row_id_column TEXT;
   current_row JSONB;
   current_row_id TEXT;
 BEGIN
-  audit_user := NULLIF(current_setting(${contextLiteral}, true), '');${readWorkspace}
+  audit_user := NULLIF(current_setting(${contextLiteral}, true), '');${readContext}
 
   row_id_column := COALESCE(NULLIF(TG_ARGV[0], ''), ${quoteLiteral(
     DEFAULT_ROW_ID_COLUMN,
@@ -132,7 +173,7 @@ export function createAuditInstallSql(options: AuditInstallOptions = {}) {
     options.triggerFunctionName ?? DEFAULT_TRIGGER_FUNCTION,
     "triggerFunctionName",
   )
-  const workspaceIdColumn = options.workspaceIdColumn?.trim()
+  const contextColumns = normalizeContextColumns(options)
 
   const qualifiedAuditTable = qualifyName(auditTable, auditSchema)
   const qualifiedTriggerFunction = qualifyName(triggerFunctionName, auditSchema)
@@ -144,7 +185,7 @@ export function createAuditInstallSql(options: AuditInstallOptions = {}) {
     "operation TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE'))",
     "row_id TEXT",
     "user_id TEXT",
-    ...(workspaceIdColumn ? [quoteIdent(workspaceIdColumn) + " TEXT"] : []),
+    ...contextColumns.map((col) => quoteIdent(col.column) + " TEXT"),
     "old_data JSONB",
     "new_data JSONB",
     "created_at TIMESTAMPTZ NOT NULL DEFAULT now()",
@@ -154,11 +195,12 @@ export function createAuditInstallSql(options: AuditInstallOptions = {}) {
     `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_table_name_idx`)} ON ${qualifiedAuditTable} (table_name);`,
     `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_row_id_idx`)} ON ${qualifiedAuditTable} (row_id);`,
     `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_user_id_idx`)} ON ${qualifiedAuditTable} (user_id);`,
-    ...(workspaceIdColumn
-      ? [
-          `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_${workspaceIdColumn}_idx`)} ON ${qualifiedAuditTable} (${quoteIdent(workspaceIdColumn)});`,
-        ]
-      : []),
+    ...contextColumns
+      .filter((col) => col.index)
+      .map(
+        (col) =>
+          `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_${col.column}_idx`)} ON ${qualifiedAuditTable} (${quoteIdent(col.column)});`,
+      ),
     `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_created_at_idx`)} ON ${qualifiedAuditTable} (created_at DESC);`,
   ]
 
@@ -173,7 +215,7 @@ CREATE TABLE IF NOT EXISTS ${qualifiedAuditTable} (
       qualifiedAuditTable,
       qualifiedTriggerFunction,
       contextLiteral,
-      { workspaceIdColumn: workspaceIdColumn ?? undefined },
+      contextColumns,
     ),
   ].join("\n\n")
 }
@@ -229,18 +271,17 @@ export function createAttachAuditTriggersSql(
 }
 
 /**
- * Generates SQL to add the workspace column and replace the trigger function on an
- * existing audit_logs table. Use in a new migration when adding workspace_id after
- * the initial install. Options must match your install (auditSchema, auditTable,
- * triggerFunctionName, contextKey, workspaceIdColumn).
+ * Generates SQL to add context columns and regenerate the trigger function on an
+ * existing audit_logs table. Use in a new migration when adding context columns
+ * after the initial install.
+ *
+ * Pass the FULL set of context columns the audit table should have (the trigger is
+ * a single CREATE OR REPLACE, so it must reference every column). Columns are added
+ * with `ADD COLUMN IF NOT EXISTS`, so already-present columns are left untouched.
+ * Options must match your install (auditSchema, auditTable, triggerFunctionName,
+ * contextKey).
  */
-export function createAuditAddWorkspaceColumnSql(
-  options: AuditInstallOptions & { workspaceIdColumn: string },
-) {
-  const workspaceIdColumn = assertNonEmpty(
-    options.workspaceIdColumn.trim(),
-    "workspaceIdColumn",
-  )
+export function createAuditAddContextColumnsSql(options: AuditInstallOptions = {}) {
   const auditSchema = assertNonEmpty(
     options.auditSchema ?? DEFAULT_AUDIT_SCHEMA,
     "auditSchema",
@@ -258,15 +299,40 @@ export function createAuditAddWorkspaceColumnSql(
     "triggerFunctionName",
   )
 
+  const contextColumns = normalizeContextColumns(options)
+  if (contextColumns.length === 0) {
+    throw new Error("createAuditAddContextColumnsSql requires at least one context column")
+  }
+
   const qualifiedAuditTable = qualifyName(auditTable, auditSchema)
   const qualifiedTriggerFunction = qualifyName(triggerFunctionName, auditSchema)
   const contextLiteral = quoteLiteral(contextKey)
 
   return [
-    `ALTER TABLE ${qualifiedAuditTable} ADD COLUMN IF NOT EXISTS ${quoteIdent(workspaceIdColumn)} TEXT;`,
-    `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_${workspaceIdColumn}_idx`)} ON ${qualifiedAuditTable} (${quoteIdent(workspaceIdColumn)});`,
-    buildTriggerFunctionSql(qualifiedAuditTable, qualifiedTriggerFunction, contextLiteral, {
-      workspaceIdColumn,
-    }),
+    ...contextColumns.flatMap((col) => [
+      `ALTER TABLE ${qualifiedAuditTable} ADD COLUMN IF NOT EXISTS ${quoteIdent(col.column)} TEXT;`,
+      ...(col.index
+        ? [
+            `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_${col.column}_idx`)} ON ${qualifiedAuditTable} (${quoteIdent(col.column)});`,
+          ]
+        : []),
+    ]),
+    buildTriggerFunctionSql(
+      qualifiedAuditTable,
+      qualifiedTriggerFunction,
+      contextLiteral,
+      contextColumns,
+    ),
   ].join("\n\n")
+}
+
+/**
+ * @deprecated Use `createAuditAddContextColumnsSql({ contextColumns: [...] })` instead.
+ * Thin backward-compat wrapper that adds a single workspace column.
+ */
+export function createAuditAddWorkspaceColumnSql(
+  options: AuditInstallOptions & { workspaceIdColumn: string },
+) {
+  assertNonEmpty(options.workspaceIdColumn.trim(), "workspaceIdColumn")
+  return createAuditAddContextColumnsSql(options)
 }

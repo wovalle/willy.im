@@ -7,22 +7,48 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core"
 
+import type { AuditContextColumn } from "./types.js"
+
 export type PgAuditLogTableOptions = {
-  /** When set (e.g. "workspace_id"), the table definition includes this optional column to match the install. */
+  /** Extra context columns to include in the table definition, matching the install. */
+  contextColumns?: AuditContextColumn[]
+  /**
+   * @deprecated Use `contextColumns: [{ column: "workspace_id" }]` instead.
+   * When set (e.g. "workspace_id"), the table definition includes this optional column.
+   */
   workspaceIdColumn?: string
 }
 
-export function pgAuditLogTable(options?: PgAuditLogTableOptions) {
+function resolveColumns(options?: PgAuditLogTableOptions): string[] {
+  const columns: string[] = []
+  const seen = new Set<string>()
+
+  for (const entry of options?.contextColumns ?? []) {
+    const column = entry.column?.trim()
+    if (column && !seen.has(column)) {
+      seen.add(column)
+      columns.push(column)
+    }
+  }
+
   const workspaceIdColumn = options?.workspaceIdColumn?.trim()
+  if (workspaceIdColumn && !seen.has(workspaceIdColumn)) {
+    seen.add(workspaceIdColumn)
+    columns.push(workspaceIdColumn)
+  }
+
+  return columns
+}
+
+export function pgAuditLogTable(options?: PgAuditLogTableOptions) {
+  const contextColumns = resolveColumns(options)
   const columns = {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     table_name: text("table_name").notNull(),
     operation: text("operation").notNull(),
     row_id: text("row_id"),
     user_id: text("user_id"),
-    ...(workspaceIdColumn
-      ? { [workspaceIdColumn]: text(workspaceIdColumn) }
-      : {}),
+    ...Object.fromEntries(contextColumns.map((c) => [c, text(c)])),
     old_data: jsonb("old_data"),
     new_data: jsonb("new_data"),
     created_at: timestamp("created_at", { withTimezone: true })

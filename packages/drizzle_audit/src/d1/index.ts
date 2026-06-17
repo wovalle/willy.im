@@ -13,8 +13,10 @@ export {
   setD1AuditContext,
   withD1AuditedTransaction,
 } from "./runtime.js"
+export type { D1AuditContextOptions } from "./runtime.js"
 
 export type {
+  AuditContextColumn,
   D1AuditInstallOptions,
   D1AuditSqlExecutor,
   D1AuditTriggerTarget,

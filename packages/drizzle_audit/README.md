@@ -118,47 +118,65 @@ sqlite.exec(createAttachD1AuditTriggersSqlWithColumns([
 ]))
 ```
 
-## Workspace / Tenant Scoping
+## Context Columns
 
-All three approaches support an optional workspace column for multi-tenant apps.
+Beyond `user_id`, you can declare arbitrary extra context columns (e.g.
+`workspace_id`, `tenant_id`, `request_id`). Each is an extra `TEXT` column on
+`audit_logs`, populated at write-time from a named runtime context value (a
+Postgres session GUC, or a `_audit_context` KV row in D1).
+
+```ts
+type AuditContextColumn = {
+  column: string      // audit table column (TEXT, nullable)
+  sessionKey?: string // Postgres GUC the trigger reads — default `app.${column}`
+                      // D1: the _audit_context key — default `${column}`
+  index?: boolean     // create an index on the column — default true
+}
+```
+
+> The legacy `workspaceIdColumn` / `workspaceId` options still work as a
+> **deprecated** alias for a single `{ column: "workspace_id" }` context column.
 
 ### Postgres
 
 ```ts
-// Install with workspace column
-createAuditInstallSql({ workspaceIdColumn: "workspace_id" })
-export const auditLogs = pgAuditLogTable({ workspaceIdColumn: "workspace_id" })
+const contextColumns = [{ column: "workspace_id" }, { column: "tenant_id" }]
 
-// Pass workspace at runtime
+createAuditInstallSql({ contextColumns })
+export const auditLogs = pgAuditLogTable({ contextColumns })
+
+// Pass context at runtime (GUC name → value)
 await withAuditedTransaction(
   db, userId, async (tx) => { /* ... */ },
   "app.user_id",
-  { workspaceId: "ws_1" },
+  { context: { "app.workspace_id": "ws_1", "app.tenant_id": "t_1" } },
 )
 ```
 
-To add workspace to an existing install, use `createAuditAddWorkspaceColumnSql()`.
+To add context columns to an existing install, use
+`createAuditAddContextColumnsSql({ contextColumns })` — it adds each column and
+regenerates the trigger over the full set. Pass the complete list of columns the
+table should have.
 
 ### D1 Runtime
 
 ```ts
 const audit = withAudit(db, auditLogs, {
   userId: "user_1",
-  workspaceId: "ws_1",
+  context: { workspace_id: "ws_1", tenant_id: "t_1" },
 })
 ```
 
 ### D1 Triggers
 
 ```ts
-createD1AuditInstallSql({ workspaceIdColumn: "workspace_id" })
-createAttachD1AuditTriggersSql(
-  [{ table: "users" }],
-  { workspaceIdColumn: "workspace_id" },
-)
+const contextColumns = [{ column: "workspace_id" }, { column: "tenant_id" }]
+
+createD1AuditInstallSql({ contextColumns })
+createAttachD1AuditTriggersSql([{ table: "users" }], { contextColumns })
 
 withD1AuditedTransaction(db, "user_1", (tx) => { /* ... */ }, {
-  workspaceId: "ws_1",
+  context: { workspace_id: "ws_1", tenant_id: "t_1" },
 })
 ```
 
@@ -200,7 +218,8 @@ export function createAuditSql() {
 | `createAuditInstallSql(options?)` | SQL to create the audit table, indexes, and trigger function |
 | `createAttachAuditTriggerSql(target, options?)` | SQL to attach audit trigger to one table |
 | `createAttachAuditTriggersSql(targets, options?)` | Same, for multiple tables |
-| `createAuditAddWorkspaceColumnSql(options)` | SQL to add workspace column to existing install |
+| `createAuditAddContextColumnsSql(options)` | SQL to add context columns + regenerate trigger on existing install |
+| `createAuditAddWorkspaceColumnSql(options)` | _Deprecated_ — thin wrapper over `createAuditAddContextColumnsSql` |
 | `setAuditContext(db, actorId, contextKey?, options?)` | Set actor context in current transaction |
 | `withAuditedTransaction(db, actorId, callback, contextKey?, options?)` | Transaction wrapper with actor context |
 

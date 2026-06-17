@@ -9,6 +9,9 @@ type JsonValue = Record<string, unknown>
 
 export type AuditContext = {
   userId: string
+  /** Map of extra audit context column name → value (matching contextColumns). */
+  context?: Record<string, string>
+  /** @deprecated Use `context: { workspace_id: value }` instead. */
   workspaceId?: string
 }
 
@@ -116,7 +119,7 @@ export function withAudit<TDb extends DrizzleSQLiteDb>(
   auditTable: SQLiteTable,
   context: AuditContext,
 ): AuditedDb<TDb> {
-  const workspaceIdColumn = (() => {
+  const extraColumns = (() => {
     const cols = getTableColumns(auditTable)
     const known = new Set([
       "id",
@@ -128,9 +131,14 @@ export function withAudit<TDb extends DrizzleSQLiteDb>(
       "new_data",
       "created_at",
     ])
-    const extra = Object.keys(cols).find((k) => !known.has(k))
-    return extra ?? null
+    return Object.keys(cols).filter((k) => !known.has(k))
   })()
+
+  // Merge the deprecated workspaceId alias into the generic context map.
+  const contextValues: Record<string, string> = { ...(context.context ?? {}) }
+  if (context.workspaceId !== undefined && context.workspaceId !== "") {
+    contextValues["workspace_id"] = context.workspaceId
+  }
 
   function buildAuditRow(
     tableName: string,
@@ -139,6 +147,14 @@ export function withAudit<TDb extends DrizzleSQLiteDb>(
     oldData: JsonValue | null,
     newData: JsonValue | null,
   ): AuditLogInsertShape {
+    const extra: Record<string, string> = {}
+    for (const column of extraColumns) {
+      const value = contextValues[column]
+      if (value !== undefined && value !== "") {
+        extra[column] = value
+      }
+    }
+
     return {
       table_name: tableName,
       operation,
@@ -146,9 +162,7 @@ export function withAudit<TDb extends DrizzleSQLiteDb>(
       user_id: context.userId,
       old_data: oldData ? JSON.stringify(oldData) : null,
       new_data: newData ? JSON.stringify(newData) : null,
-      ...(workspaceIdColumn && context.workspaceId
-        ? { [workspaceIdColumn]: context.workspaceId }
-        : {}),
+      ...extra,
     }
   }
 

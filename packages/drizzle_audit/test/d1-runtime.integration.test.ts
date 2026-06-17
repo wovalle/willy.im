@@ -237,6 +237,72 @@ test("withAudit with workspace_id", () => {
   }
 })
 
+test("withAudit with generic context columns", () => {
+  const sqlite = new Database(":memory:")
+  const auditLogsWithCtx = d1AuditLogTable({
+    contextColumns: [
+      { column: "workspace_id" },
+      { column: "tenant_id" },
+      { column: "request_id" },
+    ],
+  })
+  const db = drizzle({ client: sqlite, schema: { auditLogs: auditLogsWithCtx, users } })
+
+  try {
+    sqlite.exec(`
+      CREATE TABLE audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        row_id TEXT,
+        user_id TEXT,
+        workspace_id TEXT,
+        tenant_id TEXT,
+        request_id TEXT,
+        old_data TEXT,
+        new_data TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT
+      );
+    `)
+
+    const audited = withAudit(db, auditLogsWithCtx, {
+      userId: "user_1",
+      context: {
+        workspace_id: "ws_1",
+        tenant_id: "tenant_1",
+        request_id: "req_1",
+      },
+    })
+    audited.insert(users, { id: "u1", name: "Ada" })
+
+    const logs = db.select().from(auditLogsWithCtx).all()
+    assert.equal(logs.length, 1)
+    const row = logs[0] as Record<string, unknown>
+    assert.equal(row.user_id, "user_1")
+    assert.equal(row.workspace_id, "ws_1")
+    assert.equal(row.tenant_id, "tenant_1")
+    assert.equal(row.request_id, "req_1")
+
+    // No context: extra columns stay NULL.
+    const auditedNoCtx = withAudit(db, auditLogsWithCtx, { userId: "user_2" })
+    auditedNoCtx.insert(users, { id: "u2", name: "Bob" })
+
+    const all = db.select().from(auditLogsWithCtx).orderBy(asc(auditLogsWithCtx.id)).all()
+    const last = all[all.length - 1] as Record<string, unknown>
+    assert.equal(last.user_id, "user_2")
+    assert.equal(last.workspace_id, null)
+    assert.equal(last.tenant_id, null)
+    assert.equal(last.request_id, null)
+  } finally {
+    sqlite.close()
+  }
+})
+
 test("withAudit.db gives access to raw db for non-audited ops", () => {
   const { db, sqlite } = setupDb()
   try {

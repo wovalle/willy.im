@@ -1,4 +1,8 @@
-import type { D1AuditInstallOptions, D1AuditTriggerTarget } from "./types.js"
+import type {
+  AuditContextColumn,
+  D1AuditInstallOptions,
+  D1AuditTriggerTarget,
+} from "./types.js"
 
 const DEFAULT_AUDIT_TABLE = "audit_logs"
 const DEFAULT_CONTEXT_TABLE = "_audit_context"
@@ -19,6 +23,67 @@ function assertNonEmpty(value: string, label: string) {
   return value
 }
 
+type ResolvedContextColumn = {
+  column: string
+  sessionKey: string
+  index: boolean
+}
+
+/**
+ * Normalizes the context columns from the install options, folding the
+ * deprecated `workspaceIdColumn` alias into the generic `contextColumns` list
+ * and de-duplicating by column name. For D1 the KV key defaults to the column
+ * name itself.
+ */
+function normalizeContextColumns(
+  options: { contextColumns?: AuditContextColumn[]; workspaceIdColumn?: string },
+): ResolvedContextColumn[] {
+  const raw: AuditContextColumn[] = [...(options.contextColumns ?? [])]
+
+  const workspaceIdColumn = options.workspaceIdColumn?.trim()
+  if (workspaceIdColumn) {
+    raw.push({ column: workspaceIdColumn })
+  }
+
+  const resolved: ResolvedContextColumn[] = []
+  const seen = new Set<string>()
+  for (const entry of raw) {
+    const column = entry.column?.trim()
+    if (!column) {
+      throw new Error("contextColumns[].column must not be empty")
+    }
+    if (seen.has(column)) {
+      continue
+    }
+    seen.add(column)
+    resolved.push({
+      column,
+      sessionKey: entry.sessionKey?.trim() || column,
+      index: entry.index ?? true,
+    })
+  }
+
+  return resolved
+}
+
+/** Builds the column-name suffix for an INSERT column list. */
+function contextColsClause(contextColumns: ResolvedContextColumn[]): string {
+  return contextColumns.map((c) => `, ${quoteIdent(c.column)}`).join("")
+}
+
+/** Builds the matching VALUES suffix that reads each KV row from the context table. */
+function contextValuesClause(
+  contextColumns: ResolvedContextColumn[],
+  contextTable: string,
+): string {
+  return contextColumns
+    .map(
+      (c) =>
+        `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = ${quoteLiteral(c.sessionKey)})`,
+    )
+    .join("")
+}
+
 /**
  * Generates SQL to install the audit_logs table and _audit_context table.
  *
@@ -35,7 +100,7 @@ export function createD1AuditInstallSql(options: D1AuditInstallOptions = {}) {
     options.contextTable ?? DEFAULT_CONTEXT_TABLE,
     "contextTable",
   )
-  const workspaceIdColumn = options.workspaceIdColumn?.trim()
+  const contextColumns = normalizeContextColumns(options)
 
   const auditColumns = [
     "id INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -43,13 +108,13 @@ export function createD1AuditInstallSql(options: D1AuditInstallOptions = {}) {
     "operation TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE'))",
     "row_id TEXT",
     "user_id TEXT",
-    ...(workspaceIdColumn ? [`${quoteIdent(workspaceIdColumn)} TEXT`] : []),
+    ...contextColumns.map((c) => `${quoteIdent(c.column)} TEXT`),
     "old_data TEXT",
     "new_data TEXT",
     "created_at TEXT NOT NULL DEFAULT (datetime('now'))",
   ]
 
-  const contextColumns = [
+  const contextTableColumns = [
     "key TEXT PRIMARY KEY",
     "value TEXT",
   ]
@@ -58,17 +123,18 @@ export function createD1AuditInstallSql(options: D1AuditInstallOptions = {}) {
     `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_table_name_idx`)} ON ${quoteIdent(auditTable)} (table_name);`,
     `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_row_id_idx`)} ON ${quoteIdent(auditTable)} (row_id);`,
     `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_user_id_idx`)} ON ${quoteIdent(auditTable)} (user_id);`,
-    ...(workspaceIdColumn
-      ? [
-          `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_${workspaceIdColumn}_idx`)} ON ${quoteIdent(auditTable)} (${quoteIdent(workspaceIdColumn)});`,
-        ]
-      : []),
+    ...contextColumns
+      .filter((c) => c.index)
+      .map(
+        (c) =>
+          `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_${c.column}_idx`)} ON ${quoteIdent(auditTable)} (${quoteIdent(c.column)});`,
+      ),
     `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${auditTable}_created_at_idx`)} ON ${quoteIdent(auditTable)} (created_at);`,
   ]
 
   return [
     `CREATE TABLE IF NOT EXISTS ${quoteIdent(auditTable)} (\n  ${auditColumns.join(",\n  ")}\n);`,
-    `CREATE TABLE IF NOT EXISTS ${quoteIdent(contextTable)} (\n  ${contextColumns.join(",\n  ")}\n);`,
+    `CREATE TABLE IF NOT EXISTS ${quoteIdent(contextTable)} (\n  ${contextTableColumns.join(",\n  ")}\n);`,
     ...indexStatements,
   ].join("\n\n")
 }
@@ -92,7 +158,7 @@ function buildInsertTriggerSql(
   )
   const triggerPrefix = target.triggerPrefix ?? table
   const triggerName = `${triggerPrefix}_audit_insert`
-  const workspaceIdColumn = options.workspaceIdColumn?.trim()
+  const contextColumns = normalizeContextColumns(options)
 
   return `
 DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)};
@@ -101,12 +167,12 @@ CREATE TRIGGER ${quoteIdent(triggerName)}
 AFTER INSERT ON ${quoteIdent(table)}
 FOR EACH ROW
 BEGIN
-  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""})
+  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${contextColsClause(contextColumns)})
   VALUES (
     ${quoteLiteral(table)},
     'INSERT',
     NEW.${quoteIdent(rowIdColumn)},
-    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""}
+    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${contextValuesClause(contextColumns, contextTable)}
   );
 END;`.trim()
 }
@@ -130,7 +196,7 @@ function buildUpdateTriggerSql(
   )
   const triggerPrefix = target.triggerPrefix ?? table
   const triggerName = `${triggerPrefix}_audit_update`
-  const workspaceIdColumn = options.workspaceIdColumn?.trim()
+  const contextColumns = normalizeContextColumns(options)
 
   return `
 DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)};
@@ -139,12 +205,12 @@ CREATE TRIGGER ${quoteIdent(triggerName)}
 AFTER UPDATE ON ${quoteIdent(table)}
 FOR EACH ROW
 BEGIN
-  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""})
+  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${contextColsClause(contextColumns)})
   VALUES (
     ${quoteLiteral(table)},
     'UPDATE',
     NEW.${quoteIdent(rowIdColumn)},
-    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""}
+    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${contextValuesClause(contextColumns, contextTable)}
   );
 END;`.trim()
 }
@@ -168,7 +234,7 @@ function buildDeleteTriggerSql(
   )
   const triggerPrefix = target.triggerPrefix ?? table
   const triggerName = `${triggerPrefix}_audit_delete`
-  const workspaceIdColumn = options.workspaceIdColumn?.trim()
+  const contextColumns = normalizeContextColumns(options)
 
   return `
 DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)};
@@ -177,12 +243,12 @@ CREATE TRIGGER ${quoteIdent(triggerName)}
 AFTER DELETE ON ${quoteIdent(table)}
 FOR EACH ROW
 BEGIN
-  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""})
+  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${contextColsClause(contextColumns)})
   VALUES (
     ${quoteLiteral(table)},
     'DELETE',
     OLD.${quoteIdent(rowIdColumn)},
-    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""}
+    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${contextValuesClause(contextColumns, contextTable)}
   );
 END;`.trim()
 }
@@ -247,7 +313,7 @@ function buildInsertTriggerWithColumnsSql(
   )
   const triggerPrefix = target.triggerPrefix ?? table
   const triggerName = `${triggerPrefix}_audit_insert`
-  const workspaceIdColumn = options.workspaceIdColumn?.trim()
+  const contextColumns = normalizeContextColumns(options)
 
   return `
 DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)};
@@ -256,12 +322,12 @@ CREATE TRIGGER ${quoteIdent(triggerName)}
 AFTER INSERT ON ${quoteIdent(table)}
 FOR EACH ROW
 BEGIN
-  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""}, new_data)
+  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${contextColsClause(contextColumns)}, new_data)
   VALUES (
     ${quoteLiteral(table)},
     'INSERT',
     NEW.${quoteIdent(rowIdColumn)},
-    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""},
+    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${contextValuesClause(contextColumns, contextTable)},
     ${buildJsonObjectExpr(target.columns, "NEW")}
   );
 END;`.trim()
@@ -286,7 +352,7 @@ function buildUpdateTriggerWithColumnsSql(
   )
   const triggerPrefix = target.triggerPrefix ?? table
   const triggerName = `${triggerPrefix}_audit_update`
-  const workspaceIdColumn = options.workspaceIdColumn?.trim()
+  const contextColumns = normalizeContextColumns(options)
 
   return `
 DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)};
@@ -295,12 +361,12 @@ CREATE TRIGGER ${quoteIdent(triggerName)}
 AFTER UPDATE ON ${quoteIdent(table)}
 FOR EACH ROW
 BEGIN
-  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""}, old_data, new_data)
+  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${contextColsClause(contextColumns)}, old_data, new_data)
   VALUES (
     ${quoteLiteral(table)},
     'UPDATE',
     NEW.${quoteIdent(rowIdColumn)},
-    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""},
+    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${contextValuesClause(contextColumns, contextTable)},
     ${buildJsonObjectExpr(target.columns, "OLD")},
     ${buildJsonObjectExpr(target.columns, "NEW")}
   );
@@ -326,7 +392,7 @@ function buildDeleteTriggerWithColumnsSql(
   )
   const triggerPrefix = target.triggerPrefix ?? table
   const triggerName = `${triggerPrefix}_audit_delete`
-  const workspaceIdColumn = options.workspaceIdColumn?.trim()
+  const contextColumns = normalizeContextColumns(options)
 
   return `
 DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)};
@@ -335,12 +401,12 @@ CREATE TRIGGER ${quoteIdent(triggerName)}
 AFTER DELETE ON ${quoteIdent(table)}
 FOR EACH ROW
 BEGIN
-  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${workspaceIdColumn ? `, ${quoteIdent(workspaceIdColumn)}` : ""}, old_data)
+  INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${contextColsClause(contextColumns)}, old_data)
   VALUES (
     ${quoteLiteral(table)},
     'DELETE',
     OLD.${quoteIdent(rowIdColumn)},
-    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${workspaceIdColumn ? `,\n    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'workspace_id')` : ""},
+    (SELECT value FROM ${quoteIdent(contextTable)} WHERE key = 'user_id')${contextValuesClause(contextColumns, contextTable)},
     ${buildJsonObjectExpr(target.columns, "OLD")}
   );
 END;`.trim()
