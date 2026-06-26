@@ -52,9 +52,11 @@ User (global)
 - **Identity + profile**: `id_token` claims + `userinfo`, plus a server-to-server
   profile API. A "Manage profile" link sends users to the IdP and back.
 - **Per-app workspace + role + permission claims**, scoped to the requesting app.
-  A user may belong to multiple workspaces in an app; tokens are always scoped to
-  one workspace — the app resolves which (via a `workspace_id` authorize param or
-  a post-login selection screen) before requesting the token.
+  A user may belong to multiple workspaces in an app; the token includes *all* of
+  them as an array (`https://willy.im/workspaces`), filtered to the requesting app
+  only — workspaces from other apps are never visible. The app picks the active
+  workspace from the array at request time (by subdomain, URL param, stored
+  preference, etc.) without needing a new token.
 - **`permissions[]` claim**: a static catalog of permission strings declared by the
   app. The IdP resolves each user's granted permissions and emits them as a
   `permissions` array in the token. Apps enforce access against this list (see
