@@ -12,5 +12,10 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
-  "exclude": ["node_modules", "dist", "test/postgres.integration.test.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test/postgres.integration.test.ts",
+    "test/context.integration.test.ts"
+  ]
 }
