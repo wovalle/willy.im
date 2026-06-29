@@ -179,6 +179,60 @@ withD1AuditedTransaction(db, "user_1", (tx) => { /* ... */ }, {
 })
 ```
 
+## Ambient Context (AsyncLocalStorage)
+
+The explicit `withAuditedTransaction(db, actorId, cb)` is the cross-runtime floor —
+it works everywhere and you pass the actor by hand. The opt-in
+`@willyim/drizzle-audit/context` export adds an *ambient* layer on top: establish
+"who is acting" **once** at an entry boundary (a request, a job, an engine tick),
+then open-or-reuse a single audited transaction anywhere below — the actor is read
+from the ambient store, never threaded through call signatures.
+
+```ts
+import {
+  runWithAuditContext,
+  ensureAuditedTx,
+  currentAudit,
+} from "@willyim/drizzle-audit/context"
+
+// 1. Boundary: set the ambient actor for the unit of work. Pass a thunk to
+//    resolve it LAZILY — it only runs if a write actually happens, so read-only
+//    requests never pay for it (e.g. resolving a session).
+app.use((req, next) =>
+  runWithAuditContext(
+    async () => ({
+      actorId: (await getSession(req)).userId,
+      context: { "app.workspace_id": req.workspaceId },
+    }),
+    next,
+  ),
+)
+
+// 2. Anywhere below: open-or-reuse ONE audited tx. Reads don't call this, so
+//    they never open a transaction. Reentrant — nested calls share the tx.
+async function archive(db, id) {
+  await ensureAuditedTx(db, async (tx) => {
+    await tx.update(items).set({ archived: true }).where(eq(items.id, id))
+  })
+}
+
+// 3. Read the actor for a domain column (inside the callback, where it's resolved).
+async function assign(db, id, to) {
+  await ensureAuditedTx(db, async (tx) => {
+    await tx.insert(assignments).values({ id, to, assignedBy: currentAudit().actorId })
+  })
+}
+```
+
+**Runtime support.** This uses *only* `AsyncLocalStorage` from `node:async_hooks`
+(not `createHook`/`executionAsyncId`/…), which is the subset Cloudflare Workers
+implements. Works on Node, Bun, and Workers — Workers needs the `nodejs_compat`
+flag and a recent compatibility date. If a target lacks ALS, the import throws
+loudly; fall back to the explicit `withAuditedTransaction`.
+
+**Guardrail.** `ensureAuditedTx` (and `currentAudit`) throw if there is no ambient
+context — a missed boundary becomes a loud failure instead of an unattributed write.
+
 ## CLI
 
 Generate a Drizzle migration with audit SQL appended:
@@ -220,6 +274,18 @@ export function createAuditSql() {
 | `createAuditAddContextColumnsSql(options)` | SQL to add context columns + regenerate trigger on existing install |
 | `setAuditContext(db, actorId, contextKey?, options?)` | Set actor context in current transaction |
 | `withAuditedTransaction(db, actorId, callback, contextKey?, options?)` | Transaction wrapper with actor context |
+
+### `@willyim/drizzle-audit/context`
+
+Opt-in ambient layer (AsyncLocalStorage). See [Ambient Context](#ambient-context-asynclocalstorage).
+
+| Export | Description |
+|---|---|
+| `runWithAuditContext(audit, fn)` | Set the ambient actor for `fn` (`audit` is an `AuditContext` or a lazy thunk) |
+| `ensureAuditedTx(db, run, contextKey?)` | Open-or-reuse one audited tx; actor read from the ambient context |
+| `currentAudit()` | The resolved ambient `AuditContext` (throws if absent/unresolved) |
+| `maybeCurrentAudit()` | The resolved ambient `AuditContext`, or `null` |
+| `hasAuditContext()` | Whether an ambient context is in scope |
 
 ### `@willyim/drizzle-audit`
 
