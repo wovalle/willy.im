@@ -262,8 +262,7 @@ test("workspace_id column and context are stored when enabled", async () => {
       async (tx) => {
         await tx.insert(users).values({ id: "u1", name: "Alice" })
       },
-      "app.user_id",
-      { context: { "app.workspace_id": "ws_1" } },
+      { context: { workspace_id: "ws_1" } },
     )
 
     const logs = await db.select().from(auditLogsWithWorkspace)
@@ -318,8 +317,7 @@ test("custom context column name uses matching session key", async () => {
       async (tx) => {
         await tx.insert(users).values({ id: "u1", name: "Alice" })
       },
-      "app.user_id",
-      { context: { "app.tenant_id": "tenant_abc" } },
+      { context: { tenant_id: "tenant_abc" } },
     )
 
     const logs = await db.select().from(auditLogsWithTenant)
@@ -365,12 +363,11 @@ test("generic contextColumns populate and stay NULL without context", async () =
           .where(eq(users.id, "u1"))
         await tx.delete(users).where(eq(users.id, "u1"))
       },
-      "app.user_id",
       {
         context: {
-          "app.workspace_id": "ws_1",
-          "app.tenant_id": "tenant_1",
-          "app.request_id": "req_1",
+          workspace_id: "ws_1",
+          tenant_id: "tenant_1",
+          request_id: "req_1",
         },
       },
     )
@@ -445,11 +442,10 @@ test("createAuditAddContextColumnsSql adds a column and regenerates trigger", as
       async (tx) => {
         await tx.insert(users).values({ id: "u1", name: "Alice" })
       },
-      "app.user_id",
       {
         context: {
-          "app.workspace_id": "ws_1",
-          "app.request_id": "req_99",
+          workspace_id: "ws_1",
+          request_id: "req_99",
         },
       },
     )
@@ -495,7 +491,7 @@ test("custom context key for user_id works", async () => {
       async (tx) => {
         await tx.insert(users).values({ id: "u1", name: "Alice" })
       },
-      "myapp.actor",
+      { actorKey: "myapp.actor" },
     )
 
     const logs = await db.select().from(auditLogs).orderBy(asc(auditLogs.id))

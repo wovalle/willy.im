@@ -45,7 +45,7 @@ test("ensureAuditedTx stamps the ambient actor + context columns", async () => {
   const db = await makeDb()
 
   await runWithAuditContext(
-    { actorId: "user_123", context: { "app.workspace_id": "ws_1" } },
+    { actorId: "user_123", context: { workspace_id: "ws_1" } },
     () =>
       ensureAuditedTx(db, async (tx) => {
         await tx.insert(users).values({ id: "u1", name: "Ada" })

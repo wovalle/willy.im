@@ -106,10 +106,10 @@ test("lazy resolver runs exactly once, on first write", async () => {
 
 test("eager context resolves immediately (currentAudit before any write)", async () => {
   await runWithAuditContext(
-    { actorId: "eager", context: { "app.workspace_id": "ws_9" } },
+    { actorId: "eager", context: { workspace_id: "ws_9" } },
     async () => {
       assert.equal(currentAudit().actorId, "eager")
-      assert.equal(currentAudit().context?.["app.workspace_id"], "ws_9")
+      assert.equal(currentAudit().context?.["workspace_id"], "ws_9")
     },
   )
 })

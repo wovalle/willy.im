@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 
-import { setAuditContext } from "../postgres/runtime.js"
+import { setAuditContext, type AuditContextOptions } from "../postgres/runtime.js"
 import type {
   AuditSqlExecutor,
   AuditTransactionCapable,
@@ -35,11 +35,14 @@ if (typeof AsyncLocalStorage === "undefined") {
   )
 }
 
-/** Opaque to the library: an actor string + the GUC map written for the tx. */
+/** Opaque to the library: an actor string + the context map written for the tx. */
 export type AuditContext = {
   /** Value written to the actor GUC (default `app.user_id`). */
   actorId: string
-  /** Extra session GUCs (full GUC name → value), e.g. `app.workspace_id`. */
+  /**
+   * Context values keyed by **column name** (e.g. `workspace_id`), written to
+   * `app.${column}` GUCs. See {@link AuditContextOptions.context}.
+   */
   context?: Record<string, string>
 }
 
@@ -123,7 +126,7 @@ export async function ensureAuditedTx<
 >(
   db: AuditTransactionCapable<TTransaction>,
   run: (tx: TTransaction) => Promise<TResult> | TResult,
-  contextKey = "app.user_id",
+  options?: Omit<AuditContextOptions, "context">,
 ): Promise<TResult> {
   const cell = als.getStore()
   if (!cell) {
@@ -139,9 +142,7 @@ export async function ensureAuditedTx<
   const audit = cell.resolved ?? (cell.resolved = await cell.resolve())
 
   return db.transaction(async (tx) => {
-    await setAuditContext(tx, audit.actorId, contextKey, {
-      context: audit.context,
-    })
+    await setAuditContext(tx, audit.actorId, { ...options, context: audit.context })
     cell.tx = tx
     try {
       return await run(tx)
