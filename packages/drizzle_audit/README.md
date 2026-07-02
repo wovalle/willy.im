@@ -144,11 +144,12 @@ const contextColumns = [{ column: "workspace_id" }, { column: "tenant_id" }]
 createAuditInstallSql({ contextColumns })
 export const auditLogs = pgAuditLogTable({ contextColumns })
 
-// Pass context at runtime (GUC name → value)
+// Pass context at runtime, keyed by COLUMN name. Each value is written to the
+// GUC `app.${column}` (matching the trigger's default sessionKey). Override the
+// prefix with `contextPrefix`, or set it to "" to pass fully-qualified keys.
 await withAuditedTransaction(
   db, userId, async (tx) => { /* ... */ },
-  "app.user_id",
-  { context: { "app.workspace_id": "ws_1", "app.tenant_id": "t_1" } },
+  { context: { workspace_id: "ws_1", tenant_id: "t_1" } },
 )
 ```
 
@@ -202,7 +203,7 @@ app.use((req, next) =>
   runWithAuditContext(
     async () => ({
       actorId: (await getSession(req)).userId,
-      context: { "app.workspace_id": req.workspaceId },
+      context: { workspace_id: req.workspaceId },
     }),
     next,
   ),
@@ -272,8 +273,8 @@ export function createAuditSql() {
 | `createAttachAuditTriggerSql(target, options?)` | SQL to attach audit trigger to one table |
 | `createAttachAuditTriggersSql(targets, options?)` | Same, for multiple tables |
 | `createAuditAddContextColumnsSql(options)` | SQL to add context columns + regenerate trigger on existing install |
-| `setAuditContext(db, actorId, contextKey?, options?)` | Set actor context in current transaction |
-| `withAuditedTransaction(db, actorId, callback, contextKey?, options?)` | Transaction wrapper with actor context |
+| `setAuditContext(db, actorId, options?)` | Set actor + context GUCs in the current transaction |
+| `withAuditedTransaction(db, actorId, callback, options?)` | Transaction wrapper with actor context |
 
 ### `@willyim/drizzle-audit/context`
 
@@ -282,7 +283,7 @@ Opt-in ambient layer (AsyncLocalStorage). See [Ambient Context](#ambient-context
 | Export | Description |
 |---|---|
 | `runWithAuditContext(audit, fn)` | Set the ambient actor for `fn` (`audit` is an `AuditContext` or a lazy thunk) |
-| `ensureAuditedTx(db, run, contextKey?)` | Open-or-reuse one audited tx; actor read from the ambient context |
+| `ensureAuditedTx(db, run, options?)` | Open-or-reuse one audited tx; actor read from the ambient context |
 | `currentAudit()` | The resolved ambient `AuditContext` (throws if absent/unresolved) |
 | `maybeCurrentAudit()` | The resolved ambient `AuditContext`, or `null` |
 | `hasAuditContext()` | Whether an ambient context is in scope |
@@ -398,6 +399,23 @@ CREATE TABLE audit_logs (
 | **User context** | Native session vars | Available in JS | `_audit_context` table |
 | **Bypass risk** | Low (DB-level) | Medium (must use wrapper) | Low (DB-level) |
 | **Best for** | Postgres apps | D1/Cloudflare Workers | SQLite apps needing DB-level guarantees |
+
+## Migrating from 0.6.x → 0.7.0
+
+The Postgres runtime now takes a single options bag and keys `context` by
+**column name** (the library prepends `app.`), matching the D1 runtime and the
+`contextColumns` config. The positional `contextKey` argument is gone.
+
+| Before (0.6) | After (0.7) |
+|---|---|
+| `setAuditContext(db, actorId, "app.user_id", { context: { "app.workspace_id": v } })` | `setAuditContext(db, actorId, { context: { workspace_id: v } })` |
+| `withAuditedTransaction(db, actorId, cb, "app.user_id", { context: { "app.workspace_id": v } })` | `withAuditedTransaction(db, actorId, cb, { context: { workspace_id: v } })` |
+| `withAuditedTransaction(db, actorId, cb, "myapp.actor")` | `withAuditedTransaction(db, actorId, cb, { actorKey: "myapp.actor" })` |
+| `ensureAuditedTx(db, run, "app.user_id")` | `ensureAuditedTx(db, run, { actorKey: "app.user_id" })` |
+| `AuditContext.context = { "app.workspace_id": v }` | `AuditContext.context = { workspace_id: v }` |
+
+If a context column uses a custom `sessionKey` (not `app.${column}`), set
+`contextPrefix: ""` and pass the fully-qualified GUC name as the key.
 
 ## Migrating from 0.2.x → 0.3.0
 
