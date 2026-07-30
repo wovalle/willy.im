@@ -245,6 +245,23 @@ npx drizzle-audit generate \
   --migrations-dir drizzle
 ```
 
+Any argument the CLI doesn't recognize (and anything after `--`) is passed
+through to `drizzle-kit generate`, so `--name` and `--custom` work. drizzle-kit
+runs with your terminal's stdio, so its interactive prompts (rename vs create)
+behave exactly as they do when you run drizzle-kit directly.
+
+The audit SQL is appended **only when it changed** since the last time it was
+shipped, tracked by a hash in `<migrations-dir>/.drizzle-audit.json` — commit
+that file. Migrations that don't touch the audit config stay free of trigger
+DDL, and a diff carrying the `-- drizzle-audit <hash>` block is a signal that
+the audit setup actually moved. If the audit SQL changes but your schema
+didn't, the CLI exits non-zero and tells you to create an empty migration for
+it:
+
+```bash
+npx drizzle-audit generate --config app/db/audit.ts -- --custom --name audit-update
+```
+
 Your config file exports a `createAuditSql()` function:
 
 ```ts

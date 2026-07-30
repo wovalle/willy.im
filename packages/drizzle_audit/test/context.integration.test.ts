@@ -29,7 +29,7 @@ const auditLogs = pgAuditLogTable({ contextColumns })
 
 async function makeDb() {
   const client = new PGlite()
-  const db = drizzle({ client, schema: { auditLogs, users } })
+  const db = drizzle({ client })
   await client.exec(createAuditInstallSql({ contextColumns }))
   await client.exec(`
     CREATE TABLE users (
