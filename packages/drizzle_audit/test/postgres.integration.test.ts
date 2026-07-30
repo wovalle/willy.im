@@ -28,14 +28,7 @@ const auditLogs = pgAuditLogTable()
 
 test("postgres auditing works end to end", async () => {
   const client = new PGlite()
-  const db = drizzle({
-    client,
-    schema: {
-      auditLogs,
-      users,
-      invoices,
-    },
-  })
+  const db = drizzle({ client })
 
   try {
     await client.exec(createAuditInstallSql())
@@ -123,14 +116,7 @@ test("postgres auditing works end to end", async () => {
 
 test("migration SQL bundle installs and enforces audit context", async () => {
   const client = new PGlite()
-  const db = drizzle({
-    client,
-    schema: {
-      auditLogs,
-      users,
-      invoices,
-    },
-  })
+  const db = drizzle({ client })
 
   try {
     await client.exec(`
@@ -178,13 +164,7 @@ test("migration SQL bundle installs and enforces audit context", async () => {
 
 test("writes without audit context produce audit rows with user_id = NULL", async () => {
   const client = new PGlite()
-  const db = drizzle({
-    client,
-    schema: {
-      auditLogs,
-      users,
-    },
-  })
+  const db = drizzle({ client })
 
   try {
     await client.exec(createAuditInstallSql())
@@ -233,14 +213,7 @@ test("workspace_id column and context are stored when enabled", async () => {
   const auditLogsWithWorkspace = pgAuditLogTable({
     contextColumns: [{ column: "workspace_id" }],
   })
-  const db = drizzle({
-    client,
-    schema: {
-      auditLogs: auditLogsWithWorkspace,
-      users,
-      invoices,
-    },
-  })
+  const db = drizzle({ client })
 
   try {
     await client.exec(
@@ -288,13 +261,7 @@ test("custom context column name uses matching session key", async () => {
   const auditLogsWithTenant = pgAuditLogTable({
     contextColumns: [{ column: "tenant_id" }],
   })
-  const db = drizzle({
-    client,
-    schema: {
-      auditLogs: auditLogsWithTenant,
-      users,
-    },
-  })
+  const db = drizzle({ client })
 
   try {
     await client.exec(
@@ -337,10 +304,7 @@ test("generic contextColumns populate and stay NULL without context", async () =
     { column: "request_id" },
   ]
   const auditLogsWithCtx = pgAuditLogTable({ contextColumns })
-  const db = drizzle({
-    client,
-    schema: { auditLogs: auditLogsWithCtx, users },
-  })
+  const db = drizzle({ client })
 
   try {
     await client.exec(createAuditInstallSql({ contextColumns }))
@@ -410,10 +374,7 @@ test("createAuditAddContextColumnsSql adds a column and regenerates trigger", as
   const auditLogsAfter = pgAuditLogTable({
     contextColumns: [{ column: "workspace_id" }, { column: "request_id" }],
   })
-  const db = drizzle({
-    client,
-    schema: { auditLogs: auditLogsAfter, users },
-  })
+  const db = drizzle({ client })
 
   try {
     // 1) Install base table with a single context column.
@@ -463,10 +424,7 @@ test("createAuditAddContextColumnsSql adds a column and regenerates trigger", as
 
 test("custom context key for user_id works", async () => {
   const client = new PGlite()
-  const db = drizzle({
-    client,
-    schema: { auditLogs, users },
-  })
+  const db = drizzle({ client })
 
   try {
     await client.exec(
@@ -504,10 +462,7 @@ test("custom context key for user_id works", async () => {
 
 test("install + attach SQL is idempotent — re-applying does not break or double-log", async () => {
   const client = new PGlite()
-  const db = drizzle({
-    client,
-    schema: { auditLogs, users },
-  })
+  const db = drizzle({ client })
 
   try {
     // Consumers ship the audit block in generated migrations, so a fresh
