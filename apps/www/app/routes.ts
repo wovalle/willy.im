@@ -8,6 +8,8 @@ export default [
     route("login", "routes/auth/login.tsx"),
     route("auth/*", "routes/auth/auth.$.ts"),
     route("cron/update", "routes/cron/update.ts"),
+    route("api/logs", "routes/api/logs.ts"),
+    route("api/logs/:id", "routes/api/logs.$id.ts"),
     route("about", "routes/about.tsx"),
     route("privacy", "routes/privacy.tsx"),
     route("terms", "routes/terms.tsx"),

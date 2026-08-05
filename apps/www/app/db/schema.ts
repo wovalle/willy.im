@@ -8,6 +8,15 @@ export const kv = sqliteTable("kv", {
   expires_at: integer({ mode: "timestamp" }), // Timestamp for expiration
 })
 
+export const logs = sqliteTable("logs", {
+  id: text().primaryKey().notNull(),
+  filename: text(),
+  client: text(),
+  content_type: text(),
+  size: integer().notNull(),
+  created_at: integer({ mode: "timestamp" }).notNull(),
+})
+
 export const notes = sqliteTable("notes", {
   id: text().primaryKey().notNull(),
   title: text().notNull(),
