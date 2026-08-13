@@ -1,4 +1,4 @@
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { Form, useActionData, useNavigate, useNavigation } from "react-router"
 import { ChevronRight, Loader2, Plus } from "lucide-react"
 
@@ -58,9 +58,26 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
   const error = actionData && "error" in actionData ? actionData.error : null
   const field = actionData && "field" in actionData ? actionData.field : null
   const uriRef = useRef<HTMLInputElement>(null)
+  // null = automatic: open when there's nothing to list, or when a submit
+  // produced something to show (validation error, one-time secret).
+  const [formOpen, setFormOpen] = useState<boolean | null>(null)
+  const showForm = formOpen ?? (!!actionData || applications.length === 0)
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold tracking-tight">Applications</h2>
+        <Button
+          variant="outline"
+          aria-expanded={showForm}
+          onClick={() => setFormOpen(!showForm)}
+        >
+          <Plus className="size-4" />
+          Register application
+        </Button>
+      </div>
+
+      {showForm ? (
       <Card>
         <CardHeader>
           <CardTitle>Register an application</CardTitle>
@@ -117,10 +134,11 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
           ) : null}
         </CardContent>
       </Card>
+      ) : null}
 
       {applications.length === 0 ? (
         <div className="text-muted-foreground rounded-lg border border-dashed p-10 text-center text-sm">
-          No applications yet. Register one above to let it “Sign in with willy.im”.
+          No applications yet.
         </div>
       ) : (
         <Table>
