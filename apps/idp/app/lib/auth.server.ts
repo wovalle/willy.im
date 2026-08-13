@@ -189,8 +189,6 @@ export function createAuthService(context: BaseServiceContext, requestUrl?: stri
           organization: {
             additionalFields: {
               applicationId: { type: "string", required: false, input: true },
-              // Hostname this workspace is served on (multi-domain apps).
-              domain: { type: "string", required: false, input: true },
             },
           },
         },

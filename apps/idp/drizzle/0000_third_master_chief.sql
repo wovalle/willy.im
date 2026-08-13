@@ -231,8 +231,7 @@ CREATE TABLE `organization` (
 	`logo` text,
 	`created_at` integer NOT NULL,
 	`metadata` text,
-	`application_id` text,
-	`domain` text
+	`application_id` text
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `organization_slug_unique` ON `organization` (`slug`);--> statement-breakpoint

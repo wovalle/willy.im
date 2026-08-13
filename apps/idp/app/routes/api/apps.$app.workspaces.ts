@@ -31,7 +31,6 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     app: params.app,
     name: body.name,
     slug: body.slug,
-    domain: body.domain ?? null,
   })
   if ("error" in res) return Response.json({ error: res.error }, { status: 409 })
   await recordAudit(context, {

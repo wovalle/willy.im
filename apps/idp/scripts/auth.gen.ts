@@ -28,10 +28,6 @@ export const auth = betterAuth({
         organization: {
           additionalFields: {
             applicationId: { type: "string", required: false, input: true },
-            // Hostname this workspace is served on (multi-domain apps, e.g.
-            // invoices.willy.im vs invoices.mellen.do). Emitted in claims so
-            // the app can resolve the active workspace from the request host.
-            domain: { type: "string", required: false, input: true },
           },
         },
       },

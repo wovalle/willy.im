@@ -21,11 +21,6 @@ export const WorkspaceSchema = z.object({
   id: z.string(),
   name: z.string(),
   slug: z.string(),
-  domain: z
-    .string()
-    .nullable()
-    .optional()
-    .describe("Hostname this workspace is served on (multi-domain apps)"),
   applicationId: z.string().nullable(),
   createdAt: z.string(),
 })
@@ -69,17 +64,11 @@ export const CreateWorkspaceInput = z.object({
     .string()
     .min(1)
     .regex(/^[a-z0-9-]+$/, "lowercase letters, numbers and dashes only"),
-  domain: z
-    .string()
-    .regex(/^[a-z0-9.-]+$/, "hostname only (no scheme/path)")
-    .optional()
-    .describe("Hostname this workspace is served on (multi-domain apps)"),
 })
 export const WorkspaceCreatedSchema = z.object({
   id: z.string(),
   name: z.string(),
   slug: z.string(),
-  domain: z.string().nullable(),
 })
 
 export const OkSchema = z.object({ ok: z.literal(true) })

@@ -79,14 +79,13 @@ export async function createMember(
 /** A workspace (organization) belonging to one application. */
 export async function createWorkspace(
   ctx: BaseServiceContext,
-  input: { app: string; slug: string; name?: string; domain?: string | null },
+  input: { app: string; slug: string; name?: string },
 ) {
   const id = `org_${uniq()}`
   await ctx.db.insert(schema.organization).values({
     id,
     name: input.name ?? input.slug,
     slug: input.slug,
-    domain: input.domain ?? null,
     applicationId: input.app,
     createdAt: new Date(),
   })

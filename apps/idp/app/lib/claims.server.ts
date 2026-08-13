@@ -94,7 +94,6 @@ export async function workspaceClaimsFor(
       id: schema.organization.id,
       slug: schema.organization.slug,
       name: schema.organization.name,
-      domain: schema.organization.domain,
       role: schema.member.role,
     })
     .from(schema.member)

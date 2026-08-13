@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5d90197d-ab77-44cc-83ae-e442c8dfcc70",
+  "id": "957c8574-d581-442f-853b-5f9cc3c171ad",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "api_key": {
@@ -1644,13 +1644,6 @@
         },
         "application_id": {
           "name": "application_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "domain": {
-          "name": "domain",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
