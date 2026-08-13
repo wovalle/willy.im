@@ -20,9 +20,27 @@ export type AppConfig = z.infer<typeof appConfigSchema>
 /** Full stored app metadata: the immutable `app` key plus the editable config. */
 export type AppMetadata = AppConfig & { app: string | null }
 
+/**
+ * better-auth and drizzle's mode:"json" columns don't always agree on
+ * serialization (values can come back already-parsed, once-, or twice-encoded),
+ * so unwrap defensively up to two JSON layers.
+ */
+export function unwrapJson(value: unknown): unknown {
+  let current = value
+  for (let i = 0; i < 2 && typeof current === "string"; i++) {
+    try {
+      current = JSON.parse(current)
+    } catch {
+      break
+    }
+  }
+  return current
+}
+
 /** Lenient read of whatever is stored in oauth_client.metadata. */
 export function parseAppMetadata(raw: unknown): AppMetadata {
-  const obj = (raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}) ?? {}
+  const unwrapped = unwrapJson(raw)
+  const obj = (unwrapped && typeof unwrapped === "object" ? (unwrapped as Record<string, unknown>) : {}) ?? {}
   const app = typeof obj.app === "string" ? obj.app : null
   const parsed = appConfigSchema.safeParse(obj)
   const config = parsed.success ? parsed.data : { allow_signup: false, permissions: [] }

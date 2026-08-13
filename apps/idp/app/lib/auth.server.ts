@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm"
 import { betterAuth } from "better-auth"
+import { APIError } from "better-auth/api"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { admin } from "better-auth/plugins/admin"
 import { emailOTP } from "better-auth/plugins/email-otp"
@@ -13,6 +14,11 @@ import * as schema from "../db/schema"
 import { customClaimsFor } from "./claims.server"
 import { claimInvitationsForUser } from "./members.server"
 import type { BaseServiceContext } from "./services"
+import {
+  SIGNUP_NOT_ALLOWED_MESSAGE,
+  clientIdFromSignInRequest,
+  decideSignup,
+} from "./signup.server"
 
 /**
  * Builds the sign-in email. Contains both the 6-digit code (type it) and a
@@ -91,6 +97,26 @@ export function createAuthService(context: BaseServiceContext, requestUrl?: stri
       updateAge: 60 * 60 * 24, // refresh daily
     },
     databaseHooks: {
+      // The `allow_signup` gate. This is the only place a willy.im account comes
+      // into existence, so it is the only place the per-app open-signup flag can
+      // be enforced (see signup.server.ts for the exact semantics). Throwing here
+      // aborts before the user row is written — no orphan account.
+      user: {
+        create: {
+          before: async (user, endpoint) => {
+            const clientId = clientIdFromSignInRequest({
+              body: endpoint?.body,
+              query: endpoint?.query,
+              url: endpoint?.request?.url,
+            })
+            const decision = await decideSignup(context, { clientId, email: user.email })
+            if (!decision.allowed) {
+              context.logger.warn("signup.rejected", { app: decision.app, email: user.email })
+              throw new APIError("FORBIDDEN", { message: SIGNUP_NOT_ALLOWED_MESSAGE })
+            }
+          },
+        },
+      },
       // On every new session, claim any pending app invitations addressed to the
       // signed-in user's (verified) email — INVITED → MEMBER. Runs regardless of
       // entry path (console or OAuth), so membership exists before id_token claims

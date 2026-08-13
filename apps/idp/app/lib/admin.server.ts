@@ -3,7 +3,7 @@ import { redirect } from "react-router"
 
 import * as schema from "../db/schema"
 import type { AuthService } from "./auth.server"
-import { type AppConfig, parseAppMetadata } from "./metadata"
+import { type AppConfig, parseAppMetadata, unwrapJson as unwrap } from "./metadata"
 import type { BaseServiceContext } from "./services"
 
 function adminEmails(ctx: BaseServiceContext): string[] {
@@ -41,23 +41,6 @@ export async function requireAdminSession(
   if (!session) throw redirect("/login")
   if (!admin) throw redirect("/account")
   return session
-}
-
-/**
- * better-auth and drizzle's mode:"json" columns don't always agree on
- * serialization (values can come back already-parsed, once-, or twice-encoded),
- * so unwrap defensively up to two JSON layers.
- */
-function unwrap(v: unknown): unknown {
-  let x = v
-  for (let i = 0; i < 2 && typeof x === "string"; i++) {
-    try {
-      x = JSON.parse(x)
-    } catch {
-      break
-    }
-  }
-  return x
 }
 
 function coerceUriList(v: unknown): string[] {
