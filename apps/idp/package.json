@@ -16,7 +16,7 @@
     "db:generate": "dotenv -- drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply --local db",
     "db:migrate-prod": "wrangler d1 migrations apply --remote db",
-    "auth:db:generate": "ln -sf \"$(cd ../.. && pwd)/apps/idp/node_modules/drizzle-orm\" ../../node_modules/drizzle-orm; better-auth generate --config scripts/auth.gen.ts --output app/db/auth-schema.ts --yes; rm -f ../../node_modules/drizzle-orm",
+    "auth:db:generate": "better-auth generate --config scripts/auth.gen.ts --output app/db/auth-schema.ts --yes",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -28,7 +28,7 @@
     "better-auth": "^1.6.15",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "drizzle-orm": "^0.44.6",
+    "drizzle-orm": "^0.45.2",
     "isbot": "^5.1.31",
     "lucide-react": "^1.17.0",
     "react": "^19.1.1",
