@@ -15,6 +15,10 @@ import type { BaseServiceContext } from "../../app/lib/services"
  * with the real `drizzle/*.sql` migrations applied gives us the production
  * schema without a Workers runtime — the service functions under test only ever
  * touch `ctx.db`, so they run unmodified against it.
+ *
+ * The migrations run once per process into a template database; each harness
+ * restores that snapshot. Tests still get a private database with no shared
+ * state — they just don't each pay for replaying the migration history.
  */
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -31,6 +35,22 @@ function migrationStatements(): string[] {
         .map((s) => s.trim())
         .filter(Boolean),
     )
+}
+
+/**
+ * The migrated schema as a raw SQLite image, built once per process. Every
+ * harness restores from this snapshot instead of replaying the migrations, so
+ * the cost of `drizzle/*.sql` is paid once no matter how many tests run.
+ */
+let snapshot: Buffer | null = null
+
+function schemaSnapshot(): Buffer {
+  if (snapshot) return snapshot
+  const template = new Database(":memory:")
+  for (const statement of migrationStatements()) template.exec(statement)
+  snapshot = template.serialize()
+  template.close()
+  return snapshot
 }
 
 export type TestHarness = {
@@ -50,9 +70,8 @@ export type TestHarnessOptions = {
  * (which is what `getAppEnv` parses) and restored by `close()`.
  */
 export function createTestHarness(options: TestHarnessOptions = {}): TestHarness {
-  const sqlite = new Database(":memory:")
+  const sqlite = new Database(schemaSnapshot())
   sqlite.pragma("foreign_keys = ON")
-  for (const statement of migrationStatements()) sqlite.exec(statement)
 
   const db = drizzle(sqlite, { schema })
 
