@@ -223,14 +223,3 @@ export const auditLog = sqliteTable(
 )
 
 export type AuditLog = typeof auditLog.$inferSelect
-
-/**
- * Placeholder app table from Phase 1. Kept for the migration history.
- */
-export const appMeta = sqliteTable("app_meta", {
-  key: text("key").primaryKey(),
-  value: text("value").notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .$defaultFn(() => new Date())
-    .notNull(),
-})

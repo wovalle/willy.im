@@ -85,6 +85,13 @@
       "when": 1781251712282,
       "tag": "0011_fixed_warhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1786649723973,
+      "tag": "0012_acoustic_the_hunter",
+      "breakpoints": true
     }
   ]
 }
