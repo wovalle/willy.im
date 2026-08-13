@@ -105,7 +105,7 @@ export default function Account({ loaderData }: Route.ComponentProps) {
                     aria-label={`Delete passkey ${pk.name ?? ""}`}
                     onClick={() => removePasskey(pk.id)}
                     disabled={!!pending}
-                    className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                    className="text-muted-foreground hover:text-destructive -m-2 rounded-md p-2 disabled:opacity-50"
                   >
                     {pending === pk.id ? (
                       <Loader2 className="size-4 animate-spin" />

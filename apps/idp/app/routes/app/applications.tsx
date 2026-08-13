@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { Form, useActionData, useNavigate, useNavigation } from "react-router"
+import { Form, Link, useActionData, useNavigation } from "react-router"
 import { ChevronRight, Loader2, Plus } from "lucide-react"
 
 import type { Route } from "./+types/applications"
@@ -51,7 +51,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function AdminApplications({ loaderData }: Route.ComponentProps) {
   const { applications } = loaderData
   const actionData = useActionData<typeof action>()
-  const navigate = useNavigate()
   const nav = useNavigation()
   const busy = nav.state !== "idle"
   const created = actionData && "created" in actionData ? actionData.created : null
@@ -153,12 +152,16 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
           </TableHeader>
           <TableBody>
             {applications.map((a) => (
-              <TableRow
-                key={a.clientId}
-                onClick={() => navigate(`/apps/${a.clientId}`)}
-                className="cursor-pointer"
-              >
-                <TableCell className="font-medium">{a.name ?? "—"}</TableCell>
+              <TableRow key={a.clientId} className="relative">
+                <TableCell className="font-medium">
+                  {/* Stretched link: the whole row is clickable with real link semantics. */}
+                  <Link
+                    to={`/apps/${a.clientId}`}
+                    className="no-underline after:absolute after:inset-0"
+                  >
+                    {a.name ?? "—"}
+                  </Link>
+                </TableCell>
                 <TableCell>
                   {a.app ? <Badge variant="secondary">{a.app}</Badge> : "—"}
                 </TableCell>

@@ -453,7 +453,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
                 <code className="bg-muted min-w-0 flex-1 truncate rounded-md px-3 py-2 font-mono text-xs">
                   {application.clientId}
                 </code>
-                <CopyButton value={application.clientId} />
+                <CopyButton value={application.clientId} label="Copy client ID" />
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -1108,7 +1108,7 @@ function PermissionsCatalog({
 }
 
 /** Copy-to-clipboard icon button with a transient checkmark. */
-function CopyButton({ value }: { value: string }) {
+function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <Button
@@ -1127,7 +1127,7 @@ function CopyButton({ value }: { value: string }) {
       }}
     >
       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-      <span className="sr-only">Copy</span>
+      <span className="sr-only">{label}</span>
     </Button>
   )
 }
@@ -1275,6 +1275,7 @@ function MemberRow({
               <span className="text-sm font-medium">{member.email}</span>
               <select
                 name="role"
+                aria-label="Role"
                 value={role}
                 onChange={(e) => setRole(e.target.value as AppRole)}
                 disabled={busy}
@@ -1355,11 +1356,11 @@ function MemberRow({
           variant="ghost"
           size="sm"
           disabled={busy}
-          title="Sign in as this user (superadmin only)"
           onClick={() => submit({ intent: "impersonate", userId: member.userId }, { method: "post" })}
         >
           <UserCog className="size-3.5" />
           Impersonate
+          <span className="sr-only"> {member.email} (superadmin only)</span>
         </Button>
         <AlertDialog>
           <AlertDialogTrigger
