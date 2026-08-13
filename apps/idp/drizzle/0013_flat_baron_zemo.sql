@@ -1,1 +1,0 @@
-DROP TABLE `user_app_metadata`;
