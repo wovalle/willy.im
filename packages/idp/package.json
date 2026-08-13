@@ -1,0 +1,78 @@
+{
+  "name": "@willyim/idp",
+  "version": "0.1.0",
+  "description": "Login for apps that don't own identity — OIDC client, server sessions, and react-router guards against the willy.im IdP",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./drizzle": {
+      "types": "./dist/src/drizzle/index.d.ts",
+      "import": "./dist/src/drizzle/index.js"
+    },
+    "./react-router": {
+      "types": "./dist/src/react-router/index.d.ts",
+      "import": "./dist/src/react-router/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "openapi",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/generated','dist/src/generated',{recursive:true})\"",
+    "prepare": "npm run build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "openapi": "node scripts/generate-openapi.mjs"
+  },
+  "keywords": [
+    "oidc",
+    "oauth",
+    "openid-connect",
+    "authentication",
+    "session",
+    "pkce",
+    "cloudflare-workers",
+    "react-router",
+    "drizzle"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wovalle/willy.im",
+    "directory": "packages/idp"
+  },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.44 || >=1.0.0-0"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-orm": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.19.7",
+    "better-sqlite3": "^12.11.1",
+    "drizzle-orm": "^0.44.7",
+    "esbuild": "^0.25.12",
+    "openapi-typescript": "^7.9.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

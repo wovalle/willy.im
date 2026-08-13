@@ -13,6 +13,7 @@
   "workspaces": [
     "apps/www",
     "apps/idp",
+    "packages/idp",
     "packages/rbac",
     "packages/drizzle_audit",
     "packages/drizzle_repositories"
