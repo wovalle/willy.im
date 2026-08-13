@@ -12,7 +12,10 @@
   "devDependencies": {},
   "workspaces": [
     "apps/www",
-    "apps/idp"
+    "apps/idp",
+    "packages/rbac",
+    "packages/drizzle_audit",
+    "packages/drizzle_repositories"
   ],
   "license": "MIT"
 }
