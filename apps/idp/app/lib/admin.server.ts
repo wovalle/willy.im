@@ -147,52 +147,6 @@ export async function updateApplicationPermissions(
     .where(eq(schema.oauthClient.clientId, clientId))
 }
 
-/** Per-app free-form metadata stored for one user. */
-export async function getUserAppMetadata(
-  ctx: BaseServiceContext,
-  app: string,
-  userId: string,
-): Promise<Record<string, unknown>> {
-  const [row] = await ctx.db
-    .select({ data: schema.userAppMetadata.data })
-    .from(schema.userAppMetadata)
-    .where(
-      and(
-        eq(schema.userAppMetadata.applicationId, app),
-        eq(schema.userAppMetadata.userId, userId),
-      ),
-    )
-    .limit(1)
-  return (unwrap(row?.data) as Record<string, unknown>) ?? {}
-}
-
-/** All per-user metadata rows for an app (for the member editor). */
-export async function listUserMetadataForApp(ctx: BaseServiceContext, app: string) {
-  const rows = await ctx.db
-    .select({ userId: schema.userAppMetadata.userId, data: schema.userAppMetadata.data })
-    .from(schema.userAppMetadata)
-    .where(eq(schema.userAppMetadata.applicationId, app))
-  return rows.map((r) => ({
-    userId: r.userId,
-    data: (unwrap(r.data) as Record<string, unknown>) ?? {},
-  }))
-}
-
-export async function setUserAppMetadata(
-  ctx: BaseServiceContext,
-  app: string,
-  userId: string,
-  data: Record<string, unknown>,
-) {
-  await ctx.db
-    .insert(schema.userAppMetadata)
-    .values({ applicationId: app, userId, data })
-    .onConflictDoUpdate({
-      target: [schema.userAppMetadata.applicationId, schema.userAppMetadata.userId],
-      set: { data, updatedAt: new Date() },
-    })
-}
-
 /**
  * Registers an OAuth client and tags it with metadata.app (the application key
  * consumers' workspace claims are filtered by). Creation goes through better-auth

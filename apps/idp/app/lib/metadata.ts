@@ -1,10 +1,10 @@
 import { z } from "zod"
 
 /**
- * App + user metadata schemas. The app's metadata (stored on oauth_client) holds
- * its product config: whether open signup is allowed and the catalog of product
- * permissions it declares (which the IdP grants to members and emits downstream).
- * User metadata is per-app free-form JSON the app cares about.
+ * App metadata schema. The app's metadata (stored on oauth_client) holds its
+ * product config: whether open signup is allowed and the catalog of product
+ * permissions it declares (which the IdP grants to members and emits
+ * downstream).
  */
 
 const dedupe = (a: string[]) => [...new Set(a.map((s) => s.trim()).filter(Boolean))]
@@ -45,22 +45,4 @@ export function parseAppMetadata(raw: unknown): AppMetadata {
   const parsed = appConfigSchema.safeParse(obj)
   const config = parsed.success ? parsed.data : { allow_signup: false, permissions: [] }
   return { app, ...config }
-}
-
-/** Free-form per-app user metadata — any JSON object. */
-export const userMetadataSchema = z.record(z.string(), z.unknown())
-
-/** Parse + validate a JSON string the user typed into a metadata editor. */
-export function parseJsonObject(
-  raw: string,
-): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
-  let value: unknown
-  try {
-    value = JSON.parse(raw)
-  } catch {
-    return { ok: false, error: "Not valid JSON." }
-  }
-  const parsed = userMetadataSchema.safeParse(value)
-  if (!parsed.success) return { ok: false, error: "Metadata must be a JSON object." }
-  return { ok: true, value: parsed.data }
 }

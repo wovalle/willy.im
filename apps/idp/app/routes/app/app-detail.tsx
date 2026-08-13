@@ -27,16 +27,14 @@ import {
   getApplication,
   listAppMembers,
   listPeopleForApp,
-  listUserMetadataForApp,
   listWorkspacesForApp,
   requireAdminSession,
   rotateApplicationSecret,
-  setUserAppMetadata,
   updateApplicationMetadata,
   updateApplicationPermissions,
   updateApplicationRedirectUris,
 } from "~/lib/admin.server"
-import { appConfigSchema, parseJsonObject } from "~/lib/metadata"
+import { appConfigSchema } from "~/lib/metadata"
 import {
   addOrInviteAppMember,
   listAppInvitations,
@@ -81,16 +79,15 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   const application = await getApplication(context, params.clientId)
   if (!application) throw new Response("Application not found", { status: 404 })
   const app = application.app ?? ""
-  const [workspaces, people, members, invitations, apiKeys, audit, userMetadata] = await Promise.all([
+  const [workspaces, people, members, invitations, apiKeys, audit] = await Promise.all([
     app ? listWorkspacesForApp(context, app) : Promise.resolve([]),
     app ? listPeopleForApp(context, app) : Promise.resolve([]),
     app ? listAppMembers(context, app) : Promise.resolve([]),
     app ? listAppInvitations(context, app) : Promise.resolve([]),
     app ? listApiKeys(context, app) : Promise.resolve([]),
     app ? listAuditForApp(context, app, 20) : Promise.resolve([]),
-    app ? listUserMetadataForApp(context, app) : Promise.resolve([]),
   ])
-  return { application, workspaces, people, members, invitations, apiKeys, audit, userMetadata }
+  return { application, workspaces, people, members, invitations, apiKeys, audit }
 }
 
 export async function action({ request, context, params }: Route.ActionArgs) {
@@ -397,33 +394,13 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     return { ok: "permission-removed" }
   }
 
-  if (intent === "set-user-metadata") {
-    const application = await getApplication(context, clientId)
-    const app = application?.app
-    if (!app) return { error: "This application has no app key yet." }
-    await requireAppPermission(request, context, auth, app, "member:manage")
-    const userId = String(form.get("userId") ?? "")
-    const parsed = parseJsonObject(String(form.get("metadata") ?? "{}"))
-    if (!parsed.ok) return { error: parsed.error, field: `user-meta-${userId}` }
-    await setUserAppMetadata(context, app, userId, parsed.value)
-    await recordAudit(context, {
-      actor,
-      table: "user_app_metadata",
-      operation: "update",
-      applicationId: app,
-      rowId: userId,
-    })
-    return { ok: "user-metadata" }
-  }
-
   return { error: "Unknown action" }
 }
 
 export default function AppDetail({ loaderData }: Route.ComponentProps) {
-  const { application, workspaces, people, members, invitations, apiKeys, audit, userMetadata } =
+  const { application, workspaces, people, members, invitations, apiKeys, audit } =
     loaderData
   const catalog = application.permissions
-  const metaByUser = new Map(userMetadata.map((m) => [m.userId, m.data]))
   const actionData = useActionData<typeof action>()
   const nav = useNavigation()
   const submit = useSubmit()
@@ -695,7 +672,6 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
                     member={m}
                     busy={busy}
                     catalog={catalog}
-                    userMetadata={metaByUser.get(m.userId) ?? {}}
                   />
                 ))}
               </TableBody>
@@ -1490,17 +1466,15 @@ type MemberRowData = {
   productPermissions: string[] | null
 }
 
-/** A member row, collapsible into an inline role + permission + metadata editor. */
+/** A member row, collapsible into an inline role + permission editor. */
 function MemberRow({
   member,
   busy,
   catalog,
-  userMetadata,
 }: {
   member: MemberRowData
   busy: boolean
   catalog: string[]
-  userMetadata: Record<string, unknown>
 }) {
   const submit = useSubmit()
   const [editing, setEditing] = useState(false)
@@ -1571,26 +1545,6 @@ function MemberRow({
                 Cancel
               </Button>
             </div>
-          </Form>
-
-          {/* Per-app user metadata — free-form JSON */}
-          <Form method="post" className="mt-3 flex flex-col gap-1.5 border-t pt-3">
-            <input type="hidden" name="intent" value="set-user-metadata" />
-            <input type="hidden" name="userId" value={member.userId} />
-            <Label htmlFor={`meta-${member.userId}`} className="text-muted-foreground text-xs">
-              User metadata (JSON, for this app)
-            </Label>
-            <textarea
-              id={`meta-${member.userId}`}
-              name="metadata"
-              rows={3}
-              defaultValue={JSON.stringify(userMetadata, null, 2)}
-              disabled={busy}
-              className="border-input bg-transparent focus-visible:ring-ring/50 min-h-16 w-full rounded-md border px-3 py-2 font-mono text-xs shadow-xs focus-visible:ring-[3px] focus-visible:outline-none"
-            />
-            <Button type="submit" size="sm" variant="outline" disabled={busy} className="self-start">
-              Save metadata
-            </Button>
           </Form>
         </TableCell>
       </TableRow>

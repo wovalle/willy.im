@@ -77,25 +77,6 @@ export const applicationInvitation = sqliteTable(
 
 export type ApplicationInvitation = typeof applicationInvitation.$inferSelect
 
-/** Per-app, free-form user metadata (self-service profile fields an app cares about). */
-export const userAppMetadata = sqliteTable(
-  "user_app_metadata",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    applicationId: text("application_id").notNull(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    data: text("data", { mode: "json" }).$type<Record<string, unknown>>().default({}),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-      .$defaultFn(() => new Date())
-      .notNull(),
-  },
-  (t) => [uniqueIndex("user_app_metadata_app_user_uidx").on(t.applicationId, t.userId)],
-)
-
 /**
  * Scoped API key: a hashed, revocable, optionally-expiring credential that lets
  * an agent or service drive the management API for *one application* with a
