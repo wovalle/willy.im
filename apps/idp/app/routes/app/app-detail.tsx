@@ -6,12 +6,10 @@ import {
   ChevronRight,
   Copy,
   KeyRound,
-  LayoutGrid,
   Loader2,
   Mail,
   Plus,
   ScrollText,
-  Settings2,
   ShieldCheck,
   Terminal,
   Trash2,
@@ -417,9 +415,10 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
     error && (field === "invite-email" || field === undefined || field === null) ? error : null
 
   const [searchParams, setSearchParams] = useSearchParams()
-  const section = searchParams.get("section") ?? "overview"
   // Section lives in the URL so it survives Form posts (the action returns to the
   // same URL, search params and all) and is deep-linkable.
+  const rawSection = searchParams.get("section") ?? "overview"
+  const section = LEGACY_SECTIONS[rawSection] ?? rawSection
   const setSection = (id: string) =>
     setSearchParams(
       (prev) => {
@@ -448,7 +447,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
         </h1>
       </div>
 
-      <SectionTabs active={section} onChange={setSection} pendingInvites={invitations.length} />
+      <SectionTabs active={section} pendingInvites={invitations.length} />
 
       {section === "overview" ? (
         <Overview
@@ -595,7 +594,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           <CardTitle>App settings</CardTitle>
           <CardDescription>
             Product config the app declares. <code>allow_signup</code> gates open vs invite-only.
-            The permission catalog lives in its own <span className="font-medium">Permissions</span> section.
+            The permission catalog lives in the <span className="font-medium">Access</span> section.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -625,7 +624,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
       </Card>
       ) : null}
 
-      {section === "access" ? (
+      {section === "members" ? (
       /* App access — admins & members (IdP-level) */
       <Card>
         <CardHeader>
@@ -739,7 +738,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
       </Card>
       ) : null}
 
-      {section === "api-keys" ? (
+      {section === "keys" ? (
       /* API keys — scoped management-API credentials */
       <Card>
         <CardHeader>
@@ -794,7 +793,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
       </Card>
       ) : null}
 
-      {section === "access" ? (
+      {section === "members" ? (
       /* People (derived from workspace membership) */
       <Card>
         <CardHeader>
@@ -921,7 +920,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
       </Card>
       ) : null}
 
-      {section === "permissions" ? (
+      {section === "access" ? (
         <PermissionsCatalog
           catalog={catalog}
           members={members}
@@ -936,51 +935,49 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
 }
 
 const SECTIONS = [
-  { id: "overview", label: "Overview", icon: LayoutGrid },
-  { id: "config", label: "Configuration", icon: Settings2 },
-  { id: "permissions", label: "Permissions", icon: ShieldCheck },
-  { id: "access", label: "Access", icon: Users },
-  { id: "workspaces", label: "Workspaces", icon: Building2 },
-  { id: "api-keys", label: "API keys", icon: Terminal },
-  { id: "activity", label: "Activity", icon: ScrollText },
+  { id: "overview", label: "Overview" },
+  { id: "config", label: "Configuration" },
+  { id: "members", label: "Members" },
+  { id: "access", label: "Access" },
+  { id: "workspaces", label: "Workspaces" },
+  { id: "keys", label: "Keys" },
+  { id: "activity", label: "Activity" },
 ] as const
 
-/** Top-level section switcher. Drives the URL `?section=` param. */
-function SectionTabs({
-  active,
-  onChange,
-  pendingInvites,
-}: {
-  active: string
-  onChange: (id: string) => void
-  pendingInvites: number
-}) {
+/** Legacy `?section=` ids from the pre-rename console, mapped to their new homes. */
+const LEGACY_SECTIONS: Record<string, string> = {
+  permissions: "access",
+  "api-keys": "keys",
+}
+
+/** Top-level section switcher. Reads and writes the URL `?section=` param. */
+function SectionTabs({ active, pendingInvites }: { active: string; pendingInvites: number }) {
   return (
     <div className="border-foreground/10 -mt-2 border-b">
       <nav className="-mb-px flex gap-0.5 overflow-x-auto" aria-label="Sections">
         {SECTIONS.map((s) => {
           const isActive = active === s.id
           return (
-            <button
+            <Link
               key={s.id}
-              type="button"
-              onClick={() => onChange(s.id)}
+              to={`?section=${s.id}`}
+              replace
+              preventScrollReset
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors",
+                "flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap no-underline transition-colors",
                 isActive
                   ? "border-foreground text-foreground"
                   : "text-muted-foreground hover:text-foreground border-transparent",
               )}
             >
-              <s.icon className="size-4" />
               {s.label}
-              {s.id === "access" && pendingInvites > 0 ? (
+              {s.id === "members" && pendingInvites > 0 ? (
                 <Badge variant="secondary" className="ml-0.5">
                   {pendingInvites}
                 </Badge>
               ) : null}
-            </button>
+            </Link>
           )
         })}
       </nav>
@@ -1058,17 +1055,17 @@ function Overview({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
           icon={Users}
-          label="Access"
+          label="Members"
           value={counts.members}
           hint={`${counts.admins} ${plural(counts.admins, "admin")} · ${counts.members - counts.admins} ${plural(counts.members - counts.admins, "member")}`}
-          onClick={() => onNavigate("access")}
+          onClick={() => onNavigate("members")}
         />
         <StatCard
           icon={ShieldCheck}
-          label="Permissions"
+          label="Access"
           value={counts.permissions}
           hint="Product catalog"
-          onClick={() => onNavigate("permissions")}
+          onClick={() => onNavigate("access")}
         />
         <StatCard
           icon={Building2}
@@ -1079,17 +1076,17 @@ function Overview({
         />
         <StatCard
           icon={Terminal}
-          label="API keys"
+          label="Keys"
           value={counts.activeKeys}
           hint={`${counts.totalKeys} total · ${counts.activeKeys} active`}
-          onClick={() => onNavigate("api-keys")}
+          onClick={() => onNavigate("keys")}
         />
         <StatCard
           icon={Mail}
           label="Pending invites"
           value={counts.invites}
           hint={counts.invites > 0 ? "Awaiting acceptance" : "None pending"}
-          onClick={() => onNavigate("access")}
+          onClick={() => onNavigate("members")}
         />
       </div>
 
@@ -1208,7 +1205,7 @@ function PermissionsCatalog({
           The permission vocabulary this app declares. Members are granted a subset (admins get all);
           granted permissions ship in the{" "}
           <code className="font-mono text-xs">https://willy.im/permissions</code> claim of the
-          id_token. Grant them to people in the Access section.
+          id_token. Grant them to people in the Members section.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
