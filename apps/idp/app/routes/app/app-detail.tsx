@@ -434,20 +434,18 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Breadcrumb */}
-      <nav className="text-muted-foreground flex items-center gap-1.5 text-sm" aria-label="Breadcrumb">
-        <Link to="/" className="hover:text-foreground no-underline">
+      {/* Breadcrumb-as-title: the back link is the trail, the leaf is the h1. */}
+      <div className="flex items-baseline gap-1.5">
+        <Link
+          to="/"
+          className="text-muted-foreground hover:text-foreground text-xl font-semibold tracking-tight no-underline transition-colors"
+        >
           Applications
         </Link>
-        <ChevronRight className="size-3.5" />
-        <span className="text-foreground">{application.name ?? application.clientId}</span>
-      </nav>
-
-      <div className="flex items-center gap-3">
+        <span className="text-muted-foreground text-xl font-semibold">/</span>
         <h1 className="text-xl font-semibold tracking-tight">
-          {application.name ?? "Untitled app"}
+          {application.name ?? application.clientId}
         </h1>
-        {application.app ? <Badge variant="secondary">{application.app}</Badge> : null}
       </div>
 
       <SectionTabs active={section} onChange={setSection} pendingInvites={invitations.length} />
