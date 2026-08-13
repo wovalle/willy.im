@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm"
 
 import * as schema from "../db/schema"
-import { APP_PERMISSIONS, type AppPermission } from "./permissions"
+import { isAppPermission, type AppPermission } from "./permissions"
 import type { BaseServiceContext } from "./services"
 
 /**
@@ -39,9 +39,7 @@ export async function hashToken(token: string): Promise<string> {
 
 /** Keep only catalog permissions. */
 function sanitizePermissions(permissions: string[]): AppPermission[] {
-  return permissions.filter((p): p is AppPermission =>
-    (APP_PERMISSIONS as readonly string[]).includes(p),
-  )
+  return permissions.filter(isAppPermission)
 }
 
 export type ApiKeySummary = {

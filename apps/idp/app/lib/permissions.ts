@@ -1,12 +1,16 @@
+import { definePermissions } from "@willyim/rbac"
+
 /**
  * IdP management permissions — what a principal may do *to an application within
  * the IdP* (distinct from an app's own product permissions, which the app
  * declares and enforces itself).
  *
- * Kept inline for now; mirrors the shape of @willyim/rbac so it can be swapped
- * to that package once it's a workspace dependency.
+ * Defined with @willyim/rbac: permissions are the primitive, roles are named
+ * permission bags. `admin` holds the whole catalog; `member` holds nothing by
+ * role — a member's permissions are the explicit grants stored on their
+ * application_member row (intersected with the catalog below).
  */
-export const APP_PERMISSIONS = [
+const PERMISSIONS = [
   "app:read",
   "app:update",
   "app:delete",
@@ -28,14 +32,30 @@ export const APP_PERMISSIONS = [
   "user:impersonate",
 ] as const
 
+export const appRbac = definePermissions({
+  permissions: PERMISSIONS,
+  roles: {
+    admin: PERMISSIONS,
+    member: [],
+  },
+})
+
+export const APP_PERMISSIONS = appRbac.permissions
+
 export type AppPermission = (typeof APP_PERMISSIONS)[number]
 
-export type AppRole = "admin" | "member"
+export type AppRole = keyof (typeof appRbac)["roles"] & string
+
+/** Is `value` a permission this IdP knows about? */
+export function isAppPermission(value: string): value is AppPermission {
+  return (APP_PERMISSIONS as readonly string[]).includes(value)
+}
 
 /** Resolve the effective permission set for a role + explicit grants. admin = all. */
 export function resolvePermissions(role: AppRole, granted: string[] = []): AppPermission[] {
-  if (role === "admin") return [...APP_PERMISSIONS]
-  return granted.filter((p): p is AppPermission =>
-    (APP_PERMISSIONS as readonly string[]).includes(p),
-  )
+  // Effective = the role's bag ∪ the explicit grants (filtered to the catalog, in
+  // case it shrank since the grant). admin's bag is everything, so the union is
+  // the whole catalog; member's bag is empty, so it's just their grants.
+  const checker = appRbac.createChecker(role)
+  return [...new Set([...checker.granted, ...granted.filter(isAppPermission)])]
 }

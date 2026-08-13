@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm"
 import { Resend } from "resend"
 
 import * as schema from "../db/schema"
-import { APP_PERMISSIONS, type AppPermission, type AppRole } from "./permissions"
+import { isAppPermission, type AppPermission, type AppRole } from "./permissions"
 import type { BaseServiceContext } from "./services"
 
 /** Invites stay valid for 7 days. */
@@ -16,9 +16,7 @@ export function normalizeEmail(email: string): string {
 /** Keep only catalog permissions; admins ignore this (they resolve to all). */
 function sanitizePermissions(role: AppRole, permissions: string[]): AppPermission[] {
   if (role === "admin") return []
-  return permissions.filter((p): p is AppPermission =>
-    (APP_PERMISSIONS as readonly string[]).includes(p),
-  )
+  return permissions.filter(isAppPermission)
 }
 
 /**
