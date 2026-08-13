@@ -386,11 +386,8 @@
                   }
                 },
                 "required": [
-                  "email",
-                  "role",
-                  "permissions"
-                ],
-                "additionalProperties": false
+                  "email"
+                ]
               }
             }
           }
@@ -425,6 +422,9 @@
           },
           "403": {
             "description": "Key lacks the permission / is bound to another app"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
           },
           "409": {
             "description": "Conflict (already a member, last admin, slug taken, …)"
@@ -487,10 +487,8 @@
                   }
                 },
                 "required": [
-                  "role",
-                  "permissions"
-                ],
-                "additionalProperties": false
+                  "role"
+                ]
               }
             }
           }
@@ -522,6 +520,9 @@
           },
           "403": {
             "description": "Key lacks the permission / is bound to another app"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
           },
           "409": {
             "description": "Conflict (already a member, last admin, slug taken, …)"
@@ -585,6 +586,9 @@
           },
           "403": {
             "description": "Key lacks the permission / is bound to another app"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
           },
           "409": {
             "description": "Conflict (already a member, last admin, slug taken, …)"
@@ -719,8 +723,7 @@
                 "required": [
                   "name",
                   "slug"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -760,6 +763,9 @@
           "403": {
             "description": "Key lacks the permission / is bound to another app"
           },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
           "409": {
             "description": "Conflict (already a member, last admin, slug taken, …)"
           },
@@ -771,7 +777,7 @@
     },
     "/api/v1/apps/{app}/user-keys": {
       "get": {
-        "summary": "List end-user API keys (filter: ?userId=&workspaceId=)",
+        "summary": "List end-user API keys",
         "description": "Requires `userkey:read` on the path app (or the superadmin token).",
         "security": [
           {
@@ -784,6 +790,24 @@
             "in": "path",
             "required": true,
             "description": "Application key (oauth_client.metadata.app).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "description": "Only keys owned by this user.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "in": "query",
+            "required": false,
+            "description": "Only keys bound to this workspace.",
             "schema": {
               "type": "string"
             }
@@ -951,10 +975,8 @@
                 },
                 "required": [
                   "userId",
-                  "name",
-                  "scopes"
-                ],
-                "additionalProperties": false
+                  "name"
+                ]
               }
             }
           }
@@ -994,6 +1016,9 @@
           },
           "403": {
             "description": "Key lacks the permission / is bound to another app"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
           },
           "409": {
             "description": "Conflict (already a member, last admin, slug taken, …)"
@@ -1039,8 +1064,7 @@
                 },
                 "required": [
                   "token"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -1129,6 +1153,9 @@
           "403": {
             "description": "Key lacks the permission / is bound to another app"
           },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
           "409": {
             "description": "Conflict (already a member, last admin, slug taken, …)"
           },
@@ -1193,6 +1220,9 @@
           },
           "403": {
             "description": "Key lacks the permission / is bound to another app"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
           },
           "409": {
             "description": "Conflict (already a member, last admin, slug taken, …)"

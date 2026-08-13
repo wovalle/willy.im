@@ -20,7 +20,15 @@ import {
   WorkspaceListSchema,
 } from "~/lib/api-schemas"
 
+/**
+ * Responses describe what the API *returns*, so they use zod's output types.
+ * Request bodies describe what a caller may *send*, which is a different shape:
+ * a field with a `.default()` is optional on the way in and guaranteed on the
+ * way out. Emitting output types for both would mark every defaulted field
+ * `required` and force callers to supply values the API would have defaulted.
+ */
 const json = (schema: z.ZodType) => z.toJSONSchema(schema)
+const jsonInput = (schema: z.ZodType) => z.toJSONSchema(schema, { io: "input" })
 
 const bearerGet = (summary: string, responseSchema: z.ZodType) => ({
   get: {
@@ -55,11 +63,20 @@ const jsonContent = (schema: z.ZodType) => ({
   content: { "application/json": { schema: json(schema) } },
 })
 
-const scopedGet = (summary: string, permission: string, responseSchema: z.ZodType) => ({
+const jsonRequest = (schema: z.ZodType) => ({
+  content: { "application/json": { schema: jsonInput(schema) } },
+})
+
+const scopedGet = (
+  summary: string,
+  permission: string,
+  responseSchema: z.ZodType,
+  extraParams: object[] = [],
+) => ({
   summary,
   description: `Requires \`${permission}\` on the path app (or the superadmin token).`,
   security: [{ bearerAuth: [] }],
-  parameters: [appParam],
+  parameters: [appParam, ...extraParams],
   responses: {
     "200": { description: "OK", ...jsonContent(responseSchema) },
     "401": { description: "Missing or invalid bearer token" },
@@ -79,12 +96,13 @@ const scopedWrite = (opts: {
   security: [{ bearerAuth: [] }],
   parameters: [appParam, ...(opts.extraParams ?? [])],
   ...(opts.input
-    ? { requestBody: { required: true, ...jsonContent(opts.input) } }
+    ? { requestBody: { required: true, ...jsonRequest(opts.input) } }
     : {}),
   responses: {
     [opts.success.code]: { description: "OK", ...jsonContent(opts.success.schema) },
     "401": { description: "Missing or invalid bearer token" },
     "403": { description: "Key lacks the permission / is bound to another app" },
+    "405": { description: "Method not allowed on this resource (see the `Allow` header)" },
     "409": { description: "Conflict (already a member, last admin, slug taken, …)" },
     "422": { description: "Body failed validation" },
   },
@@ -149,11 +167,22 @@ export async function loader({ context }: Route.LoaderArgs) {
         }),
       },
       "/api/v1/apps/{app}/user-keys": {
-        get: scopedGet(
-          "List end-user API keys (filter: ?userId=&workspaceId=)",
-          "userkey:read",
-          UserApiKeyListSchema,
-        ),
+        get: scopedGet("List end-user API keys", "userkey:read", UserApiKeyListSchema, [
+          {
+            name: "userId",
+            in: "query",
+            required: false,
+            description: "Only keys owned by this user.",
+            schema: { type: "string" },
+          },
+          {
+            name: "workspaceId",
+            in: "query",
+            required: false,
+            description: "Only keys bound to this workspace.",
+            schema: { type: "string" },
+          },
+        ]),
         post: scopedWrite({
           summary: "Mint an end-user API key (plaintext returned once)",
           permission: "userkey:create",
