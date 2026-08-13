@@ -1,5 +1,5 @@
-import { useRef } from "react"
-import { Form, useActionData, useNavigate, useNavigation } from "react-router"
+import { useRef, useState } from "react"
+import { Form, Link, useActionData, useNavigation } from "react-router"
 import { ChevronRight, Loader2, Plus } from "lucide-react"
 
 import type { Route } from "./+types/applications"
@@ -51,16 +51,32 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function AdminApplications({ loaderData }: Route.ComponentProps) {
   const { applications } = loaderData
   const actionData = useActionData<typeof action>()
-  const navigate = useNavigate()
   const nav = useNavigation()
   const busy = nav.state !== "idle"
   const created = actionData && "created" in actionData ? actionData.created : null
   const error = actionData && "error" in actionData ? actionData.error : null
   const field = actionData && "field" in actionData ? actionData.field : null
   const uriRef = useRef<HTMLInputElement>(null)
+  // null = automatic: open when there's nothing to list, or when a submit
+  // produced something to show (validation error, one-time secret).
+  const [formOpen, setFormOpen] = useState<boolean | null>(null)
+  const showForm = formOpen ?? (!!actionData || applications.length === 0)
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold tracking-tight">Applications</h2>
+        <Button
+          variant="outline"
+          aria-expanded={showForm}
+          onClick={() => setFormOpen(!showForm)}
+        >
+          <Plus className="size-4" />
+          Register application
+        </Button>
+      </div>
+
+      {showForm ? (
       <Card>
         <CardHeader>
           <CardTitle>Register an application</CardTitle>
@@ -92,7 +108,7 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
                 disabled={busy}
               />
               <p id="redirectUris-help" className="text-muted-foreground text-xs">
-                Absolute URLs, space- or comma-separated. Where willy.im sends users back after sign-in.
+                Absolute URLs, space- or comma-separated.
               </p>
             </div>
             <Button type="submit" disabled={busy} className="self-start">
@@ -117,10 +133,11 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
           ) : null}
         </CardContent>
       </Card>
+      ) : null}
 
       {applications.length === 0 ? (
         <div className="text-muted-foreground rounded-lg border border-dashed p-10 text-center text-sm">
-          No applications yet. Register one above to let it “Sign in with willy.im”.
+          No applications yet.
         </div>
       ) : (
         <Table>
@@ -135,12 +152,16 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
           </TableHeader>
           <TableBody>
             {applications.map((a) => (
-              <TableRow
-                key={a.clientId}
-                onClick={() => navigate(`/apps/${a.clientId}`)}
-                className="cursor-pointer"
-              >
-                <TableCell className="font-medium">{a.name ?? "—"}</TableCell>
+              <TableRow key={a.clientId} className="relative">
+                <TableCell className="font-medium">
+                  {/* Stretched link: the whole row is clickable with real link semantics. */}
+                  <Link
+                    to={`/apps/${a.clientId}`}
+                    className="no-underline after:absolute after:inset-0"
+                  >
+                    {a.name ?? "—"}
+                  </Link>
+                </TableCell>
                 <TableCell>
                   {a.app ? <Badge variant="secondary">{a.app}</Badge> : "—"}
                 </TableCell>

@@ -44,7 +44,9 @@ export default {
         cloudflare: { env, ctx },
         ...baseCtx,
         services: {
-          auth: createAuthService(baseCtx),
+          // Host-aware: a request on a vanity IdP domain (IDP_EXTRA_DOMAINS)
+          // gets that host as issuer/cookies/passkey RP.
+          auth: createAuthService(baseCtx, request.url),
         },
       })
       baseCtx.logger.debug("request.end", {

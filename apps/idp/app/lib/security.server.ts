@@ -60,3 +60,22 @@ export async function getAppAccess(
     can: (p) => permissions.includes(p),
   }
 }
+
+/**
+ * Action gate: resolve the caller's access to `app` and require a permission.
+ * Returns the AppAccess on success; throws a 403 Response otherwise. Superadmins
+ * and app admins pass everything; members are checked against their grants.
+ */
+export async function requireAppPermission(
+  request: Request,
+  ctx: BaseServiceContext,
+  auth: AuthService,
+  app: string,
+  permission: AppPermission,
+): Promise<AppAccess> {
+  const access = await getAppAccess(request, ctx, auth, app)
+  if (!access || !access.can(permission)) {
+    throw new Response("Forbidden", { status: 403 })
+  }
+  return access
+}

@@ -1,6 +1,8 @@
-import { and, eq } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { betterAuth } from "better-auth"
+import { APIError } from "better-auth/api"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { admin } from "better-auth/plugins/admin"
 import { emailOTP } from "better-auth/plugins/email-otp"
 import { jwt } from "better-auth/plugins/jwt"
 import { organization } from "better-auth/plugins/organization"
@@ -9,7 +11,14 @@ import { oauthProvider } from "@better-auth/oauth-provider"
 import { Resend } from "resend"
 
 import * as schema from "../db/schema"
+import { customClaimsFor } from "./claims.server"
+import { claimInvitationsForUser } from "./members.server"
 import type { BaseServiceContext } from "./services"
+import {
+  SIGNUP_NOT_ALLOWED_MESSAGE,
+  clientIdFromSignInRequest,
+  decideSignup,
+} from "./signup.server"
 
 /**
  * Builds the sign-in email. Contains both the 6-digit code (type it) and a
@@ -29,37 +38,52 @@ function renderOtpEmail(baseUrl: string, email: string, otp: string) {
   }
 }
 
-const WORKSPACES_CLAIM = "https://willy.im/workspaces"
-
 /**
- * The workspaces (organizations) the user belongs to *within one application*,
- * with their role. Scoped by organization.applicationId so a consumer only ever
- * sees its own tenants. Consumers map role -> permissions via packages/rbac.
+ * Builds the auth service for one request. `requestUrl` makes the IdP
+ * host-aware: when the request arrives on a configured vanity domain
+ * (IDP_EXTRA_DOMAINS, e.g. idp.kasso.do CNAME'd here), that host becomes the
+ * issuer, cookie domain, and passkey RP — first-party auth per domain. Unknown
+ * hosts fall back to the canonical BETTER_AUTH_URL. Signing keys and the user
+ * store are shared, so an account works on every domain; sessions and passkeys
+ * are per-domain by design (no cross-domain SSO).
  */
-async function workspaceClaimsFor(db: BaseServiceContext["db"], userId: string, app?: string) {
-  if (!app) return []
-  return db
-    .select({
-      id: schema.organization.id,
-      slug: schema.organization.slug,
-      name: schema.organization.name,
-      role: schema.member.role,
-    })
-    .from(schema.member)
-    .innerJoin(schema.organization, eq(schema.member.organizationId, schema.organization.id))
-    .where(and(eq(schema.member.userId, userId), eq(schema.organization.applicationId, app)))
-}
-
-export function createAuthService(context: BaseServiceContext) {
+export function createAuthService(context: BaseServiceContext, requestUrl?: string) {
   const env = context.getAppEnv()
   const isProd = env.APP_ENV === "production"
-  const url = new URL(env.BETTER_AUTH_URL)
+  const canonical = new URL(env.BETTER_AUTH_URL)
+
+  const extraHosts = env.IDP_EXTRA_DOMAINS.split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean)
+  const allowedHosts = new Set([canonical.host, ...extraHosts])
+
+  let url = canonical
+  if (requestUrl) {
+    const requested = new URL(requestUrl)
+    if (requested.host !== canonical.host && allowedHosts.has(requested.host.toLowerCase())) {
+      // Vanity domains are always https (Cloudflare/Caddy terminate TLS).
+      url = new URL(`https://${requested.host}`)
+    }
+  }
+
+  // IdP-level superadmins (static allowlist). They — and only they — get the
+  // Better Auth `admin` role, which is what gates impersonation. App-scoped
+  // impersonation by app-admins is intentionally NOT enabled here: the admin
+  // plugin's authorization is global, so granting app-admins the role would let
+  // them call /auth/admin/impersonate-user directly and bypass app-scoping.
+  const superadminEmails = env.ADMIN_EMAILS.split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+  const isSuperadminEmail = (email?: string | null) =>
+    !!email && superadminEmails.includes(email.toLowerCase())
 
   // In dev, trust common localhost ports so a default `npm run dev` (5173) works
-  // even if BETTER_AUTH_URL points elsewhere. Prod trusts only its own origin.
+  // even if BETTER_AUTH_URL points elsewhere. Prod trusts the resolved origin
+  // plus every configured IdP domain (a vanity-domain login posts to itself).
+  const prodOrigins = [...new Set([url.origin, ...extraHosts.map((h) => `https://${h}`)])]
   const trustedOrigins = isProd
-    ? [url.origin]
-    : [...new Set([url.origin, "http://localhost:5173", "http://localhost:9100"])]
+    ? prodOrigins
+    : [...new Set([...prodOrigins, "http://localhost:5173", "http://localhost:9100"])]
 
   return betterAuth({
     appName: "willy.im",
@@ -71,6 +95,68 @@ export function createAuthService(context: BaseServiceContext) {
     session: {
       expiresIn: 60 * 60 * 24 * 30, // 30 days
       updateAge: 60 * 60 * 24, // refresh daily
+    },
+    databaseHooks: {
+      // The `allow_signup` gate. This is the only place a willy.im account comes
+      // into existence, so it is the only place the per-app open-signup flag can
+      // be enforced (see signup.server.ts for the exact semantics). Throwing here
+      // aborts before the user row is written — no orphan account.
+      user: {
+        create: {
+          before: async (user, endpoint) => {
+            const clientId = clientIdFromSignInRequest({
+              body: endpoint?.body,
+              query: endpoint?.query,
+              url: endpoint?.request?.url,
+            })
+            const decision = await decideSignup(context, { clientId, email: user.email })
+            if (!decision.allowed) {
+              context.logger.warn("signup.rejected", { app: decision.app, email: user.email })
+              throw new APIError("FORBIDDEN", { message: SIGNUP_NOT_ALLOWED_MESSAGE })
+            }
+          },
+        },
+      },
+      // On every new session, claim any pending app invitations addressed to the
+      // signed-in user's (verified) email — INVITED → MEMBER. Runs regardless of
+      // entry path (console or OAuth), so membership exists before id_token claims
+      // resolve. Best-effort: a failure here must not block sign-in.
+      session: {
+        create: {
+          after: async (session) => {
+            try {
+              const [u] = await context.db
+                .select({ id: schema.user.id, email: schema.user.email, role: schema.user.role })
+                .from(schema.user)
+                .where(eq(schema.user.id, session.userId))
+                .limit(1)
+              if (u) {
+                await claimInvitationsForUser(context, u)
+                // Keep the Better Auth admin role in sync with the superadmin
+                // allowlist — idempotent, so existing admins are backfilled on
+                // their next sign-in (and a removed email loses the role).
+                const shouldBeAdmin = isSuperadminEmail(u.email)
+                if (shouldBeAdmin && u.role !== "admin") {
+                  await context.db
+                    .update(schema.user)
+                    .set({ role: "admin" })
+                    .where(eq(schema.user.id, u.id))
+                } else if (!shouldBeAdmin && u.role === "admin") {
+                  await context.db
+                    .update(schema.user)
+                    .set({ role: null })
+                    .where(eq(schema.user.id, u.id))
+                }
+              }
+            } catch (err) {
+              context.logger.warn("invites.claim_failed", {
+                userId: session.userId,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
+          },
+        },
+      },
     },
     plugins: [
       emailOTP({
@@ -120,12 +206,37 @@ export function createAuthService(context: BaseServiceContext) {
         silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
         // Each OAuth client is tagged with metadata.app (its application key).
         // We surface only that application's workspaces + roles as a claim.
-        customIdTokenClaims: async ({ user, metadata }) => {
-          const app = (metadata as { app?: string } | undefined)?.app
-          const workspaces = await workspaceClaimsFor(context.db, user.id, app)
-          return workspaces.length ? { [WORKSPACES_CLAIM]: workspaces } : {}
+        customIdTokenClaims: ({ user, metadata }) => customClaimsFor(context.db, user.id, metadata),
+        // Same claims on /userinfo, so apps that refresh server-side (or skip
+        // id_token parsing) still see workspaces/permissions and — crucially —
+        // a LIVE `act` claim while an admin is impersonating the user, letting
+        // them tag audit logs per-request. The hook has no client metadata, so
+        // resolve the client from the access token's client_id/azp/aud.
+        customUserInfoClaims: async ({ user, jwt }) => {
+          const raw = jwt.client_id ?? jwt.azp ?? jwt.aud
+          const clientId = Array.isArray(raw) ? raw[0] : raw
+          if (typeof clientId !== "string" || !clientId) return {}
+          const [client] = await context.db
+            .select({ metadata: schema.oauthClient.metadata })
+            .from(schema.oauthClient)
+            .where(eq(schema.oauthClient.clientId, clientId))
+            .limit(1)
+          if (!client) return {}
+          let metadata: unknown = client.metadata
+          if (typeof metadata === "string") {
+            try {
+              metadata = JSON.parse(metadata)
+            } catch {
+              return {}
+            }
+          }
+          return customClaimsFor(context.db, user.id, metadata)
         },
       }),
+      // Impersonation. Only users with the `admin` role (= superadmin allowlist,
+      // synced above) may impersonate; impersonation sessions last 1h. App-scoped
+      // impersonation by app-admins is enforced in our own route, not here.
+      admin({ impersonationSessionDuration: 60 * 60 }),
     ],
   })
 }

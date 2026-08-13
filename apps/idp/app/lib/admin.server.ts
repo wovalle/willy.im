@@ -3,6 +3,7 @@ import { redirect } from "react-router"
 
 import * as schema from "../db/schema"
 import type { AuthService } from "./auth.server"
+import { type AppConfig, parseAppMetadata, unwrapJson as unwrap } from "./metadata"
 import type { BaseServiceContext } from "./services"
 
 function adminEmails(ctx: BaseServiceContext): string[] {
@@ -42,48 +43,17 @@ export async function requireAdminSession(
   return session
 }
 
-/** API gate: require the management API bearer token. */
-export function requireAdminToken(request: Request, ctx: BaseServiceContext) {
-  const expected = ctx.getAppEnv("ADMIN_API_TOKEN")
-  const provided = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
-  if (!expected || !provided || provided !== expected) {
-    throw Response.json({ error: "unauthorized" }, { status: 401 })
-  }
-}
-
-/**
- * better-auth and drizzle's mode:"json" columns don't always agree on
- * serialization (values can come back already-parsed, once-, or twice-encoded),
- * so unwrap defensively up to two JSON layers.
- */
-function unwrap(v: unknown): unknown {
-  let x = v
-  for (let i = 0; i < 2 && typeof x === "string"; i++) {
-    try {
-      x = JSON.parse(x)
-    } catch {
-      break
-    }
-  }
-  return x
-}
-
 function coerceUriList(v: unknown): string[] {
   const x = unwrap(v)
   return Array.isArray(x) ? x.filter((s): s is string => typeof s === "string") : []
-}
-
-function coerceApp(v: unknown): string | null {
-  const x = unwrap(v)
-  return x && typeof x === "object" && typeof (x as { app?: unknown }).app === "string"
-    ? (x as { app: string }).app
-    : null
 }
 
 export type ApplicationSummary = {
   clientId: string
   name: string | null
   app: string | null
+  allowSignup: boolean
+  permissions: string[]
   redirectUris: string[]
   disabled: boolean
   createdAt: Date
@@ -102,14 +72,19 @@ export async function listApplications(ctx: BaseServiceContext): Promise<Applica
     .from(schema.oauthClient)
     .orderBy(desc(schema.oauthClient.createdAt))
 
-  return rows.map((r) => ({
-    clientId: r.clientId,
-    name: r.name,
-    app: coerceApp(r.metadata),
-    redirectUris: coerceUriList(r.redirectUris),
-    disabled: !!r.disabled,
-    createdAt: r.createdAt ?? new Date(0),
-  }))
+  return rows.map((r) => {
+    const meta = parseAppMetadata(unwrap(r.metadata))
+    return {
+      clientId: r.clientId,
+      name: r.name,
+      app: meta.app,
+      allowSignup: meta.allow_signup,
+      permissions: meta.permissions,
+      redirectUris: coerceUriList(r.redirectUris),
+      disabled: !!r.disabled,
+      createdAt: r.createdAt ?? new Date(0),
+    }
+  })
 }
 
 export async function getApplication(
@@ -118,6 +93,58 @@ export async function getApplication(
 ): Promise<ApplicationSummary | null> {
   const all = await listApplications(ctx)
   return all.find((a) => a.clientId === clientId) ?? null
+}
+
+/** Find an application by its app key (oauth_client.metadata.app). */
+export async function getApplicationByApp(
+  ctx: BaseServiceContext,
+  app: string,
+): Promise<ApplicationSummary | null> {
+  const all = await listApplications(ctx)
+  return all.find((a) => a.app === app) ?? null
+}
+
+/**
+ * Merge new product config into an app's metadata, preserving the immutable
+ * `app` key. Validated config only (allow_signup + declared permission catalog).
+ */
+export async function updateApplicationMetadata(
+  ctx: BaseServiceContext,
+  clientId: string,
+  config: AppConfig,
+) {
+  const [row] = await ctx.db
+    .select({ metadata: schema.oauthClient.metadata })
+    .from(schema.oauthClient)
+    .where(eq(schema.oauthClient.clientId, clientId))
+    .limit(1)
+  const app = parseAppMetadata(unwrap(row?.metadata)).app
+  await ctx.db
+    .update(schema.oauthClient)
+    .set({ metadata: { app, allow_signup: config.allow_signup, permissions: config.permissions } })
+    .where(eq(schema.oauthClient.clientId, clientId))
+}
+
+/**
+ * Replace an app's product-permission catalog, preserving the rest of its
+ * metadata (immutable `app` key + allow_signup). Catalog entries are the
+ * vocabulary members can be granted and what's emitted in the permissions claim.
+ */
+export async function updateApplicationPermissions(
+  ctx: BaseServiceContext,
+  clientId: string,
+  permissions: string[],
+) {
+  const [row] = await ctx.db
+    .select({ metadata: schema.oauthClient.metadata })
+    .from(schema.oauthClient)
+    .where(eq(schema.oauthClient.clientId, clientId))
+    .limit(1)
+  const meta = parseAppMetadata(unwrap(row?.metadata))
+  await ctx.db
+    .update(schema.oauthClient)
+    .set({ metadata: { app: meta.app, allow_signup: meta.allow_signup, permissions } })
+    .where(eq(schema.oauthClient.clientId, clientId))
 }
 
 /**
@@ -161,6 +188,7 @@ export async function listAppMembers(ctx: BaseServiceContext, app: string) {
       name: schema.user.name,
       role: schema.applicationMember.role,
       permissions: schema.applicationMember.permissions,
+      productPermissions: schema.applicationMember.productPermissions,
     })
     .from(schema.applicationMember)
     .innerJoin(schema.user, eq(schema.applicationMember.userId, schema.user.id))
@@ -268,4 +296,37 @@ export async function createWorkspace(
     headers: request.headers,
     body: { name: input.name, slug: input.slug, applicationId: input.applicationId },
   })
+}
+
+/**
+ * Session-less workspace creation for the management API. Better Auth's
+ * createOrganization needs a user session (it makes the caller the owner); a
+ * scoped API key has no user, so the row is inserted directly. Members are
+ * added separately (via the member endpoints / invitations). Slug must be
+ * unique across all apps (the organization table enforces it).
+ */
+export async function createWorkspaceForApp(
+  ctx: BaseServiceContext,
+  input: { app: string; name: string; slug: string },
+): Promise<{ id: string; name: string; slug: string } | { error: string }> {
+  const slug = input.slug.trim().toLowerCase()
+  const name = input.name.trim()
+  if (!name || !slug) return { error: "Workspace name and slug are required." }
+
+  const [clash] = await ctx.db
+    .select({ id: schema.organization.id })
+    .from(schema.organization)
+    .where(eq(schema.organization.slug, slug))
+    .limit(1)
+  if (clash) return { error: `Slug "${slug}" is already taken.` }
+
+  const id = crypto.randomUUID()
+  await ctx.db.insert(schema.organization).values({
+    id,
+    name,
+    slug,
+    applicationId: input.app,
+    createdAt: new Date(),
+  })
+  return { id, name, slug }
 }

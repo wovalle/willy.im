@@ -74,7 +74,11 @@ export default function Consent() {
               </ul>
             </>
           ) : null}
-          {error ? <p className="text-destructive mt-3 text-sm">{error}</p> : null}
+          {error ? (
+            <p className="text-destructive mt-3 text-sm" role="alert">
+              {error}
+            </p>
+          ) : null}
         </CardContent>
         <CardFooter className="flex flex-col gap-2">
           <Button className="w-full" onClick={() => decide(true)} disabled={!!pending}>

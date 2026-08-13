@@ -6,6 +6,11 @@ const appEnvSchema = z.object({
   BETTER_AUTH_URL: z.string().default("http://localhost:5173"),
   BETTER_AUTH_SECRET: z.string().default("dev-insecure-secret-change-me"),
 
+  // Extra hostnames the IdP also serves (vanity domains, e.g. "idp.kasso.do").
+  // Comma-separated. A request on one of these gets that host as its issuer,
+  // cookies, and passkey RP — first-party per domain, no cross-domain SSO.
+  IDP_EXTRA_DOMAINS: z.string().default(""),
+
   // Auth email sender. Optional locally — without it OTPs are logged to console.
   RESEND_TOKEN: z.string().optional(),
   EMAIL_FROM: z.string().default("willy.im <noreply@emails.willy.im>"),
