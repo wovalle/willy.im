@@ -1,9 +1,7 @@
-import { useState, type ComponentType, type ReactNode } from "react"
+import { useState } from "react"
 import { Form, Link, redirect, useActionData, useNavigation, useSearchParams, useSubmit } from "react-router"
 import {
-  Building2,
   Check,
-  ChevronRight,
   Copy,
   KeyRound,
   Loader2,
@@ -59,7 +57,7 @@ import {
 } from "~/components/ui/alert-dialog"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { cn } from "~/lib/utils"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
@@ -414,22 +412,13 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
   const memberError =
     error && (field === "invite-email" || field === undefined || field === null) ? error : null
 
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   // Section lives in the URL so it survives Form posts (the action returns to the
   // same URL, search params and all) and is deep-linkable.
   const rawSection = searchParams.get("section") ?? "overview"
   const section = LEGACY_SECTIONS[rawSection] ?? rawSection
-  const setSection = (id: string) =>
-    setSearchParams(
-      (prev) => {
-        prev.set("section", id)
-        return prev
-      },
-      { replace: true, preventScrollReset: true },
-    )
 
   const adminCount = members.filter((m) => m.role === "admin").length
-  const activeKeys = apiKeys.filter((k) => k.status === "active").length
 
   return (
     <div className="flex flex-col gap-6">
@@ -450,35 +439,33 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
       <SectionTabs active={section} pendingInvites={invitations.length} />
 
       {section === "overview" ? (
-        <Overview
-          application={application}
-          audit={audit}
-          counts={{
-            members: members.length,
-            admins: adminCount,
-            permissions: catalog.length,
-            workspaces: workspaces.length,
-            activeKeys,
-            totalKeys: apiKeys.length,
-            invites: invitations.length,
-          }}
-          onNavigate={setSection}
-        />
-      ) : null}
-
-      {section === "config" ? (
-      /* OAuth configuration */
+      /* OAuth configuration + app settings — the app's identity and config */
       <Card>
         <CardHeader>
           <CardTitle>OAuth configuration</CardTitle>
           <CardDescription>Credentials and redirect URIs for the OIDC flow.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <Label>Client ID</Label>
-            <code className="bg-muted rounded-md px-3 py-2 font-mono text-xs break-all">
-              {application.clientId}
-            </code>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <Label>Client ID</Label>
+              <div className="flex items-center gap-1">
+                <code className="bg-muted min-w-0 flex-1 truncate rounded-md px-3 py-2 font-mono text-xs">
+                  {application.clientId}
+                </code>
+                <CopyButton value={application.clientId} />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>App key</Label>
+              <div>
+                {application.app ? (
+                  <Badge variant="secondary">{application.app}</Badge>
+                ) : (
+                  <span className="text-muted-foreground text-sm">Not set</span>
+                )}
+              </div>
+            </div>
           </div>
 
           <Form method="post" className="flex flex-col gap-2">
@@ -525,6 +512,30 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               </div>
             ) : null}
           </div>
+
+          <Form method="post" className="flex flex-col gap-2 border-t pt-4">
+            <input type="hidden" name="intent" value="update-app-metadata" />
+            <Label>Signup</Label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="allow_signup"
+                defaultChecked={application.allowSignup}
+                disabled={busy}
+                className="size-4"
+              />
+              Allow open signup (otherwise invite-only)
+            </label>
+            {field === "app-metadata" && error ? (
+              <p role="alert" className="text-destructive text-sm">
+                {error}
+              </p>
+            ) : null}
+            <Button type="submit" variant="outline" disabled={busy} className="self-start">
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              Save app settings
+            </Button>
+          </Form>
         </CardContent>
       </Card>
       ) : null}
@@ -583,43 +594,6 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
-      ) : null}
-
-      {section === "config" ? (
-      /* App settings — product config stored in the app's metadata */
-      <Card>
-        <CardHeader>
-          <CardTitle>App settings</CardTitle>
-          <CardDescription>
-            Product config the app declares. <code>allow_signup</code> gates open vs invite-only.
-            The permission catalog lives in the <span className="font-medium">Access</span> section.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form method="post" className="flex flex-col gap-4">
-            <input type="hidden" name="intent" value="update-app-metadata" />
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                name="allow_signup"
-                defaultChecked={application.allowSignup}
-                disabled={busy}
-                className="size-4"
-              />
-              Allow open signup (otherwise invite-only)
-            </label>
-            {field === "app-metadata" && error ? (
-              <p role="alert" className="text-destructive text-sm">
-                {error}
-              </p>
-            ) : null}
-            <Button type="submit" variant="outline" disabled={busy} className="self-start">
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-              Save app settings
-            </Button>
-          </Form>
         </CardContent>
       </Card>
       ) : null}
@@ -884,7 +858,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
       </Card>
       ) : null}
 
-      {section === "config" ? (
+      {section === "overview" ? (
       /* Danger zone */
       <Card className="border-destructive/40">
         <CardHeader>
@@ -936,7 +910,6 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
 
 const SECTIONS = [
   { id: "overview", label: "Overview" },
-  { id: "config", label: "Configuration" },
   { id: "members", label: "Members" },
   { id: "access", label: "Access" },
   { id: "workspaces", label: "Workspaces" },
@@ -946,6 +919,7 @@ const SECTIONS = [
 
 /** Legacy `?section=` ids from the pre-rename console, mapped to their new homes. */
 const LEGACY_SECTIONS: Record<string, string> = {
+  config: "overview",
   permissions: "access",
   "api-keys": "keys",
 }
@@ -982,189 +956,6 @@ function SectionTabs({ active, pendingInvites }: { active: string; pendingInvite
         })}
       </nav>
     </div>
-  )
-}
-
-type OverviewApplication = {
-  clientId: string
-  app: string | null
-  redirectUris: string[]
-  allowSignup: boolean
-}
-
-/** The landing section: key facts + a clickable map of every other section. */
-function Overview({
-  application,
-  audit,
-  counts,
-  onNavigate,
-}: {
-  application: OverviewApplication
-  audit: Array<{ id: number; operation: string; tableName: string; createdAt: string }>
-  counts: {
-    members: number
-    admins: number
-    permissions: number
-    workspaces: number
-    activeKeys: number
-    totalKeys: number
-    invites: number
-  }
-  onNavigate: (id: string) => void
-}) {
-  const plural = (n: number, one: string, many = `${one}s`) => (n === 1 ? one : many)
-  return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Overview</CardTitle>
-          <CardDescription>
-            Key facts and a map of everything you manage for this app.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <Fact label="Client ID">
-            <div className="flex items-center gap-1">
-              <code className="bg-muted min-w-0 flex-1 truncate rounded-md px-2 py-1 font-mono text-xs">
-                {application.clientId}
-              </code>
-              <CopyButton value={application.clientId} />
-            </div>
-          </Fact>
-          <Fact label="App key">
-            {application.app ? (
-              <Badge variant="secondary">{application.app}</Badge>
-            ) : (
-              <span className="text-muted-foreground text-sm">Not set</span>
-            )}
-          </Fact>
-          <Fact label="Redirect URIs">
-            <span className="text-sm">
-              {application.redirectUris.length}{" "}
-              {plural(application.redirectUris.length, "URL")} configured
-            </span>
-          </Fact>
-          <Fact label="Signup">
-            <Badge variant={application.allowSignup ? "default" : "outline"}>
-              {application.allowSignup ? "Open" : "Invite-only"}
-            </Badge>
-          </Fact>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <StatCard
-          icon={Users}
-          label="Members"
-          value={counts.members}
-          hint={`${counts.admins} ${plural(counts.admins, "admin")} · ${counts.members - counts.admins} ${plural(counts.members - counts.admins, "member")}`}
-          onClick={() => onNavigate("members")}
-        />
-        <StatCard
-          icon={ShieldCheck}
-          label="Access"
-          value={counts.permissions}
-          hint="Product catalog"
-          onClick={() => onNavigate("access")}
-        />
-        <StatCard
-          icon={Building2}
-          label="Workspaces"
-          value={counts.workspaces}
-          hint="Tenants of this app"
-          onClick={() => onNavigate("workspaces")}
-        />
-        <StatCard
-          icon={Terminal}
-          label="Keys"
-          value={counts.activeKeys}
-          hint={`${counts.totalKeys} total · ${counts.activeKeys} active`}
-          onClick={() => onNavigate("keys")}
-        />
-        <StatCard
-          icon={Mail}
-          label="Pending invites"
-          value={counts.invites}
-          hint={counts.invites > 0 ? "Awaiting acceptance" : "None pending"}
-          onClick={() => onNavigate("members")}
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ScrollText className="text-muted-foreground size-4" />
-            Recent activity
-          </CardTitle>
-          <CardDescription>The latest privileged changes on this app.</CardDescription>
-          <CardAction>
-            <Button variant="ghost" size="sm" onClick={() => onNavigate("activity")}>
-              View all
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          {audit.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No activity yet.</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {audit.slice(0, 5).map((e) => (
-                <li key={e.id} className="flex items-center gap-2 text-sm">
-                  <Badge variant="secondary">{e.operation}</Badge>
-                  <span className="text-muted-foreground font-mono text-xs">{e.tableName}</span>
-                  <span className="text-muted-foreground ml-auto text-xs whitespace-nowrap">
-                    {new Date(`${e.createdAt.replace(" ", "T")}Z`).toLocaleString()}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <span className="text-muted-foreground text-xs font-medium">{label}</span>
-      {children}
-    </div>
-  )
-}
-
-/** A clickable summary tile that jumps to its section. */
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-  onClick,
-}: {
-  icon: ComponentType<{ className?: string }>
-  label: string
-  value: number | string
-  hint?: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group bg-card ring-foreground/10 hover:bg-muted/40 hover:ring-foreground/20 flex flex-col gap-1 rounded-xl p-4 text-left ring-1 transition-colors"
-    >
-      <span className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
-        <Icon className="size-3.5" />
-        {label}
-      </span>
-      <span className="text-2xl font-semibold tracking-tight">{value}</span>
-      {hint ? <span className="text-muted-foreground text-xs">{hint}</span> : null}
-      <span className="text-muted-foreground/60 group-hover:text-foreground mt-1 flex items-center gap-0.5 text-xs transition-colors">
-        View
-        <ChevronRight className="size-3" />
-      </span>
-    </button>
   )
 }
 
