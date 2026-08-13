@@ -495,8 +495,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           <div className="flex flex-col gap-2 border-t pt-4">
             <Label>Client secret</Label>
             <p className="text-muted-foreground text-xs">
-              Hashed and unrecoverable. Rotate to issue a new one — the old secret stops working
-              immediately.
+              Hashed and unrecoverable. Rotating invalidates the old secret immediately.
             </p>
             <Form method="post">
               <input type="hidden" name="intent" value="rotate" />
@@ -545,7 +544,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
       <Card>
         <CardHeader>
           <CardTitle>Workspaces</CardTitle>
-          <CardDescription>Tenants of this application. Members get a role here.</CardDescription>
+          <CardDescription>Tenants of this application.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <Form method="post" className="flex flex-wrap items-end gap-2">
@@ -604,11 +603,11 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="text-muted-foreground size-4" />
-            App access
+            Members
           </CardTitle>
           <CardDescription>
-            Admins manage this app in the IdP (all permissions); members get specific permissions.
-            Inviting an existing willy.im user adds them right away; a new email gets an invitation.
+            Admins hold every permission; members hold a granted subset. Existing users are added
+            immediately; new emails get an invitation.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
@@ -721,9 +720,9 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
             API keys
           </CardTitle>
           <CardDescription>
-            Scoped credentials for the management API. A key carries a fixed set of permissions and
-            can only act on this app. The token is shown once at creation — store it somewhere safe.
-            Authenticate with <code className="font-mono text-xs">Authorization: Bearer &lt;token&gt;</code>.
+            Scoped management-API credentials, bound to this app. The token is shown once at
+            creation. Authenticate with{" "}
+            <code className="font-mono text-xs">Authorization: Bearer &lt;token&gt;</code>.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
@@ -775,9 +774,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
             <Users className="text-muted-foreground size-4" />
             People in workspaces
           </CardTitle>
-          <CardDescription>
-            Derived from workspace membership — these willy.im users belong to a workspace of this app.
-          </CardDescription>
+          <CardDescription>Derived from workspace membership.</CardDescription>
         </CardHeader>
         <CardContent>
           {people.length === 0 ? (
@@ -816,9 +813,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
             <ScrollText className="text-muted-foreground size-4" />
             Recent activity
           </CardTitle>
-          <CardDescription>
-            Privileged actions on this app — member, API key and workspace writes — with who did them.
-          </CardDescription>
+          <CardDescription>Member, key and workspace writes, with actor.</CardDescription>
         </CardHeader>
         <CardContent>
           {audit.length === 0 ? (
@@ -993,10 +988,9 @@ function PermissionsCatalog({
           Product permissions
         </CardTitle>
         <CardDescription>
-          The permission vocabulary this app declares. Members are granted a subset (admins get all);
-          granted permissions ship in the{" "}
-          <code className="font-mono text-xs">https://willy.im/permissions</code> claim of the
-          id_token. Grant them to people in the Members section.
+          The permission vocabulary this app declares. Grants ship in the id_token's{" "}
+          <code className="font-mono text-xs">https://willy.im/permissions</code> claim; assign
+          them in Members.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">

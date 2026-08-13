@@ -92,7 +92,7 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
                 disabled={busy}
               />
               <p id="redirectUris-help" className="text-muted-foreground text-xs">
-                Absolute URLs, space- or comma-separated. Where willy.im sends users back after sign-in.
+                Absolute URLs, space- or comma-separated.
               </p>
             </div>
             <Button type="submit" disabled={busy} className="self-start">
