@@ -76,12 +76,10 @@ export default function Account({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{user.name || user.email}</CardTitle>
-          <CardDescription>{user.email}</CardDescription>
-        </CardHeader>
-      </Card>
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight">{user.name || user.email}</h1>
+        <p className="text-muted-foreground text-sm">{user.email}</p>
+      </div>
 
       <Card>
         <CardHeader>
