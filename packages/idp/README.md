@@ -82,8 +82,17 @@ return requestHandler(request, {
 ```ts
 import { createAuthRoute } from "@willyim/idp/react-router"
 
-export const { loader, action } = createAuthRoute(({ context }) => context.idp)
+const authRoute = createAuthRoute(({ context }) => context.idp)
+
+export const loader = authRoute.loader
+export const action = authRoute.action
 ```
+
+Export the two handlers separately rather than destructuring in the `export`
+statement. `export const { loader, action } = …` works in dev but fails the
+production build — react-router's route-exports plugin strips server-only
+exports from the client bundle and cannot remove a destructured one
+("Cannot remove destructured export").
 
 Then guard whatever needs guarding:
 
