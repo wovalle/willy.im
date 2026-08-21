@@ -26,10 +26,10 @@ export type Caller = {
   kind: "superadmin" | "user" | "key"
   /** How the caller authenticated. Only the resolver should ever branch on it. */
   via: "session" | "token"
-  /** Human identity, when there is one. Null for keys and the static token. */
+  /** Human identity, when there is one. Null for keys. */
   userId: string | null
   email: string | null
-  /** Scoped management key identity. Null for humans and the static token. */
+  /** Management key identity — admin key or scoped key. Null for humans. */
   keyId: string | null
   /** The app a scoped key is bound to. Null means not app-bound. */
   applicationId: string | null
@@ -38,10 +38,11 @@ export type Caller = {
   /** Effective management permissions on `app` — for the UI to decide what to render. */
   permissionsFor(app: string): Promise<AppPermission[]>
   /**
-   * Audit identity. Labels: "user:<id>" | "apikey:<id>" | "adminkey:<id>" |
-   * "superadmin-token". A superadmin via session is "user:<id>" (they're a real
-   * person); an IdP-level key is "adminkey:<id>", so every superadmin action is
-   * attributable to one named, revocable credential.
+   * Audit identity. Labels: "user:<id>" | "adminkey:<id>" | "apikey:<id>".
+   * A superadmin via session is "user:<id>" (they're a real person); an
+   * IdP-level key is "adminkey:<id>". Every superadmin action is therefore
+   * attributable to one named, revocable credential — there is no anonymous
+   * superadmin left.
    */
   actor: Actor
 }
@@ -66,42 +67,35 @@ function extractBearer(request: Request): string | null {
   return match ? match[1].trim() : null
 }
 
-/** Constant-time string compare (avoids leaking the admin token via timing). */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let mismatch = 0
-  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return mismatch === 0
-}
-
 /** Keep only catalog permissions (the catalog may have shrunk since the grant). */
 function sanitizePermissions(permissions: string[]): AppPermission[] {
   return permissions.filter(isAppPermission)
 }
 
-/** Every permission, every app. Used by all three superadmin flavours. */
-function superadminCaller(input: {
-  via: "session" | "token"
-  userId: string | null
-  email: string | null
-  /** Set for an IdP-level admin key, so the audit trail names the credential. */
-  keyId?: string | null
-}): Caller {
-  const keyId = input.keyId ?? null
+/**
+ * Where a superadmin came from. A union rather than nullable fields because
+ * every superadmin now *has* an identity — an allowlisted human or a named
+ * admin key — and the type is what guarantees the audit label can be built.
+ */
+type SuperadminOrigin =
+  | { via: "session"; userId: string; email: string }
+  | { via: "token"; keyId: string }
+
+/** Every permission, every app. Used by both superadmin flavours. */
+function superadminCaller(origin: SuperadminOrigin): Caller {
   return {
     kind: "superadmin",
-    via: input.via,
-    userId: input.userId,
-    email: input.email,
-    keyId,
+    via: origin.via,
+    userId: origin.via === "session" ? origin.userId : null,
+    email: origin.via === "session" ? origin.email : null,
+    keyId: origin.via === "token" ? origin.keyId : null,
     applicationId: null,
     can: async () => true,
     permissionsFor: async () => [...APP_PERMISSIONS],
-    actor: input.userId
-      ? { userId: input.userId, label: `user:${input.userId}` }
-      : keyId
-        ? { userId: null, label: `adminkey:${keyId}` }
-        : { userId: null, label: "superadmin-token" },
+    actor:
+      origin.via === "session"
+        ? { userId: origin.userId, label: `user:${origin.userId}` }
+        : { userId: null, label: `adminkey:${origin.keyId}` },
   }
 }
 
@@ -189,10 +183,10 @@ async function keyCaller(ctx: BaseServiceContext, token: string): Promise<Caller
       }),
     )
 
-  // No app scope ⇒ IdP-level key: same authority as the static token, but it
-  // carries an identity the audit log can name and an admin can revoke.
+  // No app scope ⇒ IdP-level admin key: full superadmin authority, carrying an
+  // identity the audit log can name and an admin can revoke.
   if (row.applicationId === null) {
-    return superadminCaller({ via: "token", userId: null, email: null, keyId: row.id })
+    return superadminCaller({ via: "token", keyId: row.id })
   }
 
   const granted = sanitizePermissions(row.permissions ?? [])
@@ -225,16 +219,8 @@ export async function resolveCaller(
 ): Promise<Caller | null> {
   const token = extractBearer(request)
   if (token) {
-    const superToken = ctx.getAppEnv("ADMIN_API_TOKEN")
-    // Break-glass only: the static token is one shared secret with no name, no
-    // expiry and no revoke short of a redeploy, so it audits as
-    // "superadmin-token" and nothing more. Day-to-day automation should hold an
-    // admin key (POST /api/v1/admin-keys) — attributable and revocable.
-    // Compared without a DB round-trip, so it still works if the DB is down.
-    if (superToken && timingSafeEqual(token, superToken)) {
-      return superadminCaller({ via: "token", userId: null, email: null })
-    }
-    // Only opaque keys we issued are worth a lookup.
+    // Every bearer is a key row we issued — there is no env-configured
+    // superadmin secret. Anything without our prefix isn't worth a lookup.
     if (!token.startsWith(TOKEN_PREFIX)) return null
     return keyCaller(ctx, token)
   }

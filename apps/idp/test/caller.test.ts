@@ -14,12 +14,12 @@ import {
 import { APP_PERMISSIONS } from "../app/lib/permissions"
 import {
   bearerRequest,
+  bootstrapAdminKey,
   createApplication,
   createMember,
   createUser,
   mintAdminKey,
   mintApiKey,
-  tokenSuperadmin,
 } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
@@ -48,44 +48,50 @@ async function thrown(fn: () => Promise<unknown>): Promise<Response | null> {
   }
 }
 
-const ADMIN_TOKEN = "super-secret-admin-token"
-
 describe("resolveCaller", () => {
   let h: TestHarness
+  /** An IdP-level admin key — the only superadmin credential a bearer can be. */
+  let root: { id: string; token: string; caller: Caller }
   beforeEach(async () => {
-    h = createTestHarness({
-      env: { ADMIN_EMAILS: "super@willy.im", ADMIN_API_TOKEN: ADMIN_TOKEN },
-    })
+    h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
+    root = await bootstrapAdminKey(h.ctx)
     await createApplication(h.ctx, { app: "acme", permissions: ["invoices:read"] })
   })
   afterEach(() => h.close())
 
   const mint = (overrides: Partial<Parameters<typeof mintApiKey>[1]> = {}) =>
-    mintApiKey(h.ctx, { app: "acme", permissions: ["member:read", "member:invite"], ...overrides })
+    mintApiKey(
+      h.ctx,
+      { app: "acme", permissions: ["member:read", "member:invite"], ...overrides },
+      root.caller,
+    )
 
   it("returns null when there is neither a bearer token nor a session", async () => {
     expect(await resolveCaller(consoleRequest, h.ctx, authStub(null))).toBeNull()
   })
 
-  it("resolves the static admin token to a superadmin with no human identity", async () => {
-    const caller = await resolveCaller(bearerRequest(ADMIN_TOKEN), h.ctx, authStub(null))
-
-    expect(caller!.kind).toBe("superadmin")
-    expect(caller!.via).toBe("token")
-    expect(caller!.userId).toBeNull()
-    expect(caller!.email).toBeNull()
-    expect(caller!.keyId).toBeNull()
-    expect(caller!.applicationId).toBeNull()
-    expect(caller!.actor).toEqual({ userId: null, label: "superadmin-token" })
-    expect(await caller!.can("literally-anything", "app:delete")).toBe(true)
-  })
-
   it("prefers the bearer token over the session cookie", async () => {
     const user = await createUser(h.ctx, { email: "member@acme.test" })
 
-    const caller = await resolveCaller(bearerRequest(ADMIN_TOKEN), h.ctx, authStub(user))
+    const caller = await resolveCaller(bearerRequest(root.token), h.ctx, authStub(user))
     expect(caller!.kind).toBe("superadmin")
     expect(caller!.via).toBe("token")
+    expect(caller!.keyId).toBe(root.id)
+  })
+
+  it("has no env-based backdoor: a bearer that is not a wim_ key is nobody", async () => {
+    // The static superadmin secret is gone. Every accepted bearer is now a key
+    // row we issued, so a token that happens to equal an environment value —
+    // including one an older build honoured — buys the caller nothing.
+    const secret = "super-secret-admin-token"
+    process.env.LEGACY_SUPERADMIN_TOKEN = secret
+    try {
+      for (const guess of [secret, process.env.BETTER_AUTH_SECRET!, process.env.ADMIN_EMAILS!]) {
+        expect(await resolveCaller(bearerRequest(guess), h.ctx, authStub(null))).toBeNull()
+      }
+    } finally {
+      delete process.env.LEGACY_SUPERADMIN_TOKEN
+    }
   })
 
   it("refuses a bad bearer instead of falling through to a valid cookie", async () => {
@@ -210,7 +216,7 @@ describe("resolveCaller", () => {
 
   it("refuses a revoked key", async () => {
     const { token, id } = await mint()
-    await revokeApiKey(h.ctx, tokenSuperadmin(), { app: "acme", id })
+    await revokeApiKey(h.ctx, root.caller, { app: "acme", id })
     expect(await resolveCaller(bearerRequest(token), h.ctx, authStub(null))).toBeNull()
   })
 
@@ -220,7 +226,7 @@ describe("resolveCaller", () => {
   })
 
   it("resolves an unscoped key to a superadmin that the audit log can name", async () => {
-    const { token, id } = await mintAdminKey(h.ctx, { name: "Agent alpha" })
+    const { token, id } = await mintAdminKey(h.ctx, { name: "Agent alpha" }, root.caller)
 
     const caller = await resolveCaller(bearerRequest(token), h.ctx, authStub(null))
     expect(caller!.kind).toBe("superadmin")
@@ -229,14 +235,14 @@ describe("resolveCaller", () => {
     expect(caller!.applicationId).toBeNull()
     expect(caller!.userId).toBeNull()
     expect(caller!.email).toBeNull()
-    // The whole difference from the static token: a name in the trail.
+    // The point of an admin key: a name in the trail.
     expect(caller!.actor).toEqual({ userId: null, label: `adminkey:${id}` })
     expect(await caller!.can("literally-anything", "app:delete")).toBe(true)
     expect(await caller!.permissionsFor("literally-anything")).toEqual([...APP_PERMISSIONS])
   })
 
   it("bumps lastUsedAt on an admin key too", async () => {
-    const { token, id } = await mintAdminKey(h.ctx)
+    const { token, id } = await mintAdminKey(h.ctx, {}, root.caller)
     await resolveCaller(bearerRequest(token), h.ctx, authStub(null))
 
     const [row] = await h.ctx.db
@@ -247,23 +253,27 @@ describe("resolveCaller", () => {
   })
 
   it("refuses a revoked admin key", async () => {
-    const { token, id } = await mintAdminKey(h.ctx)
-    await revokeAdminKey(h.ctx, tokenSuperadmin(), id)
+    const { token, id } = await mintAdminKey(h.ctx, {}, root.caller)
+    await revokeAdminKey(h.ctx, root.caller, id)
     expect(await resolveCaller(bearerRequest(token), h.ctx, authStub(null))).toBeNull()
   })
 
   it("refuses an expired admin key", async () => {
-    const { token } = await mintAdminKey(h.ctx, { expiresAt: new Date(Date.now() - 1000) })
+    const { token } = await mintAdminKey(
+      h.ctx,
+      { expiresAt: new Date(Date.now() - 1000) },
+      root.caller,
+    )
     expect(await resolveCaller(bearerRequest(token), h.ctx, authStub(null))).toBeNull()
   })
 })
 
 describe("authorize", () => {
   let h: TestHarness
+  let root: { id: string; token: string; caller: Caller }
   beforeEach(async () => {
-    h = createTestHarness({
-      env: { ADMIN_EMAILS: "super@willy.im", ADMIN_API_TOKEN: ADMIN_TOKEN },
-    })
+    h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
+    root = await bootstrapAdminKey(h.ctx)
     await createApplication(h.ctx, { app: "acme" })
   })
   afterEach(() => h.close())
@@ -284,11 +294,15 @@ describe("authorize", () => {
     const superadmin = await createUser(h.ctx, { email: "super@willy.im" })
     const boss = await createUser(h.ctx, { email: "boss@acme.test" })
     await createMember(h.ctx, { app: "acme", userId: boss.id, role: "admin" })
-    const key = await mintApiKey(h.ctx, { app: "acme", permissions: [...APP_PERMISSIONS] })
+    const key = await mintApiKey(
+      h.ctx,
+      { app: "acme", permissions: [...APP_PERMISSIONS] },
+      root.caller,
+    )
 
     const need = { superadmin: true } as const
     const bySession = await resolveCaller(consoleRequest, h.ctx, authStub(superadmin))
-    const byToken = await resolveCaller(bearerRequest(ADMIN_TOKEN), h.ctx, authStub(null))
+    const byToken = await resolveCaller(bearerRequest(root.token), h.ctx, authStub(null))
     const appAdmin = await resolveCaller(consoleRequest, h.ctx, authStub(boss))
     const scoped = await resolveCaller(bearerRequest(key.token), h.ctx, authStub(null))
 
@@ -317,16 +331,16 @@ describe("authorize", () => {
 
 describe("requireApiCaller", () => {
   let h: TestHarness
+  let root: { id: string; token: string; caller: Caller }
   beforeEach(async () => {
-    h = createTestHarness({
-      env: { ADMIN_EMAILS: "super@willy.im", ADMIN_API_TOKEN: ADMIN_TOKEN },
-    })
+    h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
+    root = await bootstrapAdminKey(h.ctx)
     await createApplication(h.ctx, { app: "acme" })
   })
   afterEach(() => h.close())
 
   const auth = authStub(null)
-  const mint = () => mintApiKey(h.ctx, { app: "acme", permissions: ["member:read"] })
+  const mint = () => mintApiKey(h.ctx, { app: "acme", permissions: ["member:read"] }, root.caller)
 
   it("401s without a bearer token", async () => {
     const res = await thrown(() =>
@@ -368,17 +382,18 @@ describe("requireApiCaller", () => {
     expect(res!.status).toBe(403)
   })
 
-  it("reserves cross-app endpoints for the superadmin token", async () => {
+  it("reserves cross-app endpoints for admin keys", async () => {
     const { token } = await mint()
     const denied = await thrown(() =>
       requireApiCaller(bearerRequest(token), h.ctx, auth, { superadmin: true }),
     )
     expect(denied!.status).toBe(403)
 
-    const allowed = await requireApiCaller(bearerRequest(ADMIN_TOKEN), h.ctx, auth, {
+    const allowed = await requireApiCaller(bearerRequest(root.token), h.ctx, auth, {
       superadmin: true,
     })
     expect(allowed.kind).toBe("superadmin")
+    expect(allowed.keyId).toBe(root.id)
   })
 })
 

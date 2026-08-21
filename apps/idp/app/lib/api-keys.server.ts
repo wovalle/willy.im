@@ -193,10 +193,10 @@ export async function revokeApiKey(
 
 /**
  * IdP-level admin keys: `api_key` rows with a NULL `application_id`, which the
- * resolver turns into superadmin callers. They exist so automation stops
- * sharing the one static ADMIN_API_TOKEN — each agent gets its own named,
- * expiring, revocable credential that shows up in the audit log as
- * `adminkey:<id>` instead of an anonymous `superadmin-token`.
+ * resolver turns into superadmin callers. They are the only superadmin
+ * credential the IdP accepts over the wire, so automation never shares one
+ * anonymous secret — each agent gets its own named, expiring, revocable key
+ * that shows up in the audit log as `adminkey:<id>`.
  */
 
 /** Superadmin-only gate, throwing the same 403 shape `assertCan` does. */
@@ -270,7 +270,7 @@ export async function createAdminKey(
     keyHash,
     // Meaningless for an admin key — see listAdminKeys.
     permissions: [],
-    // Null when the static token or another admin key mints this one.
+    // Null when another admin key (rather than a signed-in human) mints this one.
     createdByUserId: caller.userId,
     expiresAt,
   })

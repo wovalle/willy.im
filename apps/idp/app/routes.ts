@@ -21,7 +21,7 @@ export default [
     route("account", "routes/app/account.tsx"),
   ]),
 
-  // Management API (Bearer: superadmin ADMIN_API_TOKEN or scoped API key) + docs.
+  // Management API (Bearer: an IdP-level admin key or a per-app scoped key) + docs.
   // Cross-app reads (superadmin only):
   route("api/v1/applications", "routes/api/applications.ts"),
   // Application lifecycle — registration, patch, delete, secret rotation. Every
@@ -32,8 +32,8 @@ export default [
     "routes/api/applications.$clientId.rotate-secret.ts",
   ),
   // IdP-level admin keys — named, expiring, revocable superadmin credentials.
-  // One per agent, so the audit log names who acted; the static ADMIN_API_TOKEN
-  // stays as break-glass.
+  // One per agent, so the audit log names who acted. These are the only way to
+  // reach a cross-app endpoint.
   route("api/v1/admin-keys", "routes/api/admin-keys.ts"),
   route("api/v1/admin-keys/:id", "routes/api/admin-keys.$id.ts"),
   route("api/v1/users", "routes/api/users.ts"),

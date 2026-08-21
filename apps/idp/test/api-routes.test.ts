@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import { createApplication } from "../app/lib/admin.server"
 import type { AuthService } from "../app/lib/auth.server"
-import { resolveCaller, type Caller } from "../app/lib/caller.server"
+import type { Caller } from "../app/lib/caller.server"
 import * as applications from "../app/routes/api/applications"
 import * as application from "../app/routes/api/applications.$clientId"
 import * as rotateSecret from "../app/routes/api/applications.$clientId.rotate-secret"
@@ -11,7 +11,7 @@ import * as appKey from "../app/routes/api/apps.$app.keys.$id"
 import * as appMembers from "../app/routes/api/apps.$app.members"
 import * as appPermissions from "../app/routes/api/apps.$app.permissions"
 import * as appUserKeys from "../app/routes/api/apps.$app.user-keys"
-import { createMember, createUser } from "./helpers/fixtures"
+import { bootstrapAdminKey, createMember, createUser } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
@@ -19,8 +19,6 @@ import { createTestHarness, type TestHarness } from "./helpers/harness"
  * handlers are called directly with a Request and a context, which is all a
  * resource route ever touches — no router, no Workers runtime.
  */
-
-const ADMIN_TOKEN = "super-secret-admin-token"
 
 function authStub(user: { id: string; email: string } | null): AuthService {
   return {
@@ -32,7 +30,9 @@ describe("management API routes", () => {
   let h: TestHarness
   let context: Record<string, unknown>
   let acme: { clientId: string; app: string }
+  /** An IdP-level admin key — the only bearer a cross-app endpoint accepts. */
   let root: Caller
+  let adminToken: string
 
   /** Handlers signal failure by throwing a Response; normalise both paths. */
   const call = async (
@@ -56,11 +56,11 @@ describe("management API routes", () => {
     })
 
   beforeEach(async () => {
-    h = createTestHarness({
-      env: { ADMIN_EMAILS: "super@willy.im", ADMIN_API_TOKEN: ADMIN_TOKEN },
-    })
+    h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
     context = { ...h.ctx, services: { auth: authStub(null) }, cloudflare: {} }
-    root = (await resolveCaller(request("/", { token: ADMIN_TOKEN }), h.ctx, authStub(null)))!
+    const bootstrap = await bootstrapAdminKey(h.ctx)
+    adminToken = bootstrap.token
+    root = bootstrap.caller
     const created = await createApplication(h.ctx, root, {
       name: "Acme",
       app: "acme",
@@ -102,7 +102,7 @@ describe("management API routes", () => {
       const res = await call(applications.action, {
         request: request("/api/v1/applications", {
           method: "POST",
-          token: ADMIN_TOKEN,
+          token: adminToken,
           body: { name: "Invoices", app: "invoices", redirectUris: ["https://inv.test/cb"] },
         }),
       })
@@ -115,7 +115,7 @@ describe("management API routes", () => {
       const res = await call(applications.action, {
         request: request("/api/v1/applications", {
           method: "POST",
-          token: ADMIN_TOKEN,
+          token: adminToken,
           body: { name: "Acme 2", app: "acme", redirectUris: ["https://acme.test/cb"] },
         }),
       })
@@ -126,7 +126,7 @@ describe("management API routes", () => {
       const res = await call(applications.action, {
         request: request("/api/v1/applications", {
           method: "POST",
-          token: ADMIN_TOKEN,
+          token: adminToken,
           body: { name: "No key", redirectUris: [] },
         }),
       })
@@ -136,7 +136,7 @@ describe("management API routes", () => {
 
     it("405s a method the resource doesn't serve", async () => {
       const res = await call(applications.action, {
-        request: request("/api/v1/applications", { method: "PUT", token: ADMIN_TOKEN }),
+        request: request("/api/v1/applications", { method: "PUT", token: adminToken }),
       })
       expect(res).toEqual({ status: 405, body: { error: "method_not_allowed" } })
     })
@@ -164,7 +164,7 @@ describe("management API routes", () => {
 
     it("404s an unknown client id", async () => {
       const res = await call(application.loader, {
-        request: request("/api/v1/applications/nope", { token: ADMIN_TOKEN }),
+        request: request("/api/v1/applications/nope", { token: adminToken }),
         params: { clientId: "nope" },
       })
       expect(res).toEqual({ status: 404, body: { error: "not_found" } })
@@ -174,7 +174,7 @@ describe("management API routes", () => {
       const patched = await call(application.action, {
         request: request(`/api/v1/applications/${acme.clientId}`, {
           method: "PATCH",
-          token: ADMIN_TOKEN,
+          token: adminToken,
           body: { name: "Acme Inc", allowSignup: true },
         }),
         params: { clientId: acme.clientId },
@@ -185,7 +185,7 @@ describe("management API routes", () => {
       const deleted = await call(application.action, {
         request: request(`/api/v1/applications/${acme.clientId}`, {
           method: "DELETE",
-          token: ADMIN_TOKEN,
+          token: adminToken,
         }),
         params: { clientId: acme.clientId },
       })
@@ -196,7 +196,7 @@ describe("management API routes", () => {
       const res = await call(application.action, {
         request: request(`/api/v1/applications/${acme.clientId}`, {
           method: "POST",
-          token: ADMIN_TOKEN,
+          token: adminToken,
         }),
         params: { clientId: acme.clientId },
       })
@@ -209,7 +209,7 @@ describe("management API routes", () => {
       const res = await call(rotateSecret.action, {
         request: request(`/api/v1/applications/${acme.clientId}/rotate-secret`, {
           method: "POST",
-          token: ADMIN_TOKEN,
+          token: adminToken,
         }),
         params: { clientId: acme.clientId },
       })
@@ -231,7 +231,7 @@ describe("management API routes", () => {
     it("405s GET-shaped use", async () => {
       const res = await call(rotateSecret.action, {
         request: request(`/api/v1/applications/${acme.clientId}/rotate-secret`, {
-          token: ADMIN_TOKEN,
+          token: adminToken,
         }),
         params: { clientId: acme.clientId },
       })
@@ -244,7 +244,7 @@ describe("management API routes", () => {
       const res = await call(appPermissions.action, {
         request: request("/api/v1/apps/acme/permissions", {
           method: "PUT",
-          token: ADMIN_TOKEN,
+          token: adminToken,
           body: { permissions: ["invoices:read", "invoices:write"] },
         }),
         params: { app: "acme" },
@@ -259,7 +259,7 @@ describe("management API routes", () => {
       const res = await call(appPermissions.action, {
         request: request("/api/v1/apps/ghost/permissions", {
           method: "PUT",
-          token: ADMIN_TOKEN,
+          token: adminToken,
           body: { permissions: [] },
         }),
         params: { app: "ghost" },
@@ -271,7 +271,7 @@ describe("management API routes", () => {
       const res = await call(appPermissions.action, {
         request: request("/api/v1/apps/acme/permissions", {
           method: "POST",
-          token: ADMIN_TOKEN,
+          token: adminToken,
         }),
         params: { app: "acme" },
       })
@@ -284,7 +284,7 @@ describe("management API routes", () => {
       const created = await call(appKeys.action, {
         request: request("/api/v1/apps/acme/keys", {
           method: "POST",
-          token: ADMIN_TOKEN,
+          token: adminToken,
           body: { name: "CI", permissions: ["member:read"] },
         }),
         params: { app: "acme" },
@@ -294,7 +294,7 @@ describe("management API routes", () => {
       expect(token.startsWith("wim_")).toBe(true)
 
       const listed = await call(appKeys.loader, {
-        request: request("/api/v1/apps/acme/keys", { token: ADMIN_TOKEN }),
+        request: request("/api/v1/apps/acme/keys", { token: adminToken }),
         params: { app: "acme" },
       })
       expect(listed.status).toBe(200)
@@ -327,7 +327,7 @@ describe("management API routes", () => {
 
     it("405s DELETE on the collection", async () => {
       const res = await call(appKeys.action, {
-        request: request("/api/v1/apps/acme/keys", { method: "DELETE", token: ADMIN_TOKEN }),
+        request: request("/api/v1/apps/acme/keys", { method: "DELETE", token: adminToken }),
         params: { app: "acme" },
       })
       expect(res).toEqual({ status: 405, body: { error: "method_not_allowed" } })
@@ -397,7 +397,7 @@ describe("management API routes", () => {
       const created = await call(appKeys.action, {
         request: request("/api/v1/apps/acme/keys", {
           method: "POST",
-          token: ADMIN_TOKEN,
+          token: adminToken,
           body: { name: "CI", permissions: ["member:read"] },
         }),
         params: { app: "acme" },
@@ -410,7 +410,7 @@ describe("management API routes", () => {
       const res = await call(appKey.action, {
         request: request(`/api/v1/apps/acme/keys/${id}`, {
           method: "DELETE",
-          token: ADMIN_TOKEN,
+          token: adminToken,
         }),
         params: { app: "acme", id },
       })
@@ -421,7 +421,7 @@ describe("management API routes", () => {
       const res = await call(appKey.action, {
         request: request("/api/v1/apps/acme/keys/ghost", {
           method: "DELETE",
-          token: ADMIN_TOKEN,
+          token: adminToken,
         }),
         params: { app: "acme", id: "ghost" },
       })
@@ -430,7 +430,7 @@ describe("management API routes", () => {
 
     it("405s GET", async () => {
       const res = await call(appKey.action, {
-        request: request("/api/v1/apps/acme/keys/whatever", { token: ADMIN_TOKEN }),
+        request: request("/api/v1/apps/acme/keys/whatever", { token: adminToken }),
         params: { app: "acme", id: "whatever" },
       })
       expect(res).toEqual({ status: 405, body: { error: "method_not_allowed" } })

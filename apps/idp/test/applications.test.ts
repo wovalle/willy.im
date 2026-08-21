@@ -16,15 +16,13 @@ import { listAuditForApp } from "../app/lib/audit.server"
 import type { AuthService } from "../app/lib/auth.server"
 import { resolveCaller, type Caller } from "../app/lib/caller.server"
 import { hashClientSecret } from "../app/lib/client-secret.server"
-import { bearerRequest, createMember, createUser } from "./helpers/fixtures"
+import { bootstrapAdminKey, createMember, createUser } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
  * Application lifecycle driven entirely by a bearer caller — the point of the
  * refactor. Nothing here touches a cookie session or a better-auth endpoint.
  */
-
-const ADMIN_TOKEN = "super-secret-admin-token"
 
 /** The resolver only needs `api.getSession`; sessions aren't what's under test. */
 function authStub(user: { id: string; email: string } | null): AuthService {
@@ -45,14 +43,12 @@ async function thrownStatus(fn: () => Promise<unknown>): Promise<number> {
 
 describe("application lifecycle", () => {
   let h: TestHarness
-  /** The static ADMIN_API_TOKEN, resolved through the real front-door path. */
+  /** An IdP-level admin key, resolved through the real front-door path. */
   let root: Caller
 
   beforeEach(async () => {
-    h = createTestHarness({
-      env: { ADMIN_EMAILS: "super@willy.im", ADMIN_API_TOKEN: ADMIN_TOKEN },
-    })
-    root = (await resolveCaller(bearerRequest(ADMIN_TOKEN), h.ctx, authStub(null)))!
+    h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
+    root = (await bootstrapAdminKey(h.ctx)).caller
   })
   afterEach(() => h.close())
 
@@ -176,7 +172,7 @@ describe("application lifecycle", () => {
         tableName: "oauth_client",
         operation: "create",
         rowId: clientId,
-        actor: "superadmin-token",
+        actor: `adminkey:${root.keyId}`,
         userId: null,
       })
     })
@@ -252,7 +248,7 @@ describe("application lifecycle", () => {
 
       const entries = await listAuditForApp(h.ctx, "acme")
       expect(entries.map((e) => e.operation)).toEqual(["delete", "update", "update", "create"])
-      expect(entries.every((e) => e.actor === "superadmin-token")).toBe(true)
+      expect(entries.every((e) => e.actor === `adminkey:${root.keyId}`)).toBe(true)
       expect(entries.every((e) => e.tableName === "oauth_client")).toBe(true)
     })
   })
