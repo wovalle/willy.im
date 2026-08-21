@@ -15,12 +15,12 @@ import * as adminKeyRoute from "../app/routes/api/admin-keys"
 import * as adminKeyIdRoute from "../app/routes/api/admin-keys.$id"
 import {
   bearerRequest,
+  bootstrapAdminKey,
   createApplication,
   createUser,
   fakeUserCaller,
   mintAdminKey,
   mintApiKey,
-  tokenSuperadmin,
 } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
@@ -29,8 +29,6 @@ import { createTestHarness, type TestHarness } from "./helpers/harness"
  * "the minted token comes back out of `resolveCaller` as a superadmin with a
  * name" — so most of these mint a key and then present it like a client would.
  */
-
-const ADMIN_TOKEN = "super-secret-admin-token"
 
 function authStub(user: { id: string; email: string } | null): AuthService {
   return {
@@ -51,24 +49,28 @@ async function thrown(fn: () => Promise<unknown>): Promise<Response | null> {
 
 describe("admin keys", () => {
   let h: TestHarness
+  /**
+   * The break-glass key, written straight into `api_key` — the documented way
+   * back in when every admin key is lost, and the only bootstrap there is now
+   * that no static token exists.
+   */
+  let root: { id: string; name: string; token: string; caller: Caller }
+
   beforeEach(async () => {
-    h = createTestHarness({
-      env: { ADMIN_EMAILS: "super@willy.im", ADMIN_API_TOKEN: ADMIN_TOKEN },
-    })
+    h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
+    root = await bootstrapAdminKey(h.ctx)
     await createApplication(h.ctx, { app: "acme" })
   })
   afterEach(() => h.close())
 
-  /** The caller the static break-glass token resolves to, via the real resolver. */
-  const staticTokenCaller = async () =>
-    (await resolveCaller(bearerRequest(ADMIN_TOKEN), h.ctx, authStub(null)))!
-
   const present = (token: string) => resolveCaller(bearerRequest(token), h.ctx, authStub(null))
+
+  /** Everything the bootstrap key isn't — the listing always contains it too. */
+  const minted = (keys: { name: string }[]) => keys.filter((k) => k.name !== root.name)
 
   describe("minting and presenting", () => {
     it("mints a key the resolver accepts as a named superadmin", async () => {
-      const root = await staticTokenCaller()
-      const created = await createAdminKey(h.ctx, root, { name: "Agent alpha" })
+      const created = await createAdminKey(h.ctx, root.caller, { name: "Agent alpha" })
       expect(created.token.startsWith("wim_")).toBe(true)
       expect(created.prefix).toBe(created.token.slice(0, 12))
 
@@ -82,7 +84,7 @@ describe("admin keys", () => {
     })
 
     it("lets an admin key mint another admin key", async () => {
-      const first = await mintAdminKey(h.ctx, { name: "Agent alpha" })
+      const first = await mintAdminKey(h.ctx, { name: "Agent alpha" }, root.caller)
       const asFirst = (await present(first.token))!
 
       const second = await createAdminKey(h.ctx, asFirst, { name: "Agent beta" })
@@ -92,44 +94,44 @@ describe("admin keys", () => {
     })
 
     it("lists admin keys without ever exposing a hash", async () => {
-      await mintAdminKey(h.ctx, { name: "Agent alpha" })
-      const keys = await listAdminKeys(h.ctx, await staticTokenCaller())
-      expect(keys).toHaveLength(1)
-      expect(keys[0]).toMatchObject({ name: "Agent alpha", status: "active", permissions: [] })
+      await mintAdminKey(h.ctx, { name: "Agent alpha" }, root.caller)
+      const keys = await listAdminKeys(h.ctx, root.caller)
+      expect(minted(keys)).toMatchObject([
+        { name: "Agent alpha", status: "active", permissions: [] },
+      ])
       expect(JSON.stringify(keys)).not.toContain("keyHash")
     })
 
     it("keeps admin keys out of an app's key list", async () => {
-      await mintAdminKey(h.ctx)
-      await mintApiKey(h.ctx, { app: "acme", name: "Scoped" })
-      const appKeys = await listApiKeys(h.ctx, tokenSuperadmin(), "acme")
+      await mintAdminKey(h.ctx, {}, root.caller)
+      await mintApiKey(h.ctx, { app: "acme", name: "Scoped" }, root.caller)
+      const appKeys = await listApiKeys(h.ctx, root.caller, "acme")
       expect(appKeys.map((k) => k.name)).toEqual(["Scoped"])
     })
   })
 
   describe("revocation and expiry", () => {
     it("stops authenticating once revoked", async () => {
-      const { token, id } = await mintAdminKey(h.ctx)
+      const { token, id } = await mintAdminKey(h.ctx, {}, root.caller)
       expect(await present(token)).not.toBeNull()
 
-      expect(await revokeAdminKey(h.ctx, await staticTokenCaller(), id)).toEqual({ ok: true })
+      expect(await revokeAdminKey(h.ctx, root.caller, id)).toEqual({ ok: true })
       expect(await present(token)).toBeNull()
     })
 
     it("is idempotent on a second revoke", async () => {
-      const { id } = await mintAdminKey(h.ctx)
-      const root = await staticTokenCaller()
-      await revokeAdminKey(h.ctx, root, id)
-      expect(await revokeAdminKey(h.ctx, root, id)).toEqual({ ok: true })
+      const { id } = await mintAdminKey(h.ctx, {}, root.caller)
+      await revokeAdminKey(h.ctx, root.caller, id)
+      expect(await revokeAdminKey(h.ctx, root.caller, id)).toEqual({ ok: true })
     })
 
     it("reports an unknown id as not found", async () => {
-      const res = await revokeAdminKey(h.ctx, await staticTokenCaller(), "nope")
+      const res = await revokeAdminKey(h.ctx, root.caller, "nope")
       expect(res).toEqual({ error: "Key not found." })
     })
 
     it("lets a key revoke itself, loudly", async () => {
-      const { token, id } = await mintAdminKey(h.ctx)
+      const { token, id } = await mintAdminKey(h.ctx, {}, root.caller)
       const self = (await present(token))!
 
       expect(await revokeAdminKey(h.ctx, self, id)).toEqual({ ok: true })
@@ -139,13 +141,17 @@ describe("admin keys", () => {
     })
 
     it("stops authenticating once expired", async () => {
-      const { token } = await mintAdminKey(h.ctx, { expiresAt: new Date(Date.now() - 1000) })
+      const { token } = await mintAdminKey(
+        h.ctx,
+        { expiresAt: new Date(Date.now() - 1000) },
+        root.caller,
+      )
       expect(await present(token)).toBeNull()
     })
 
     it("reports expiry in the listing", async () => {
-      await mintAdminKey(h.ctx, { expiresAt: new Date(Date.now() - 1000) })
-      const [key] = await listAdminKeys(h.ctx, await staticTokenCaller())
+      await mintAdminKey(h.ctx, { expiresAt: new Date(Date.now() - 1000) }, root.caller)
+      const [key] = minted(await listAdminKeys(h.ctx, root.caller))
       expect(key.status).toBe("expired")
     })
   })
@@ -157,7 +163,7 @@ describe("admin keys", () => {
         app: "acme",
         permissions: [...APP_PERMISSIONS],
       })
-      const { id } = await mintAdminKey(h.ctx)
+      const { id } = await mintAdminKey(h.ctx, {}, root.caller)
 
       for (const call of [
         () => listAdminKeys(h.ctx, user),
@@ -171,10 +177,14 @@ describe("admin keys", () => {
     })
 
     it("refuses an app-scoped key holding every app permission", async () => {
-      const scoped = await mintApiKey(h.ctx, { app: "acme", permissions: [...APP_PERMISSIONS] })
+      const scoped = await mintApiKey(
+        h.ctx,
+        { app: "acme", permissions: [...APP_PERMISSIONS] },
+        root.caller,
+      )
       const caller = (await present(scoped.token))!
       expect(caller.kind).toBe("key")
-      const { id } = await mintAdminKey(h.ctx)
+      const { id } = await mintAdminKey(h.ctx, {}, root.caller)
 
       for (const call of [
         () => listAdminKeys(h.ctx, caller),
@@ -186,8 +196,8 @@ describe("admin keys", () => {
     })
 
     it("does not let an app-scoped revoke reach an admin key by id", async () => {
-      const admin = await mintAdminKey(h.ctx)
-      const res = await revokeApiKey(h.ctx, tokenSuperadmin(), { app: "acme", id: admin.id })
+      const admin = await mintAdminKey(h.ctx, {}, root.caller)
+      const res = await revokeApiKey(h.ctx, root.caller, { app: "acme", id: admin.id })
       expect(res).toEqual({ error: "Key not found." })
       // Still very much alive.
       expect(await present(admin.token)).not.toBeNull()
@@ -196,15 +206,20 @@ describe("admin keys", () => {
 
   describe("audit trail", () => {
     it("records the mint under the IdP scope", async () => {
-      const created = await createAdminKey(h.ctx, await staticTokenCaller(), { name: "Agent" })
+      const created = await createAdminKey(h.ctx, root.caller, { name: "Agent" })
       const entries = await listAuditForApp(h.ctx, IDP_AUDIT_SCOPE)
       expect(entries).toMatchObject([
-        { tableName: "api_key", operation: "create", rowId: created.id, actor: "superadmin-token" },
+        {
+          tableName: "api_key",
+          operation: "create",
+          rowId: created.id,
+          actor: `adminkey:${root.id}`,
+        },
       ])
     })
 
     it("names the admin key that acted, not just 'a superadmin'", async () => {
-      const first = await mintAdminKey(h.ctx, { name: "Agent alpha" })
+      const first = await mintAdminKey(h.ctx, { name: "Agent alpha" }, root.caller)
       const asFirst = (await present(first.token))!
       const second = await createAdminKey(h.ctx, asFirst, { name: "Agent beta" })
       await revokeAdminKey(h.ctx, asFirst, second.id)
@@ -217,7 +232,7 @@ describe("admin keys", () => {
     })
 
     it("keeps IdP-level rows out of an app's audit view", async () => {
-      await mintAdminKey(h.ctx)
+      await mintAdminKey(h.ctx, {}, root.caller)
       expect(await listAuditForApp(h.ctx, "acme")).toEqual([])
     })
   })
@@ -265,7 +280,11 @@ describe("admin keys", () => {
     })
 
     it("403s an app-scoped key", async () => {
-      const scoped = await mintApiKey(h.ctx, { app: "acme", permissions: [...APP_PERMISSIONS] })
+      const scoped = await mintApiKey(
+        h.ctx,
+        { app: "acme", permissions: [...APP_PERMISSIONS] },
+        root.caller,
+      )
       const res = await call(adminKeyRoute.loader, {
         request: request("/api/v1/admin-keys", { token: scoped.token }),
       })
@@ -276,7 +295,7 @@ describe("admin keys", () => {
       const res = await call(adminKeyRoute.action, {
         request: request("/api/v1/admin-keys", {
           method: "POST",
-          token: ADMIN_TOKEN,
+          token: root.token,
           body: { name: "Agent alpha" },
         }),
       })
@@ -287,18 +306,19 @@ describe("admin keys", () => {
       // The token works, and the listing never shows it again.
       expect((await present(body.token))!.keyId).toBe(body.id)
       const list = await call(adminKeyRoute.loader, {
-        request: request("/api/v1/admin-keys", { token: ADMIN_TOKEN }),
+        request: request("/api/v1/admin-keys", { token: root.token }),
       })
       expect(list.status).toBe(200)
       expect(JSON.stringify(list.body)).not.toContain(body.token)
-      expect(list.body).toMatchObject({ keys: [{ id: body.id, name: "Agent alpha" }] })
+      const keys = (list.body as { keys: { id: string; name: string }[] }).keys
+      expect(minted(keys)).toMatchObject([{ id: body.id, name: "Agent alpha" }])
     })
 
     it("422s a body with no name", async () => {
       const res = await call(adminKeyRoute.action, {
         request: request("/api/v1/admin-keys", {
           method: "POST",
-          token: ADMIN_TOKEN,
+          token: root.token,
           body: { name: "" },
         }),
       })
@@ -306,15 +326,15 @@ describe("admin keys", () => {
     })
 
     it("200s a delete and 404s an unknown id", async () => {
-      const { id } = await mintAdminKey(h.ctx)
+      const { id } = await mintAdminKey(h.ctx, {}, root.caller)
       const ok = await call(adminKeyIdRoute.action, {
-        request: request(`/api/v1/admin-keys/${id}`, { method: "DELETE", token: ADMIN_TOKEN }),
+        request: request(`/api/v1/admin-keys/${id}`, { method: "DELETE", token: root.token }),
         params: { id },
       })
       expect(ok).toMatchObject({ status: 200, body: { ok: true } })
 
       const missing = await call(adminKeyIdRoute.action, {
-        request: request("/api/v1/admin-keys/nope", { method: "DELETE", token: ADMIN_TOKEN }),
+        request: request("/api/v1/admin-keys/nope", { method: "DELETE", token: root.token }),
         params: { id: "nope" },
       })
       expect(missing).toMatchObject({ status: 404, body: { error: "not_found" } })
@@ -322,13 +342,13 @@ describe("admin keys", () => {
 
     it("405s an unsupported method, saying what it does allow", async () => {
       const collection = await call(adminKeyRoute.action, {
-        request: request("/api/v1/admin-keys", { method: "PATCH", token: ADMIN_TOKEN }),
+        request: request("/api/v1/admin-keys", { method: "PATCH", token: root.token }),
       })
       expect(collection.status).toBe(405)
       expect(collection.headers.get("Allow")).toBe("GET, POST")
 
       const item = await call(adminKeyIdRoute.action, {
-        request: request("/api/v1/admin-keys/x", { method: "POST", token: ADMIN_TOKEN }),
+        request: request("/api/v1/admin-keys/x", { method: "POST", token: root.token }),
         params: { id: "x" },
       })
       expect(item.status).toBe(405)

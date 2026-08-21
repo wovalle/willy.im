@@ -61,7 +61,7 @@ export type TestHarness = {
 }
 
 export type TestHarnessOptions = {
-  /** Overrides for the env `getAppEnv` reads (ADMIN_EMAILS, ADMIN_API_TOKEN, …). */
+  /** Overrides for the env `getAppEnv` reads (ADMIN_EMAILS, LOG_LEVEL, …). */
   env?: Record<string, string>
 }
 

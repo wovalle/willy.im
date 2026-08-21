@@ -7,7 +7,13 @@ import {
   validateUserApiKey,
 } from "../app/lib/user-api-keys.server"
 import { listAuditForApp } from "../app/lib/audit.server"
-import { createApplication, createUser, fakeUserCaller, tokenSuperadmin } from "./helpers/fixtures"
+import type { Caller } from "../app/lib/caller.server"
+import {
+  bootstrapAdminKey,
+  createApplication,
+  createUser,
+  fakeUserCaller,
+} from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
@@ -17,18 +23,21 @@ import { createTestHarness, type TestHarness } from "./helpers/harness"
 describe("end-user API keys", () => {
   let h: TestHarness
   let user: { id: string }
+  /** A real IdP-level admin key, resolved through the production resolver. */
+  let root: Caller
 
   const CATALOG = ["invoices:read", "invoices:write"]
 
   beforeEach(async () => {
     h = createTestHarness()
+    root = (await bootstrapAdminKey(h.ctx)).caller
     await createApplication(h.ctx, { app: "acme", permissions: CATALOG })
     user = await createUser(h.ctx, { email: "enduser@acme.test" })
   })
   afterEach(() => h.close())
 
   const mint = (overrides: Partial<Parameters<typeof createUserApiKey>[2]> = {}) =>
-    createUserApiKey(h.ctx, tokenSuperadmin(), {
+    createUserApiKey(h.ctx, root, {
       app: "acme",
       userId: user.id,
       name: "CLI token",
@@ -43,7 +52,7 @@ describe("end-user API keys", () => {
 
     expect(minted.token.startsWith("wak_")).toBe(true)
 
-    const [listed] = await listUserApiKeys(h.ctx, tokenSuperadmin(), { app: "acme" })
+    const [listed] = await listUserApiKeys(h.ctx, root, { app: "acme" })
     expect(listed.id).toBe(minted.id)
     expect(listed.scopes).toEqual(["invoices:read"])
     expect(listed.status).toBe("active")
@@ -65,7 +74,7 @@ describe("end-user API keys", () => {
     const minted = await mint({ scopes: ["invoices:read", "invoices:write"] })
     if (!("token" in minted)) throw new Error("mint failed")
 
-    const result = await validateUserApiKey(h.ctx, tokenSuperadmin(), {
+    const result = await validateUserApiKey(h.ctx, root, {
       app: "acme",
       token: minted.token,
     })
@@ -84,7 +93,7 @@ describe("end-user API keys", () => {
     if (!("token" in minted)) throw new Error("mint failed")
 
     expect(
-      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "other", token: minted.token }),
+      await validateUserApiKey(h.ctx, root, { app: "other", token: minted.token }),
     ).toEqual({
       valid: false,
       reason: "not_found",
@@ -93,14 +102,14 @@ describe("end-user API keys", () => {
 
   it("reports not_found for a garbage token", async () => {
     expect(
-      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", token: "wak_nonsense" }),
+      await validateUserApiKey(h.ctx, root, { app: "acme", token: "wak_nonsense" }),
     ).toEqual({
       valid: false,
       reason: "not_found",
     })
     // A token that isn't even ours is rejected without a database round-trip.
     expect(
-      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", token: "bearer-ish" }),
+      await validateUserApiKey(h.ctx, root, { app: "acme", token: "bearer-ish" }),
     ).toEqual({
       valid: false,
       reason: "not_found",
@@ -111,9 +120,9 @@ describe("end-user API keys", () => {
     const minted = await mint()
     if (!("token" in minted)) throw new Error("mint failed")
 
-    await revokeUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", id: minted.id })
+    await revokeUserApiKey(h.ctx, root, { app: "acme", id: minted.id })
     expect(
-      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", token: minted.token }),
+      await validateUserApiKey(h.ctx, root, { app: "acme", token: minted.token }),
     ).toEqual({
       valid: false,
       reason: "revoked",
@@ -125,7 +134,7 @@ describe("end-user API keys", () => {
     if (!("token" in minted)) throw new Error("mint failed")
 
     expect(
-      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", token: minted.token }),
+      await validateUserApiKey(h.ctx, root, { app: "acme", token: minted.token }),
     ).toEqual({
       valid: false,
       reason: "expired",
@@ -137,14 +146,14 @@ describe("end-user API keys", () => {
     if (!("token" in minted)) throw new Error("mint failed")
 
     expect(
-      await revokeUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", id: minted.id }),
+      await revokeUserApiKey(h.ctx, root, { app: "acme", id: minted.id }),
     ).toEqual({ ok: true })
-    const [first] = await listUserApiKeys(h.ctx, tokenSuperadmin(), { app: "acme" })
+    const [first] = await listUserApiKeys(h.ctx, root, { app: "acme" })
 
     expect(
-      await revokeUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", id: minted.id }),
+      await revokeUserApiKey(h.ctx, root, { app: "acme", id: minted.id }),
     ).toEqual({ ok: true })
-    const [second] = await listUserApiKeys(h.ctx, tokenSuperadmin(), { app: "acme" })
+    const [second] = await listUserApiKeys(h.ctx, root, { app: "acme" })
 
     expect(second.status).toBe("revoked")
     expect(second.revokedAt).toEqual(first.revokedAt)
@@ -180,14 +189,14 @@ describe("end-user API keys", () => {
   it("audits the mint and the revocation against the app", async () => {
     const minted = await mint()
     if (!("token" in minted)) throw new Error("mint failed")
-    await revokeUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", id: minted.id })
+    await revokeUserApiKey(h.ctx, root, { app: "acme", id: minted.id })
 
     const entries = await listAuditForApp(h.ctx, "acme")
     expect(entries.map((e) => [e.tableName, e.operation, e.rowId])).toEqual([
       ["user_api_key", "revoke", minted.id],
       ["user_api_key", "create", minted.id],
     ])
-    expect(entries[1].actor).toBe("superadmin-token")
+    expect(entries[1].actor).toBe(`adminkey:${root.keyId}`)
   })
 
   it("will not let one app revoke another app's key", async () => {
@@ -195,12 +204,12 @@ describe("end-user API keys", () => {
     if (!("token" in minted)) throw new Error("mint failed")
 
     expect(
-      await revokeUserApiKey(h.ctx, tokenSuperadmin(), { app: "other", id: minted.id }),
+      await revokeUserApiKey(h.ctx, root, { app: "other", id: minted.id }),
     ).toEqual({
       error: "Key not found.",
     })
     expect(
-      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", token: minted.token }),
+      await validateUserApiKey(h.ctx, root, { app: "acme", token: minted.token }),
     ).toMatchObject({
       valid: true,
     })

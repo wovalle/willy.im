@@ -4,7 +4,7 @@ import { createApiKey, listApiKeys, revokeApiKey } from "../app/lib/api-keys.ser
 import { listAuditForApp } from "../app/lib/audit.server"
 import type { Caller } from "../app/lib/caller.server"
 import { APP_PERMISSIONS } from "../app/lib/permissions"
-import { createUser, fakeUserCaller, tokenSuperadmin } from "./helpers/fixtures"
+import { bootstrapAdminKey, createUser, fakeUserCaller } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
@@ -14,9 +14,12 @@ import { createTestHarness, type TestHarness } from "./helpers/harness"
 describe("scoped management API keys", () => {
   let h: TestHarness
   let creator: { id: string }
+  /** A real IdP-level admin key, resolved through the production resolver. */
+  let root: Caller
 
   beforeEach(async () => {
-    h = createTestHarness({ env: { ADMIN_API_TOKEN: "super-secret-admin-token" } })
+    h = createTestHarness()
+    root = (await bootstrapAdminKey(h.ctx)).caller
     creator = await createUser(h.ctx, { email: "creator@acme.test" })
   })
   afterEach(() => h.close())
@@ -47,7 +50,7 @@ describe("scoped management API keys", () => {
     return res
   }
 
-  const list = (app = "acme") => listApiKeys(h.ctx, tokenSuperadmin(), app)
+  const list = (app = "acme") => listApiKeys(h.ctx, root, app)
 
   it("returns the plaintext token exactly once and never stores it", async () => {
     const { token, prefix, id } = await mintOk()
@@ -84,7 +87,9 @@ describe("scoped management API keys", () => {
 
   it("will not let one app revoke another app's key", async () => {
     const { id } = await mintOk()
-    expect(await revokeApiKey(h.ctx, tokenSuperadmin(), { app: "other", id })).toEqual({ error: "Key not found." })
+    expect(await revokeApiKey(h.ctx, root, { app: "other", id })).toEqual({
+      error: "Key not found.",
+    })
 
     const [listed] = await list()
     expect(listed.id).toBe(id)
@@ -92,7 +97,7 @@ describe("scoped management API keys", () => {
   })
 
   it("accepts a machine caller — the static admin token has no user behind it", async () => {
-    const res = await mint({}, tokenSuperadmin())
+    const res = await mint({}, root)
     if ("error" in res) throw new Error(res.error)
     const [listed] = await list()
     expect(listed.id).toBe(res.id)
@@ -144,7 +149,7 @@ describe("scoped management API keys", () => {
     })
 
     it("lets a superadmin mint anything", async () => {
-      const res = await mint({ permissions: [...APP_PERMISSIONS] }, tokenSuperadmin())
+      const res = await mint({ permissions: [...APP_PERMISSIONS] }, root)
       if ("error" in res) throw new Error(res.error)
 
       const [listed] = await list()

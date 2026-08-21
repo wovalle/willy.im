@@ -1,7 +1,13 @@
 import * as schema from "../../app/db/schema"
-import { createAdminKey, createApiKey } from "../../app/lib/api-keys.server"
-import type { Caller } from "../../app/lib/caller.server"
-import { APP_PERMISSIONS, type AppPermission } from "../../app/lib/permissions"
+import {
+  createAdminKey,
+  createApiKey,
+  generateToken,
+  hashToken,
+} from "../../app/lib/api-keys.server"
+import type { AuthService } from "../../app/lib/auth.server"
+import { resolveCaller, type Caller } from "../../app/lib/caller.server"
+import type { AppPermission } from "../../app/lib/permissions"
 import type { BaseServiceContext } from "../../app/lib/services"
 
 /**
@@ -131,23 +137,39 @@ export function bearerRequest(token: string, url = "https://idp.willy.im/api/v1/
   return new Request(url, { headers: { authorization: `Bearer ${token}` } })
 }
 
+/** The resolver only reads `api.getSession`; a bearer caller never has one. */
+const sessionlessAuth = {
+  api: { getSession: async () => null },
+} as unknown as AuthService
+
 /**
- * The caller the static ADMIN_API_TOKEN resolves to: every permission on every
- * app, no human identity. Built literally so tests that only need *a* caller
- * don't have to stand up a request + auth stub.
+ * The break-glass admin key, written straight into `api_key` the way real
+ * recovery does: an unscoped row (`application_id` NULL) whose `key_hash` is
+ * the SHA-256 of a token we generated. Everything a test needs to act as a
+ * superadmin comes back — the plaintext bearer, a Request carrying it, and the
+ * Caller the *real* resolver builds from it, so no test hand-rolls a superadmin
+ * object that production could never produce.
  */
-export function tokenSuperadmin(): Caller {
-  return {
-    kind: "superadmin",
-    via: "token",
-    userId: null,
-    email: null,
-    keyId: null,
+export async function bootstrapAdminKey(
+  ctx: BaseServiceContext,
+  input: { name?: string; expiresAt?: Date | null } = {},
+): Promise<{ id: string; name: string; token: string; request: Request; caller: Caller }> {
+  const token = generateToken()
+  const id = `adminkey_${uniq()}`
+  const name = input.name ?? "Bootstrap key"
+  await ctx.db.insert(schema.apiKey).values({
+    id,
     applicationId: null,
-    can: async () => true,
-    permissionsFor: async () => [...APP_PERMISSIONS],
-    actor: { userId: null, label: "superadmin-token" },
-  }
+    name,
+    prefix: token.slice(0, 12),
+    keyHash: await hashToken(token),
+    permissions: [],
+    expiresAt: input.expiresAt ?? null,
+  })
+  const request = bearerRequest(token)
+  const caller = await resolveCaller(request, ctx, sessionlessAuth)
+  if (!caller) throw new Error("bootstrapAdminKey: the resolver rejected the key it was handed")
+  return { id, name, token, request, caller }
 }
 
 /** A signed-in human caller with an explicit permission set on one app. */
@@ -170,11 +192,11 @@ export function fakeUserCaller(input: {
   }
 }
 
-/** Mints a scoped key as the superadmin token, unwrapping the error union. */
+/** Mints a scoped key as `caller`, unwrapping the error union. */
 export async function mintApiKey(
   ctx: BaseServiceContext,
   input: { app: string; name?: string; permissions?: string[]; expiresAt?: Date | null },
-  caller: Caller = tokenSuperadmin(),
+  caller: Caller,
 ) {
   const res = await createApiKey(ctx, caller, {
     app: input.app,
@@ -186,11 +208,11 @@ export async function mintApiKey(
   return res
 }
 
-/** Mints an IdP-level admin key (unscoped ⇒ superadmin) as the static token. */
+/** Mints an IdP-level admin key (unscoped ⇒ superadmin) through the service. */
 export async function mintAdminKey(
   ctx: BaseServiceContext,
-  input: { name?: string; expiresAt?: Date | null } = {},
-  caller: Caller = tokenSuperadmin(),
+  input: { name?: string; expiresAt?: Date | null },
+  caller: Caller,
 ) {
   return createAdminKey(ctx, caller, {
     name: input.name ?? "Agent alpha",

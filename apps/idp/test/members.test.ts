@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import * as schema from "../app/db/schema"
 import { listAuditForApp } from "../app/lib/audit.server"
+import type { Caller } from "../app/lib/caller.server"
 import {
   addOrInviteAppMember,
   claimInvitationsForUser,
@@ -13,11 +14,11 @@ import {
   updateAppMember,
 } from "../app/lib/members.server"
 import {
+  bootstrapAdminKey,
   createApplication,
   createMember,
   createUser,
   fakeUserCaller,
-  tokenSuperadmin,
 } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
@@ -29,11 +30,14 @@ import { createTestHarness, type TestHarness } from "./helpers/harness"
 describe("invitations", () => {
   let h: TestHarness
   let inviter: { id: string }
+  /** A real IdP-level admin key, resolved through the production resolver. */
+  let root: Caller
 
   const CATALOG = ["invoices:read", "invoices:write"]
 
   beforeEach(async () => {
     h = createTestHarness()
+    root = (await bootstrapAdminKey(h.ctx)).caller
     await createApplication(h.ctx, { app: "acme", permissions: CATALOG })
     inviter = await createUser(h.ctx, { email: "inviter@acme.test" })
   })
@@ -136,7 +140,7 @@ describe("invitations", () => {
       .set({ expiresAt: new Date(Date.now() + 1000) })
       .where(eq(schema.applicationInvitation.id, pending.id))
 
-    const result = await resendInvitation(h.ctx, tokenSuperadmin(), {
+    const result = await resendInvitation(h.ctx, root, {
       app: "acme",
       invitationId: pending.id,
       origin: "https://idp.willy.im",
@@ -150,7 +154,7 @@ describe("invitations", () => {
   it("revokes a pending invitation so sign-in grants nothing", async () => {
     await invite()
     const [pending] = await listAppInvitations(h.ctx, "acme")
-    await revokeInvitation(h.ctx, tokenSuperadmin(), { app: "acme", invitationId: pending.id })
+    await revokeInvitation(h.ctx, root, { app: "acme", invitationId: pending.id })
 
     expect(await listAppInvitations(h.ctx, "acme")).toHaveLength(0)
 
@@ -248,8 +252,11 @@ describe("invitations", () => {
 
 describe("member management", () => {
   let h: TestHarness
+  /** A real IdP-level admin key, resolved through the production resolver. */
+  let root: Caller
   beforeEach(async () => {
     h = createTestHarness()
+    root = (await bootstrapAdminKey(h.ctx)).caller
     await createApplication(h.ctx, { app: "acme", permissions: ["invoices:read"] })
   })
   afterEach(() => h.close())
@@ -258,7 +265,7 @@ describe("member management", () => {
     const boss = await createUser(h.ctx, { email: "boss@acme.test" })
     await createMember(h.ctx, { app: "acme", userId: boss.id, role: "admin" })
 
-    const result = await updateAppMember(h.ctx, tokenSuperadmin(), {
+    const result = await updateAppMember(h.ctx, root, {
       app: "acme",
       userId: boss.id,
       role: "member",
@@ -274,7 +281,7 @@ describe("member management", () => {
     await createMember(h.ctx, { app: "acme", userId: boss.id, role: "admin" })
 
     expect(
-      await removeAppMember(h.ctx, tokenSuperadmin(), { app: "acme", userId: boss.id }),
+      await removeAppMember(h.ctx, root, { app: "acme", userId: boss.id }),
     ).toEqual({
       error: "Can't remove the last admin — promote someone else first.",
     })
@@ -287,7 +294,7 @@ describe("member management", () => {
     await createMember(h.ctx, { app: "acme", userId: deputy.id, role: "admin" })
 
     expect(
-      await updateAppMember(h.ctx, tokenSuperadmin(), {
+      await updateAppMember(h.ctx, root, {
         app: "acme",
         userId: deputy.id,
         role: "member",
@@ -324,25 +331,25 @@ describe("member management", () => {
     await createMember(h.ctx, { app: "acme", userId: boss.id, role: "admin" })
     await createMember(h.ctx, { app: "acme", userId: deputy.id, role: "member" })
 
-    await updateAppMember(h.ctx, tokenSuperadmin(), {
+    await updateAppMember(h.ctx, root, {
       app: "acme",
       userId: deputy.id,
       role: "member",
       permissions: ["member:read"],
     })
-    await removeAppMember(h.ctx, tokenSuperadmin(), { app: "acme", userId: deputy.id })
+    await removeAppMember(h.ctx, root, { app: "acme", userId: deputy.id })
 
     const entries = await listAuditForApp(h.ctx, "acme")
     expect(entries.map((e) => [e.tableName, e.operation, e.rowId])).toEqual([
       ["application_member", "delete", deputy.id],
       ["application_member", "update", deputy.id],
     ])
-    expect(entries[0].actor).toBe("superadmin-token")
+    expect(entries[0].actor).toBe(`adminkey:${root.keyId}`)
   })
 
   it("reports a missing member rather than silently succeeding", async () => {
     expect(
-      await removeAppMember(h.ctx, tokenSuperadmin(), { app: "acme", userId: "ghost" }),
+      await removeAppMember(h.ctx, root, { app: "acme", userId: "ghost" }),
     ).toEqual({
       error: "Member not found.",
     })

@@ -358,9 +358,14 @@ const { token } = await api.request("post", "/api/v1/admin-keys", {
 //   Authorization: Bearer wim_…
 ```
 
-The IdP's static `ADMIN_API_TOKEN` still works and still grants superadmin, but
-it is break-glass only: one shared secret, no name, no expiry, and no way to
-revoke it short of a redeploy.
+There is no static superadmin secret: every bearer the IdP accepts is a key row
+it issued, so every superadmin action names a revocable credential.
+
+**Break-glass.** If every admin key is lost, recover by writing one bootstrap
+key straight into D1 — insert an `api_key` row with `application_id` NULL and
+`key_hash` set to the SHA-256 hex digest of a token you generate — then use it
+to mint a real key via `POST /api/v1/admin-keys` and revoke the bootstrap row
+through `DELETE /api/v1/admin-keys/{id}`.
 
 The OIDC endpoints are not in that document and never will be: they are
 standards-defined and discovered at runtime from `.well-known`.

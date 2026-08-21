@@ -78,16 +78,16 @@ export const applicationInvitation = sqliteTable(
 export type ApplicationInvitation = typeof applicationInvitation.$inferSelect
 
 /**
- * Scoped API key: a hashed, revocable, optionally-expiring credential that lets
- * an agent or service drive the management API for *one application* with a
- * specific permission set. Replaces the single global ADMIN_API_TOKEN (which
- * stays as the superadmin escape hatch). The plaintext token is shown once at
- * creation and never stored — only its SHA-256 hash and a non-secret prefix
- * (for identification in the UI) are persisted.
+ * Management API key: a hashed, revocable, optionally-expiring credential that
+ * lets an agent or service drive the management API. The plaintext token is
+ * shown once at creation and never stored — only its SHA-256 hash and a
+ * non-secret prefix (for identification in the UI) are persisted.
  *
- * A row with a NULL `application_id` is an IdP-level superadmin key: named,
- * revocable and expiring, and a distinct identity in the audit log — which is
- * what the static ADMIN_API_TOKEN can never be. That token stays as break-glass.
+ * A row with an `application_id` is *scoped*: one application, an explicit
+ * permission set. A row with a NULL `application_id` is an IdP-level **admin
+ * key** — every permission on every app, and a distinct identity in the audit
+ * log. Admin keys are the only superadmin credential there is; break-glass
+ * recovery is to insert one such row by hand (see the client README).
  */
 export const apiKey = sqliteTable(
   "api_key",
@@ -196,7 +196,7 @@ export const auditLog = sqliteTable(
     applicationId: text("application_id"),
     // The human actor's user id when there is one; null for machine callers.
     userId: text("user_id"),
-    // Principal descriptor: "user:<id>" | "apikey:<id>" | "superadmin-token".
+    // Principal descriptor: "user:<id>" | "adminkey:<id>" | "apikey:<id>".
     actor: text("actor"),
     oldData: text("old_data", { mode: "json" }),
     newData: text("new_data", { mode: "json" }),

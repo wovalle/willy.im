@@ -21,7 +21,7 @@ export const IDP_AUDIT_SCOPE = "__idp__"
 export type Actor = {
   /** Human user id, when there is one. Null for machine callers. */
   userId: string | null
-  /** Descriptor: "user:<id>" | "apikey:<id>" | "adminkey:<id>" | "superadmin-token". */
+  /** Descriptor: "user:<id>" | "adminkey:<id>" | "apikey:<id>". */
   label: string
 }
 
