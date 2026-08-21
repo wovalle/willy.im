@@ -60,7 +60,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/wovalle/willy.im",
-    "directory": "packages/idp"
+    "directory": "packages/idp-client"
   },
   "peerDependencies": {
     "drizzle-orm": ">=0.44 || >=1.0.0-0"

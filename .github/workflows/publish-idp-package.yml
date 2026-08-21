@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "packages/idp/**"
+      - "packages/idp-client/**"
       - ".github/workflows/publish-idp-package.yml"
   workflow_dispatch:
 
@@ -23,15 +23,15 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: packages/idp
+        working-directory: packages/idp-client
 
       - name: Build
         run: npm run build
-        working-directory: packages/idp
+        working-directory: packages/idp-client
 
       - name: Test
         run: npm test
-        working-directory: packages/idp
+        working-directory: packages/idp-client
 
   publish-npm:
     needs: test
@@ -49,14 +49,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: packages/idp
+        working-directory: packages/idp-client
 
       - name: Build
         run: npm run build
-        working-directory: packages/idp
+        working-directory: packages/idp-client
 
       - name: Publish to npm
         run: npm publish --provenance --access public
-        working-directory: packages/idp
+        working-directory: packages/idp-client
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}

@@ -11,7 +11,7 @@
   },
   "devDependencies": {},
   "workspaces": [
-    "packages/idp",
+    "packages/idp-client",
     "packages/rbac",
     "packages/drizzle_audit",
     "packages/drizzle_repositories",
