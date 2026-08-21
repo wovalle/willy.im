@@ -1,7 +1,7 @@
 import type { Route } from "./+types/apps.$app.members.$userId"
 import { requireApiPrincipal } from "~/lib/api-keys.server"
 import { readJson } from "~/lib/api.server"
-import { UpdateMemberInput } from "~/lib/api-schemas"
+import { UpdateMemberInput } from "@willyim/idp/schemas"
 import { actorFromPrincipal, recordAudit } from "~/lib/audit.server"
 import { removeAppMember, updateAppMember } from "~/lib/members.server"
 

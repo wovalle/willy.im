@@ -7,7 +7,7 @@ import { IdpError } from "../src/index.js"
  * The `/api/v1/*` helper. Nothing in v1 calls it — the management surface is
  * cut — but the pipeline is wired now so the first management call can't be
  * hand-written: paths, path params, bodies and response shapes all come from
- * `src/generated/idp-api.d.ts`, which `npm run openapi` regenerates from
+ * the operations table in `src/schemas/operations.ts`, which also builds
  * apps/idp's OpenAPI document.
  */
 function apiFor(handler: (request: Request) => Response) {

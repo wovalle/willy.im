@@ -1,7 +1,7 @@
 import type { Route } from "./+types/apps.$app.user-keys"
 import { requireApiPrincipal } from "~/lib/api-keys.server"
 import { readJson } from "~/lib/api.server"
-import { CreateUserApiKeyInput } from "~/lib/api-schemas"
+import { CreateUserApiKeyInput } from "@willyim/idp/schemas"
 import { actorFromPrincipal, recordAudit } from "~/lib/audit.server"
 import { createUserApiKey, listUserApiKeys } from "~/lib/user-api-keys.server"
 

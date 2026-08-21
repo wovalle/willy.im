@@ -24,6 +24,7 @@
     "@better-auth/oauth-provider": "^1.6.15",
     "@better-auth/passkey": "^1.6.15",
     "@fontsource-variable/geist": "^5.2.9",
+    "@willyim/idp": "*",
     "@willyim/rbac": "*",
     "better-auth": "^1.6.15",
     "class-variance-authority": "^0.7.1",

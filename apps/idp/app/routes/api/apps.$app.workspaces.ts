@@ -2,7 +2,7 @@ import type { Route } from "./+types/apps.$app.workspaces"
 import { createWorkspaceForApp, listWorkspacesForApp } from "~/lib/admin.server"
 import { requireApiPrincipal } from "~/lib/api-keys.server"
 import { readJson } from "~/lib/api.server"
-import { CreateWorkspaceInput } from "~/lib/api-schemas"
+import { CreateWorkspaceInput } from "@willyim/idp/schemas"
 import { actorFromPrincipal, recordAudit } from "~/lib/audit.server"
 
 /** GET — list this app's workspaces. Requires workspace:read. */

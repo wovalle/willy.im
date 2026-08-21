@@ -1,7 +1,7 @@
 {
   "name": "@willyim/idp",
-  "version": "0.1.1",
-  "description": "Login for apps that don't own identity — OIDC client, server sessions, and react-router guards against the willy.im IdP",
+  "version": "0.2.0",
+  "description": "Login for apps that don't own identity \u2014 OIDC client, server sessions, and react-router guards against the willy.im IdP",
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
@@ -17,6 +17,14 @@
     "./react-router": {
       "types": "./dist/src/react-router/index.d.ts",
       "import": "./dist/src/react-router/index.js"
+    },
+    "./schemas": {
+      "types": "./dist/src/schemas/index.d.ts",
+      "import": "./dist/src/schemas/index.js"
+    },
+    "./schemas/openapi": {
+      "types": "./dist/src/schemas/openapi.d.ts",
+      "import": "./dist/src/schemas/openapi.js"
     }
   },
   "files": [
@@ -30,12 +38,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/generated','dist/src/generated',{recursive:true})\"",
+    "build": "tsc -p tsconfig.build.json",
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "openapi": "node scripts/generate-openapi.mjs"
+    "openapi": "npm run build && node scripts/generate-openapi.mjs"
   },
   "keywords": [
     "oidc",
@@ -52,7 +60,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/wovalle/willy.im",
-    "directory": "packages/idp"
+    "directory": "packages/idp-client"
   },
   "peerDependencies": {
     "drizzle-orm": ">=0.44 || >=1.0.0-0"
@@ -67,12 +75,13 @@
     "@types/node": "^22.19.7",
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.44.7",
-    "esbuild": "^0.25.12",
-    "openapi-typescript": "^7.9.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "zod": "^4.1.11"
   }
 }

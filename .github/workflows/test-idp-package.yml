@@ -3,7 +3,7 @@ name: Test idp package
 on:
   pull_request:
     paths:
-      - "packages/idp/**"
+      - "packages/idp-client/**"
 
 jobs:
   test:
@@ -17,12 +17,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: packages/idp
+        working-directory: packages/idp-client
 
       - name: Build
         run: npm run build
-        working-directory: packages/idp
+        working-directory: packages/idp-client
 
       - name: Test
         run: npm test
-        working-directory: packages/idp
+        working-directory: packages/idp-client

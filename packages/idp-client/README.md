@@ -7,13 +7,18 @@ someone is and what they may do. An app installing this package runs no auth
 framework: it owns one session table, which is a _handle_ to IdP truth rather
 than a record of it. No user table, no account table, no `ADMIN_EMAILS` list.
 
-Zero runtime dependencies — `fetch`, WebCrypto and `Request`/`Response` only, so
-the same build runs on Cloudflare Workers, Node 20+ and Bun.
+`zod` is the one runtime dependency: every payload the IdP sends — discovery,
+tokens, claims, management API responses — is parsed against a schema rather
+than cast, so a malformed response is an `IdpError` naming the field instead of
+a `TypeError` several frames later. Otherwise it is `fetch`, WebCrypto and
+`Request`/`Response` only, so the same build runs on Cloudflare Workers,
+Node 20+ and Bun.
 
 ```
-@willyim/idp               core: OIDC client + server sessions
-@willyim/idp/drizzle       the session store, and the `idp_session` table
-@willyim/idp/react-router  the auth route and the loader guards
+@willyim/idp                core: OIDC client + server sessions
+@willyim/idp/drizzle        the session store, and the `idp_session` table
+@willyim/idp/react-router   the auth route and the loader guards
+@willyim/idp/schemas        the management API wire shapes, as zod schemas
 ```
 
 ## Install
@@ -272,15 +277,71 @@ const idp = createIdp({
 })
 ```
 
+## End-user API keys
+
+Keys an app's own users create to call *that app's* API. The IdP is the key
+store: the app mints, lists, revokes and validates `wak_…` tokens over the
+management API and never persists a plaintext or a hash.
+
+```ts
+import { createUserKeys } from "@willyim/idp"
+
+const keys = createUserKeys({
+  baseUrl: "https://idp.willy.im", // the API is at the root, not under /auth
+  token: env.IDP_MANAGEMENT_KEY, //  the app's own wim_… key
+  app: "luchy",
+  cache: { ttlMs: 60_000 }, // validation cache; revocation lag is bounded by it
+})
+
+// Mint — the plaintext exists exactly once, in this response.
+const minted = await keys.create({
+  userId: session.userId,
+  name: "cli",
+  scopes: ["analytics:read"], // must be in the app's product permission catalog
+  workspaceId: session.workspaceId,
+})
+
+// Check, on the request path.
+const auth = await keys.authenticate(request, { scopes: ["analytics:read"] })
+if (!auth.ok) return new Response(auth.reason, { status: auth.status })
+auth.key // { keyId, userId, workspaceId, scopes, name }
+```
+
+`authenticate` reads `Authorization: Bearer …`, then `X-API-Key`, and returns a
+result rather than throwing so the caller owns the response shape. Underneath,
+`validate` caches verdicts by digest of the token (60s for a hit, 10s for a
+miss, never for a failed round trip) and collapses concurrent checks of the same
+token into one request. Revoking through some other channel is visible only once
+the entry expires; `forget(token)` drops it immediately when you hold the
+plaintext.
+
+Filter with `list({ userId, workspaceId })`, revoke with `revoke(id)`. Scope
+enforcement is the app's job — the IdP stores the scopes and reports them.
+
+Only for **secret** credentials. A key embedded in a web page — an analytics
+ingest token, say — identifies a site rather than a user, cannot be kept secret,
+and must not pay a round trip per hit. Keep those in the app's own table and
+gate them on `Origin` plus rate limiting.
+
 ## Management API types
 
-The IdP's `/api/v1/*` management surface is not part of this package's public
-API in v1. The types for it are generated from the IdP's OpenAPI document —
-`npm run openapi` refreshes both `openapi/idp-api.json` and
-`src/generated/idp-api.d.ts` — so that when management calls are added they
-cannot be hand-written. The OIDC endpoints are not in that document and never
-will be: they are standards-defined and discovered at runtime from
-`.well-known`.
+Endpoints without sugar of their own go through `createManagementApi`, whose
+paths, methods, path parameters, bodies and response shapes all come from the
+operations table in `@willyim/idp/schemas` — one zod definition per shape,
+which also builds `openapi/idp-api.json` (`npm run openapi`) and which the IdP
+itself validates incoming requests with. A typo in a path is a compile error,
+not a 404 in production, and a response that doesn't match its schema throws
+instead of reaching your code as `undefined`.
+
+```ts
+const api = createManagementApi({ baseUrl, token })
+const { members } = await api.request("get", "/api/v1/apps/{app}/members", {
+  params: { app: "luchy" },
+})
+```
+
+The OIDC endpoints are not in that document and never will be: they are
+standards-defined and discovered at runtime from `.well-known`.
 
 ## Licence
 
