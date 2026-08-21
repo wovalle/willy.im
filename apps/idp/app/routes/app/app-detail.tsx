@@ -18,13 +18,13 @@ import {
 
 import type { Route } from "./+types/app-detail"
 import {
-  createWorkspace,
+  createWorkspaceForApp,
   deleteApplication,
   getApplication,
+  impersonateAppMember,
   listAppMembers,
   listPeopleForApp,
   listWorkspacesForApp,
-  requireAdminSession,
   rotateApplicationSecret,
   updateApplicationMetadata,
   updateApplicationPermissions,
@@ -40,9 +40,9 @@ import {
   updateAppMember,
 } from "~/lib/members.server"
 import { createApiKey, listApiKeys, revokeApiKey } from "~/lib/api-keys.server"
-import { actorFromUser, listAuditForApp, recordAudit } from "~/lib/audit.server"
-import { APP_PERMISSIONS, type AppRole } from "~/lib/permissions"
-import { requireAppPermission } from "~/lib/security.server"
+import { listAuditForApp } from "~/lib/audit.server"
+import { requireConsoleCaller } from "~/lib/caller.server"
+import { APP_PERMISSIONS, type AppPermission, type AppRole } from "~/lib/permissions"
 import { firstInvalidRedirectUri, parseUriList } from "~/lib/validate"
 import {
   AlertDialog,
@@ -71,36 +71,61 @@ import {
 } from "~/components/ui/table"
 
 export async function loader({ request, context, params }: Route.LoaderArgs) {
-  await requireAdminSession(request, context, context.services.auth)
+  // The gate is app-scoped, so the app has to be resolved before it can be
+  // applied: any member holding app:read may open this page, not just IdP
+  // superadmins.
   const application = await getApplication(context, params.clientId)
   if (!application) throw new Response("Application not found", { status: 404 })
   const app = application.app ?? ""
+  const caller = await requireConsoleCaller(request, context, context.services.auth, {
+    app,
+    permission: "app:read",
+  })
+  // What this caller may actually do here — the UI decides what to render, and
+  // the loader decides what it can even ask for.
+  const permissions = await caller.permissionsFor(app)
+  const may = (permission: AppPermission) => permissions.includes(permission)
   const [workspaces, people, members, invitations, apiKeys, audit] = await Promise.all([
     app ? listWorkspacesForApp(context, app) : Promise.resolve([]),
     app ? listPeopleForApp(context, app) : Promise.resolve([]),
     app ? listAppMembers(context, app) : Promise.resolve([]),
     app ? listAppInvitations(context, app) : Promise.resolve([]),
-    app ? listApiKeys(context, app) : Promise.resolve([]),
+    // Gated in the service: asking without apikey:read would 403 the page for a
+    // member who is otherwise perfectly entitled to read it.
+    app && may("apikey:read") ? listApiKeys(context, caller, app) : Promise.resolve([]),
     app ? listAuditForApp(context, app, 20) : Promise.resolve([]),
   ])
-  return { application, workspaces, people, members, invitations, apiKeys, audit }
+  return {
+    application,
+    workspaces,
+    people,
+    members,
+    invitations,
+    apiKeys,
+    audit,
+    permissions,
+    // Impersonation needs superadmin *and* the permission (see admin.server), and
+    // the button should be honest about both.
+    isSuperadmin: caller.kind === "superadmin",
+  }
 }
 
 export async function action({ request, context, params }: Route.ActionArgs) {
-  const session = await requireAdminSession(request, context, context.services.auth)
-  const actor = actorFromUser(session.user)
+  // Authenticate only — every intent below is gated (and audited) by the service
+  // it calls, so the console and the management API can't drift apart.
+  const caller = await requireConsoleCaller(request, context, context.services.auth)
   const auth = context.services.auth
   const clientId = params.clientId
   const form = await request.formData()
   const intent = form.get("intent")
 
   if (intent === "delete") {
-    await deleteApplication(context, clientId)
+    await deleteApplication(context, caller, clientId)
     return redirect("/")
   }
 
   if (intent === "rotate") {
-    const { clientSecret } = await rotateApplicationSecret(request, auth, clientId)
+    const { clientSecret } = await rotateApplicationSecret(context, caller, clientId)
     return { rotatedSecret: clientSecret }
   }
 
@@ -114,7 +139,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
         error: `"${invalid}" isn't a valid URL. Use an absolute URL like https://app.example.com/callback.`,
         field: "redirectUris",
       }
-    await updateApplicationRedirectUris(request, auth, clientId, redirectUris)
+    await updateApplicationRedirectUris(context, caller, clientId, redirectUris)
     return { ok: "redirects" }
   }
 
@@ -122,31 +147,15 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     const application = await getApplication(context, clientId)
     const app = application?.app
     if (!app) return { error: "This application has no app key yet." }
-    // Only superadmins can impersonate (the Better Auth admin role is
-    // superadmin-only — see auth.server.ts). We additionally scope the target to
-    // this app's members, so the action is app-bound and auditable.
-    const access = await requireAppPermission(request, context, auth, app, "user:impersonate")
-    if (!access.isSuperadmin) return { error: "Only superadmins can impersonate." }
-    const userId = String(form.get("userId") ?? "")
-    const appMembers = await listAppMembers(context, app)
-    const isMember = appMembers.find((m) => m.userId === userId)
-    if (!isMember) return { error: "That user isn't a member of this app." }
-
-    const res = await auth.api.impersonateUser({
-      body: { userId },
+    const res = await impersonateAppMember(context, caller, {
+      app,
+      userId: String(form.get("userId") ?? ""),
+      auth,
       headers: request.headers,
-      asResponse: true,
     })
-    await recordAudit(context, {
-      actor,
-      table: "user",
-      operation: "impersonate",
-      applicationId: app,
-      rowId: userId,
-      after: { email: isMember.email },
-    })
+    if ("error" in res) return { error: res.error }
     const headers = new Headers()
-    for (const cookie of res.headers.getSetCookie()) headers.append("set-cookie", cookie)
+    for (const cookie of res.setCookies) headers.append("set-cookie", cookie)
     // Land on the impersonated user's account; a banner offers "stop".
     return redirect("/account", { headers })
   }
@@ -157,7 +166,6 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     if (!app) return { error: "This application has no app key yet." }
 
     if (intent === "create-api-key") {
-      const access = await requireAppPermission(request, context, auth, app, "apikey:create")
       const name = String(form.get("name") ?? "").trim()
       if (!name) return { error: "Give the key a name.", field: "key-name" }
       const permissions = form.getAll("permissions").map(String).filter(Boolean)
@@ -168,36 +176,19 @@ export async function action({ request, context, params }: Route.ActionArgs) {
         Number.isFinite(days) && days > 0
           ? new Date(Date.now() + days * 24 * 60 * 60 * 1000)
           : null
-      const { id, token, prefix } = await createApiKey(context, {
-        app,
-        name,
-        permissions,
-        createdByUserId: access.user.id,
-        expiresAt,
-      })
-      await recordAudit(context, {
-        actor,
-        table: "api_key",
-        operation: "create",
-        applicationId: app,
-        rowId: id,
-        after: { name, permissions, expiresAt: expiresAt?.toISOString() ?? null },
-      })
-      return { createdApiKey: { token, prefix, name } }
+      const created = await createApiKey(context, caller, { app, name, permissions, expiresAt })
+      if ("error" in created)
+        return {
+          error: `You can't grant permissions you don't hold: ${created.detail.join(", ")}.`,
+          field: "key-name",
+        }
+      return { createdApiKey: { token: created.token, prefix: created.prefix, name } }
     }
 
     // revoke-api-key
-    await requireAppPermission(request, context, auth, app, "apikey:revoke")
     const keyId = String(form.get("keyId") ?? "")
-    const res = await revokeApiKey(context, { app, id: keyId })
+    const res = await revokeApiKey(context, caller, { app, id: keyId })
     if ("error" in res) return { error: res.error }
-    await recordAudit(context, {
-      actor,
-      table: "api_key",
-      operation: "revoke",
-      applicationId: app,
-      rowId: keyId,
-    })
     return { ok: "api-key-revoked" }
   }
 
@@ -206,19 +197,9 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     const slug = String(form.get("slug") ?? "").trim()
     const app = String(form.get("app") ?? "").trim()
     if (!name || !slug) return { error: "Workspace name and slug are required.", field: "ws-name" }
-    try {
-      await createWorkspace(request, auth, { name, slug, applicationId: app })
-      await recordAudit(context, {
-        actor,
-        table: "organization",
-        operation: "create",
-        applicationId: app,
-        after: { name, slug },
-      })
-      return { ok: "workspace" }
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : "Couldn't create workspace.", field: "ws-name" }
-    }
+    const res = await createWorkspaceForApp(context, caller, { app, name, slug })
+    if ("error" in res) return { error: res.error, field: "ws-name" }
+    return { ok: "workspace" }
   }
 
   // Member-management intents. Resolved against the app's access catalog so
@@ -245,80 +226,55 @@ export async function action({ request, context, params }: Route.ActionArgs) {
       form.getAll("productPermissions").map(String).filter(Boolean)
 
     if (intent === "invite-member") {
-      const access = await requireAppPermission(request, context, auth, app, "member:invite")
       const email = String(form.get("email") ?? "").trim()
       if (!email || !email.includes("@"))
         return { error: "Enter a valid email address.", field: "invite-email" }
-      const result = await addOrInviteAppMember(context, {
+      const result = await addOrInviteAppMember(context, caller, {
         app,
         email,
         role: readRole(form.get("role")),
         permissions: readPermissions(),
         productPermissions: readProductPermissions(),
         catalog,
-        invitedByUserId: access.user.id,
         origin,
       })
       if (result.kind === "already-member")
         return { error: `${email} is already a member.`, field: "invite-email" }
-      await recordAudit(context, {
-        actor,
-        table: result.kind === "added" ? "application_member" : "application_invitation",
-        operation: "invite",
-        applicationId: app,
-        after: { email, role: readRole(form.get("role")), result: result.kind },
-      })
       return { ok: result.kind === "added" ? "member-added" : "member-invited" }
     }
 
     if (intent === "update-member") {
-      await requireAppPermission(request, context, auth, app, "member:manage")
-      const userId = String(form.get("userId") ?? "")
-      const role = readRole(form.get("role"))
-      const res = await updateAppMember(context, {
+      const res = await updateAppMember(context, caller, {
         app,
-        userId,
-        role,
+        userId: String(form.get("userId") ?? ""),
+        role: readRole(form.get("role")),
         permissions: readPermissions(),
         productPermissions: readProductPermissions(),
         catalog,
       })
       if ("error" in res) return { error: res.error }
-      await recordAudit(context, {
-        actor,
-        table: "application_member",
-        operation: "update",
-        applicationId: app,
-        rowId: userId,
-        after: { role, permissions: readPermissions(), productPermissions: readProductPermissions() },
-      })
       return { ok: "member-updated" }
     }
 
     if (intent === "remove-member") {
-      await requireAppPermission(request, context, auth, app, "member:manage")
-      const userId = String(form.get("userId") ?? "")
-      const res = await removeAppMember(context, { app, userId })
-      if ("error" in res) return { error: res.error }
-      await recordAudit(context, {
-        actor,
-        table: "application_member",
-        operation: "delete",
-        applicationId: app,
-        rowId: userId,
+      const res = await removeAppMember(context, caller, {
+        app,
+        userId: String(form.get("userId") ?? ""),
       })
+      if ("error" in res) return { error: res.error }
       return { ok: "member-removed" }
     }
 
     if (intent === "revoke-invite") {
-      await requireAppPermission(request, context, auth, app, "member:invite")
-      await revokeInvitation(context, { app, invitationId: String(form.get("invitationId") ?? "") })
+      await revokeInvitation(context, caller, {
+        app,
+        invitationId: String(form.get("invitationId") ?? ""),
+      })
       return { ok: "invite-revoked" }
     }
 
     if (intent === "resend-invite") {
-      await requireAppPermission(request, context, auth, app, "member:invite")
-      const res = await resendInvitation(context, {
+      const res = await resendInvitation(context, caller, {
         app,
         invitationId: String(form.get("invitationId") ?? ""),
         origin,
@@ -331,7 +287,6 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     const application = await getApplication(context, clientId)
     const app = application?.app
     if (!app) return { error: "This application has no app key yet." }
-    await requireAppPermission(request, context, auth, app, "app:update")
     // The permission catalog is managed in its own section; preserve it here so
     // toggling signup never touches it.
     const parsed = appConfigSchema.safeParse({
@@ -339,14 +294,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
       permissions: application.permissions,
     })
     if (!parsed.success) return { error: "Invalid app settings.", field: "app-metadata" }
-    await updateApplicationMetadata(context, clientId, parsed.data)
-    await recordAudit(context, {
-      actor,
-      table: "oauth_client",
-      operation: "update",
-      applicationId: app,
-      after: parsed.data,
-    })
+    await updateApplicationMetadata(context, caller, clientId, parsed.data)
     return { ok: "app-metadata" }
   }
 
@@ -354,7 +302,6 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     const application = await getApplication(context, clientId)
     const app = application?.app
     if (!app) return { error: "This application has no app key yet." }
-    await requireAppPermission(request, context, auth, app, "app:update")
     const catalog = application?.permissions ?? []
 
     if (intent === "add-permission") {
@@ -364,29 +311,18 @@ export async function action({ request, context, params }: Route.ActionArgs) {
         return { error: "Permissions can't contain spaces.", field: "add-permission" }
       if (catalog.includes(value))
         return { error: `"${value}" is already declared.`, field: "add-permission" }
-      const next = [...catalog, value]
-      await updateApplicationPermissions(context, clientId, next)
-      await recordAudit(context, {
-        actor,
-        table: "oauth_client",
-        operation: "update",
-        applicationId: app,
-        after: { addedPermission: value, permissions: next },
-      })
+      await updateApplicationPermissions(context, caller, clientId, [...catalog, value])
       return { ok: "permission-added" }
     }
 
     // remove-permission
     const value = String(form.get("permission") ?? "")
-    const next = catalog.filter((p) => p !== value)
-    await updateApplicationPermissions(context, clientId, next)
-    await recordAudit(context, {
-      actor,
-      table: "oauth_client",
-      operation: "update",
-      applicationId: app,
-      after: { removedPermission: value, permissions: next },
-    })
+    await updateApplicationPermissions(
+      context,
+      caller,
+      clientId,
+      catalog.filter((p) => p !== value),
+    )
     return { ok: "permission-removed" }
   }
 
@@ -394,9 +330,17 @@ export async function action({ request, context, params }: Route.ActionArgs) {
 }
 
 export default function AppDetail({ loaderData }: Route.ComponentProps) {
-  const { application, workspaces, people, members, invitations, apiKeys, audit } =
+  const { application, workspaces, people, members, invitations, apiKeys, audit, permissions } =
     loaderData
   const catalog = application.permissions
+  // Controls whose intent this caller can't perform are hidden, not disabled: a
+  // button that always 403s is a worse lie than no button at all. Read-only
+  // content (the lists) still renders for anyone who got past app:read.
+  const can = (permission: AppPermission) => permissions.includes(permission)
+  const canManageMembers = can("member:manage")
+  // Impersonation is superadmin-only regardless of the grant — mirror the
+  // service's rule so the button never promises what the action refuses.
+  const canImpersonate = can("user:impersonate") && loaderData.isSuperadmin
   const actionData = useActionData<typeof action>()
   const nav = useNavigation()
   const submit = useSubmit()
@@ -468,6 +412,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
             </div>
           </div>
 
+          {can("app:update") ? (
           <Form method="post" className="flex flex-col gap-2">
             <input type="hidden" name="intent" value="update-redirects" />
             <Label htmlFor="redirectUris">Redirect URIs</Label>
@@ -491,7 +436,16 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               Save redirect URIs
             </Button>
           </Form>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <Label>Redirect URIs</Label>
+              <code className="bg-muted rounded-md px-3 py-2 font-mono text-xs whitespace-pre-wrap">
+                {application.redirectUris.join("\n")}
+              </code>
+            </div>
+          )}
 
+          {can("app:update") ? (
           <div className="flex flex-col gap-2 border-t pt-4">
             <Label>Client secret</Label>
             <p className="text-muted-foreground text-xs">
@@ -511,7 +465,9 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               </div>
             ) : null}
           </div>
+          ) : null}
 
+          {can("app:update") ? (
           <Form method="post" className="flex flex-col gap-2 border-t pt-4">
             <input type="hidden" name="intent" value="update-app-metadata" />
             <Label>Signup</Label>
@@ -535,6 +491,14 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               Save app settings
             </Button>
           </Form>
+          ) : (
+            <div className="flex flex-col gap-1.5 border-t pt-4">
+              <Label>Signup</Label>
+              <p className="text-muted-foreground text-sm">
+                {application.allowSignup ? "Open signup is allowed." : "Invite-only."}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
       ) : null}
@@ -547,6 +511,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           <CardDescription>Tenants of this application.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          {can("workspace:create") ? (
           <Form method="post" className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="intent" value="create-workspace" />
             <input type="hidden" name="app" value={application.app ?? ""} />
@@ -563,6 +528,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               Add
             </Button>
           </Form>
+          ) : null}
           {field === "ws-name" && error ? (
             <p role="alert" className="text-destructive text-sm">
               {error}
@@ -611,11 +577,13 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          <InviteMemberForm
-            busy={busy}
-            error={field === "invite-email" ? (error ?? null) : null}
-            catalog={catalog}
-          />
+          {can("member:invite") ? (
+            <InviteMemberForm
+              busy={busy}
+              error={field === "invite-email" ? (error ?? null) : null}
+              catalog={catalog}
+            />
+          ) : null}
 
           {memberError && field !== "invite-email" ? (
             <p role="alert" className="text-destructive text-sm">
@@ -632,7 +600,9 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Permissions</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {canManageMembers || canImpersonate ? (
+                    <TableHead className="text-right">Actions</TableHead>
+                  ) : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -642,6 +612,8 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
                     member={m}
                     busy={busy}
                     catalog={catalog}
+                    canManage={canManageMembers}
+                    canImpersonate={canImpersonate}
                   />
                 ))}
               </TableBody>
@@ -661,7 +633,9 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
                     <TableHead>Role</TableHead>
                     <TableHead>Permissions</TableHead>
                     <TableHead>Expires</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {can("member:invite") ? (
+                      <TableHead className="text-right">Actions</TableHead>
+                    ) : null}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -679,6 +653,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
                       <TableCell className="text-muted-foreground text-xs">
                         {new Date(inv.expiresAt as unknown as string).toLocaleDateString()}
                       </TableCell>
+                      {can("member:invite") ? (
                       <TableCell className="text-right whitespace-nowrap">
                         <Form method="post" className="inline">
                           <input type="hidden" name="intent" value="resend-invite" />
@@ -701,6 +676,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
                           </Button>
                         </Form>
                       </TableCell>
+                      ) : null}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -726,11 +702,13 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          <CreateApiKeyForm
-            busy={busy}
-            error={field === "key-name" ? (error ?? null) : null}
-            disabled={!application.app}
-          />
+          {can("apikey:create") ? (
+            <CreateApiKeyForm
+              busy={busy}
+              error={field === "key-name" ? (error ?? null) : null}
+              disabled={!application.app}
+            />
+          ) : null}
 
           {createdApiKey ? (
             <div className="bg-muted rounded-md p-3 text-sm">
@@ -741,7 +719,13 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
             </div>
           ) : null}
 
-          {apiKeys.length === 0 ? (
+          {!can("apikey:read") ? (
+            // The loader skips the query without apikey:read, so an empty list
+            // here would read as "none exist" rather than "you can't see them".
+            <p className="text-muted-foreground text-sm">
+              You don't have permission to view this app's API keys.
+            </p>
+          ) : apiKeys.length === 0 ? (
             <p className="text-muted-foreground text-sm">No API keys yet.</p>
           ) : (
             <Table>
@@ -752,12 +736,19 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
                   <TableHead>Permissions</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last used</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {can("apikey:revoke") ? (
+                    <TableHead className="text-right">Actions</TableHead>
+                  ) : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {apiKeys.map((k) => (
-                  <ApiKeyRow key={k.id} apiKey={k} busy={busy} />
+                  <ApiKeyRow
+                    key={k.id}
+                    apiKey={k}
+                    busy={busy}
+                    canRevoke={can("apikey:revoke")}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -853,7 +844,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
       </Card>
       ) : null}
 
-      {section === "overview" ? (
+      {section === "overview" && can("app:delete") ? (
       /* Danger zone */
       <Card className="border-destructive/40">
         <CardHeader>
@@ -896,6 +887,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           adminCount={adminCount}
           busy={busy}
           hasApp={!!application.app}
+          canEdit={can("app:update")}
           addError={field === "add-permission" ? (error ?? null) : null}
         />
       ) : null}
@@ -965,6 +957,7 @@ function PermissionsCatalog({
   adminCount,
   busy,
   hasApp,
+  canEdit,
   addError,
 }: {
   catalog: string[]
@@ -972,6 +965,8 @@ function PermissionsCatalog({
   adminCount: number
   busy: boolean
   hasApp: boolean
+  /** app:update — without it the catalog is readable but not editable. */
+  canEdit: boolean
   addError: string | null
 }) {
   const submit = useSubmit()
@@ -994,6 +989,7 @@ function PermissionsCatalog({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
+        {canEdit ? (
         <Form method="post" className="flex flex-wrap items-end gap-2">
           <input type="hidden" name="intent" value="add-permission" />
           <div className="flex flex-1 flex-col gap-1.5">
@@ -1013,6 +1009,7 @@ function PermissionsCatalog({
             Add
           </Button>
         </Form>
+        ) : null}
         {!hasApp ? (
           <p className="text-muted-foreground text-sm">
             This application has no app key yet, so it can't declare permissions.
@@ -1026,8 +1023,13 @@ function PermissionsCatalog({
 
         {catalog.length === 0 ? (
           <div className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-            No permissions declared yet. Add one above — e.g.{" "}
-            <code className="font-mono text-xs">posts:read</code>.
+            No permissions declared yet.
+            {canEdit ? (
+              <>
+                {" "}
+                Add one above — e.g. <code className="font-mono text-xs">posts:read</code>.
+              </>
+            ) : null}
           </div>
         ) : (
           <ul className="divide-border divide-y rounded-lg border">
@@ -1040,7 +1042,7 @@ function PermissionsCatalog({
                     {holders} {holders === 1 ? "holder" : "holders"}
                   </Badge>
                   <div className="ml-auto">
-                    {holders > 0 ? (
+                    {!canEdit ? null : holders > 0 ? (
                       <AlertDialog>
                         <AlertDialogTrigger
                           render={
@@ -1251,10 +1253,14 @@ function MemberRow({
   member,
   busy,
   catalog,
+  canManage,
+  canImpersonate,
 }: {
   member: MemberRowData
   busy: boolean
   catalog: string[]
+  canManage: boolean
+  canImpersonate: boolean
 }) {
   const submit = useSubmit()
   const [editing, setEditing] = useState(false)
@@ -1341,27 +1347,35 @@ function MemberRow({
       <TableCell className="text-muted-foreground text-xs">
         {member.role === "admin" ? "all" : (member.permissions ?? []).join(", ") || "—"}
       </TableCell>
+      {canManage || canImpersonate ? (
       <TableCell className="text-right whitespace-nowrap">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={busy}
-          onClick={() => setEditing(true)}
-        >
-          Edit
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={busy}
-          onClick={() => submit({ intent: "impersonate", userId: member.userId }, { method: "post" })}
-        >
-          <UserCog className="size-3.5" />
-          Impersonate
-          <span className="sr-only"> {member.email} (superadmin only)</span>
-        </Button>
+        {canManage ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => setEditing(true)}
+          >
+            Edit
+          </Button>
+        ) : null}
+        {canImpersonate ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() =>
+              submit({ intent: "impersonate", userId: member.userId }, { method: "post" })
+            }
+          >
+            <UserCog className="size-3.5" />
+            Impersonate
+            <span className="sr-only"> {member.email} (superadmin only)</span>
+          </Button>
+        ) : null}
+        {canManage ? (
         <AlertDialog>
           <AlertDialogTrigger
             render={
@@ -1394,7 +1408,9 @@ function MemberRow({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        ) : null}
       </TableCell>
+      ) : null}
     </TableRow>
   )
 }
@@ -1473,7 +1489,15 @@ const statusVariant: Record<ApiKeyRowData["status"], "default" | "secondary" | "
 }
 
 /** A single API key row with an inline revoke confirmation. */
-function ApiKeyRow({ apiKey, busy }: { apiKey: ApiKeyRowData; busy: boolean }) {
+function ApiKeyRow({
+  apiKey,
+  busy,
+  canRevoke,
+}: {
+  apiKey: ApiKeyRowData
+  busy: boolean
+  canRevoke: boolean
+}) {
   const submit = useSubmit()
   const fmtDate = (d: string | Date | null) =>
     d ? new Date(d as string).toLocaleDateString() : "—"
@@ -1490,6 +1514,7 @@ function ApiKeyRow({ apiKey, busy }: { apiKey: ApiKeyRowData; busy: boolean }) {
         <Badge variant={statusVariant[apiKey.status]}>{apiKey.status}</Badge>
       </TableCell>
       <TableCell className="text-muted-foreground text-xs">{fmtDate(apiKey.lastUsedAt)}</TableCell>
+      {canRevoke ? (
       <TableCell className="text-right whitespace-nowrap">
         {apiKey.status === "revoked" ? (
           <span className="text-muted-foreground text-xs">—</span>
@@ -1526,6 +1551,7 @@ function ApiKeyRow({ apiKey, busy }: { apiKey: ApiKeyRowData; busy: boolean }) {
           </AlertDialog>
         )}
       </TableCell>
+      ) : null}
     </TableRow>
   )
 }

@@ -2,6 +2,8 @@ import { and, eq } from "drizzle-orm"
 import { Resend } from "resend"
 
 import * as schema from "../db/schema"
+import { recordAudit } from "./audit.server"
+import { assertCan, type Caller } from "./caller.server"
 import { isAppPermission, type AppPermission, type AppRole } from "./permissions"
 import type { BaseServiceContext } from "./services"
 
@@ -67,9 +69,14 @@ export type InviteResult =
  * Option A (hybrid): if the email belongs to an existing willy.im user, add them
  * to application_member immediately (silent, no email). Otherwise create a
  * pending invitation and email a branded accept link.
+ *
+ * Requires `member:invite`. The check and the audit entry live here rather than
+ * in the caller so the console and the management API cannot drift apart on
+ * who may invite, or on what the trail records.
  */
 export async function addOrInviteAppMember(
   ctx: BaseServiceContext,
+  caller: Caller,
   args: {
     app: string
     email: string
@@ -78,11 +85,10 @@ export async function addOrInviteAppMember(
     // Product-permission grants + the app's declared catalog to validate against.
     productPermissions?: string[]
     catalog?: string[]
-    // Null for machine callers (a scoped API key / superadmin token has no user).
-    invitedByUserId: string | null
     origin: string
   },
 ): Promise<InviteResult> {
+  await assertCan(caller, args.app, "member:invite")
   const email = normalizeEmail(args.email)
   const permissions = sanitizePermissions(args.role, args.permissions)
   const productPermissions = sanitizeProductPermissions(
@@ -112,6 +118,13 @@ export async function addOrInviteAppMember(
       permissions,
       productPermissions,
     })
+    await recordAudit(ctx, {
+      actor: caller.actor,
+      table: "application_member",
+      operation: "invite",
+      applicationId: args.app,
+      after: { email, role: args.role, permissions, result: "added" },
+    })
     return { kind: "added" }
   }
 
@@ -127,7 +140,8 @@ export async function addOrInviteAppMember(
       permissions,
       productPermissions,
       token,
-      invitedByUserId: args.invitedByUserId,
+      // Null for machine callers (a scoped API key / superadmin token has no user).
+      invitedByUserId: caller.userId,
       expiresAt,
     })
     .onConflictDoUpdate({
@@ -139,12 +153,23 @@ export async function addOrInviteAppMember(
     })
 
   await sendInviteEmail(ctx, { origin: args.origin, email, token, app: args.app, role: args.role })
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "application_invitation",
+    operation: "invite",
+    applicationId: args.app,
+    after: { email, role: args.role, permissions, result: "invited" },
+  })
   return { kind: "invited" }
 }
 
-/** Update an existing member's role + permissions. Guards the last admin. */
+/**
+ * Update an existing member's role + permissions. Guards the last admin.
+ * Requires `member:manage`.
+ */
 export async function updateAppMember(
   ctx: BaseServiceContext,
+  caller: Caller,
   args: {
     app: string
     userId: string
@@ -154,6 +179,7 @@ export async function updateAppMember(
     catalog?: string[]
   },
 ): Promise<{ ok: true } | { error: string }> {
+  await assertCan(caller, args.app, "member:manage")
   const [current] = await ctx.db
     .select({ role: schema.applicationMember.role })
     .from(schema.applicationMember)
@@ -171,31 +197,39 @@ export async function updateAppMember(
       return { error: "Can't demote the last admin — promote someone else first." }
   }
 
+  const permissions = sanitizePermissions(args.role, args.permissions)
+  const productPermissions = sanitizeProductPermissions(
+    args.role,
+    args.productPermissions ?? [],
+    args.catalog ?? [],
+  )
   await ctx.db
     .update(schema.applicationMember)
-    .set({
-      role: args.role,
-      permissions: sanitizePermissions(args.role, args.permissions),
-      productPermissions: sanitizeProductPermissions(
-        args.role,
-        args.productPermissions ?? [],
-        args.catalog ?? [],
-      ),
-    })
+    .set({ role: args.role, permissions, productPermissions })
     .where(
       and(
         eq(schema.applicationMember.applicationId, args.app),
         eq(schema.applicationMember.userId, args.userId),
       ),
     )
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "application_member",
+    operation: "update",
+    applicationId: args.app,
+    rowId: args.userId,
+    after: { role: args.role, permissions, productPermissions },
+  })
   return { ok: true }
 }
 
-/** Remove a member. Guards the last admin. */
+/** Remove a member. Guards the last admin. Requires `member:manage`. */
 export async function removeAppMember(
   ctx: BaseServiceContext,
+  caller: Caller,
   args: { app: string; userId: string },
 ): Promise<{ ok: true } | { error: string }> {
+  await assertCan(caller, args.app, "member:manage")
   const [current] = await ctx.db
     .select({ role: schema.applicationMember.role })
     .from(schema.applicationMember)
@@ -219,6 +253,13 @@ export async function removeAppMember(
         eq(schema.applicationMember.userId, args.userId),
       ),
     )
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "application_member",
+    operation: "delete",
+    applicationId: args.app,
+    rowId: args.userId,
+  })
   return { ok: true }
 }
 
@@ -237,10 +278,13 @@ export async function listAppInvitations(ctx: BaseServiceContext, app: string) {
     .where(eq(schema.applicationInvitation.applicationId, app))
 }
 
+/** Drop a pending invitation so signing in grants nothing. Requires `member:invite`. */
 export async function revokeInvitation(
   ctx: BaseServiceContext,
+  caller: Caller,
   args: { app: string; invitationId: string },
 ) {
+  await assertCan(caller, args.app, "member:invite")
   await ctx.db
     .delete(schema.applicationInvitation)
     .where(
@@ -251,11 +295,13 @@ export async function revokeInvitation(
     )
 }
 
-/** Refresh an invite's expiry and re-send the link. */
+/** Refresh an invite's expiry and re-send the link. Requires `member:invite`. */
 export async function resendInvitation(
   ctx: BaseServiceContext,
+  caller: Caller,
   args: { app: string; invitationId: string; origin: string },
 ): Promise<{ ok: true } | { error: string }> {
+  await assertCan(caller, args.app, "member:invite")
   const [inv] = await ctx.db
     .select()
     .from(schema.applicationInvitation)

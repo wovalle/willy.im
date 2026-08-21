@@ -6,7 +6,8 @@ import {
   revokeUserApiKey,
   validateUserApiKey,
 } from "../app/lib/user-api-keys.server"
-import { createApplication, createUser } from "./helpers/fixtures"
+import { listAuditForApp } from "../app/lib/audit.server"
+import { createApplication, createUser, fakeUserCaller, tokenSuperadmin } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
@@ -26,8 +27,8 @@ describe("end-user API keys", () => {
   })
   afterEach(() => h.close())
 
-  const mint = (overrides: Partial<Parameters<typeof createUserApiKey>[1]> = {}) =>
-    createUserApiKey(h.ctx, {
+  const mint = (overrides: Partial<Parameters<typeof createUserApiKey>[2]> = {}) =>
+    createUserApiKey(h.ctx, tokenSuperadmin(), {
       app: "acme",
       userId: user.id,
       name: "CLI token",
@@ -42,7 +43,7 @@ describe("end-user API keys", () => {
 
     expect(minted.token.startsWith("wak_")).toBe(true)
 
-    const [listed] = await listUserApiKeys(h.ctx, { app: "acme" })
+    const [listed] = await listUserApiKeys(h.ctx, tokenSuperadmin(), { app: "acme" })
     expect(listed.id).toBe(minted.id)
     expect(listed.scopes).toEqual(["invoices:read"])
     expect(listed.status).toBe("active")
@@ -64,7 +65,10 @@ describe("end-user API keys", () => {
     const minted = await mint({ scopes: ["invoices:read", "invoices:write"] })
     if (!("token" in minted)) throw new Error("mint failed")
 
-    const result = await validateUserApiKey(h.ctx, { app: "acme", token: minted.token })
+    const result = await validateUserApiKey(h.ctx, tokenSuperadmin(), {
+      app: "acme",
+      token: minted.token,
+    })
     expect(result).toMatchObject({
       valid: true,
       keyId: minted.id,
@@ -79,19 +83,25 @@ describe("end-user API keys", () => {
     const minted = await mint()
     if (!("token" in minted)) throw new Error("mint failed")
 
-    expect(await validateUserApiKey(h.ctx, { app: "other", token: minted.token })).toEqual({
+    expect(
+      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "other", token: minted.token }),
+    ).toEqual({
       valid: false,
       reason: "not_found",
     })
   })
 
   it("reports not_found for a garbage token", async () => {
-    expect(await validateUserApiKey(h.ctx, { app: "acme", token: "wak_nonsense" })).toEqual({
+    expect(
+      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", token: "wak_nonsense" }),
+    ).toEqual({
       valid: false,
       reason: "not_found",
     })
     // A token that isn't even ours is rejected without a database round-trip.
-    expect(await validateUserApiKey(h.ctx, { app: "acme", token: "bearer-ish" })).toEqual({
+    expect(
+      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", token: "bearer-ish" }),
+    ).toEqual({
       valid: false,
       reason: "not_found",
     })
@@ -101,8 +111,10 @@ describe("end-user API keys", () => {
     const minted = await mint()
     if (!("token" in minted)) throw new Error("mint failed")
 
-    await revokeUserApiKey(h.ctx, { app: "acme", id: minted.id })
-    expect(await validateUserApiKey(h.ctx, { app: "acme", token: minted.token })).toEqual({
+    await revokeUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", id: minted.id })
+    expect(
+      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", token: minted.token }),
+    ).toEqual({
       valid: false,
       reason: "revoked",
     })
@@ -112,7 +124,9 @@ describe("end-user API keys", () => {
     const minted = await mint({ expiresAt: new Date(Date.now() - 1000) })
     if (!("token" in minted)) throw new Error("mint failed")
 
-    expect(await validateUserApiKey(h.ctx, { app: "acme", token: minted.token })).toEqual({
+    expect(
+      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", token: minted.token }),
+    ).toEqual({
       valid: false,
       reason: "expired",
     })
@@ -122,24 +136,72 @@ describe("end-user API keys", () => {
     const minted = await mint()
     if (!("token" in minted)) throw new Error("mint failed")
 
-    expect(await revokeUserApiKey(h.ctx, { app: "acme", id: minted.id })).toEqual({ ok: true })
-    const [first] = await listUserApiKeys(h.ctx, { app: "acme" })
+    expect(
+      await revokeUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", id: minted.id }),
+    ).toEqual({ ok: true })
+    const [first] = await listUserApiKeys(h.ctx, tokenSuperadmin(), { app: "acme" })
 
-    expect(await revokeUserApiKey(h.ctx, { app: "acme", id: minted.id })).toEqual({ ok: true })
-    const [second] = await listUserApiKeys(h.ctx, { app: "acme" })
+    expect(
+      await revokeUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", id: minted.id }),
+    ).toEqual({ ok: true })
+    const [second] = await listUserApiKeys(h.ctx, tokenSuperadmin(), { app: "acme" })
 
     expect(second.status).toBe("revoked")
     expect(second.revokedAt).toEqual(first.revokedAt)
+  })
+
+  it("refuses every operation to a caller holding the wrong userkey permission", async () => {
+    const minted = await mint()
+    if (!("token" in minted)) throw new Error("mint failed")
+    // Holds the whole family *except* the one each call needs, so a 403 here is
+    // about the specific permission and not about being a stranger to the app.
+    const reader = fakeUserCaller({ userId: "u1", app: "acme", permissions: ["userkey:read"] })
+
+    await expect(
+      createUserApiKey(h.ctx, reader, { app: "acme", userId: user.id, name: "nope" }),
+    ).rejects.toMatchObject({ status: 403 })
+    await expect(
+      revokeUserApiKey(h.ctx, reader, { app: "acme", id: minted.id }),
+    ).rejects.toMatchObject({ status: 403 })
+    await expect(
+      validateUserApiKey(h.ctx, reader, { app: "acme", token: minted.token }),
+    ).rejects.toMatchObject({ status: 403 })
+    // The one it does hold still works.
+    expect(await listUserApiKeys(h.ctx, reader, { app: "acme" })).toHaveLength(1)
+  })
+
+  it("refuses to list keys for an app the caller has no permissions on", async () => {
+    const reader = fakeUserCaller({ userId: "u1", app: "other", permissions: ["userkey:read"] })
+    await expect(listUserApiKeys(h.ctx, reader, { app: "acme" })).rejects.toMatchObject({
+      status: 403,
+    })
+  })
+
+  it("audits the mint and the revocation against the app", async () => {
+    const minted = await mint()
+    if (!("token" in minted)) throw new Error("mint failed")
+    await revokeUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", id: minted.id })
+
+    const entries = await listAuditForApp(h.ctx, "acme")
+    expect(entries.map((e) => [e.tableName, e.operation, e.rowId])).toEqual([
+      ["user_api_key", "revoke", minted.id],
+      ["user_api_key", "create", minted.id],
+    ])
+    expect(entries[1].actor).toBe("superadmin-token")
   })
 
   it("will not let one app revoke another app's key", async () => {
     const minted = await mint()
     if (!("token" in minted)) throw new Error("mint failed")
 
-    expect(await revokeUserApiKey(h.ctx, { app: "other", id: minted.id })).toEqual({
+    expect(
+      await revokeUserApiKey(h.ctx, tokenSuperadmin(), { app: "other", id: minted.id }),
+    ).toEqual({
       error: "Key not found.",
     })
-    expect(await validateUserApiKey(h.ctx, { app: "acme", token: minted.token })).toMatchObject({
+    expect(
+      await validateUserApiKey(h.ctx, tokenSuperadmin(), { app: "acme", token: minted.token }),
+    ).toMatchObject({
       valid: true,
     })
   })

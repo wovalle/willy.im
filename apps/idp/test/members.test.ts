@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import * as schema from "../app/db/schema"
+import { listAuditForApp } from "../app/lib/audit.server"
 import {
   addOrInviteAppMember,
   claimInvitationsForUser,
@@ -11,7 +12,13 @@ import {
   revokeInvitation,
   updateAppMember,
 } from "../app/lib/members.server"
-import { createApplication, createMember, createUser } from "./helpers/fixtures"
+import {
+  createApplication,
+  createMember,
+  createUser,
+  fakeUserCaller,
+  tokenSuperadmin,
+} from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
@@ -32,18 +39,21 @@ describe("invitations", () => {
   })
   afterEach(() => h.close())
 
-  const invite = (overrides: Partial<Parameters<typeof addOrInviteAppMember>[1]> = {}) =>
-    addOrInviteAppMember(h.ctx, {
-      app: "acme",
-      email: "newcomer@acme.test",
-      role: "member",
-      permissions: ["member:read"],
-      productPermissions: ["invoices:read"],
-      catalog: CATALOG,
-      invitedByUserId: inviter.id,
-      origin: "https://idp.willy.im",
-      ...overrides,
-    })
+  const invite = (overrides: Partial<Parameters<typeof addOrInviteAppMember>[2]> = {}) =>
+    addOrInviteAppMember(
+      h.ctx,
+      fakeUserCaller({ userId: inviter.id, app: "acme", permissions: ["member:invite"] }),
+      {
+        app: "acme",
+        email: "newcomer@acme.test",
+        role: "member",
+        permissions: ["member:read"],
+        productPermissions: ["invoices:read"],
+        catalog: CATALOG,
+        origin: "https://idp.willy.im",
+        ...overrides,
+      },
+    )
 
   const memberRow = async (app: string, userId: string) => {
     const [row] = await h.ctx.db
@@ -126,7 +136,7 @@ describe("invitations", () => {
       .set({ expiresAt: new Date(Date.now() + 1000) })
       .where(eq(schema.applicationInvitation.id, pending.id))
 
-    const result = await resendInvitation(h.ctx, {
+    const result = await resendInvitation(h.ctx, tokenSuperadmin(), {
       app: "acme",
       invitationId: pending.id,
       origin: "https://idp.willy.im",
@@ -140,7 +150,7 @@ describe("invitations", () => {
   it("revokes a pending invitation so sign-in grants nothing", async () => {
     await invite()
     const [pending] = await listAppInvitations(h.ctx, "acme")
-    await revokeInvitation(h.ctx, { app: "acme", invitationId: pending.id })
+    await revokeInvitation(h.ctx, tokenSuperadmin(), { app: "acme", invitationId: pending.id })
 
     expect(await listAppInvitations(h.ctx, "acme")).toHaveLength(0)
 
@@ -189,6 +199,41 @@ describe("invitations", () => {
     expect(member!.productPermissions).toEqual([])
   })
 
+  it("audits the invite against the app, naming the actor", async () => {
+    await invite()
+
+    const [entry] = await listAuditForApp(h.ctx, "acme")
+    expect(entry).toMatchObject({
+      tableName: "application_invitation",
+      operation: "invite",
+      actor: `user:${inviter.id}`,
+      userId: inviter.id,
+    })
+  })
+
+  it("audits an immediate join against application_member instead", async () => {
+    await createUser(h.ctx, { email: "known@acme.test" })
+    await invite({ email: "known@acme.test" })
+
+    const [entry] = await listAuditForApp(h.ctx, "acme")
+    expect(entry).toMatchObject({ tableName: "application_member", operation: "invite" })
+  })
+
+  it("refuses a caller without member:invite", async () => {
+    const outsider = fakeUserCaller({ userId: "nosy", app: "acme", permissions: ["member:read"] })
+    await expect(
+      addOrInviteAppMember(h.ctx, outsider, {
+        app: "acme",
+        email: "newcomer@acme.test",
+        role: "member",
+        permissions: [],
+        origin: "https://idp.willy.im",
+      }),
+    ).rejects.toMatchObject({ status: 403 })
+
+    expect(await listAppInvitations(h.ctx, "acme")).toHaveLength(0)
+  })
+
   it("drops product-permission grants the app never declared", async () => {
     const existing = await createUser(h.ctx, { email: "known@acme.test" })
     await invite({
@@ -213,7 +258,7 @@ describe("member management", () => {
     const boss = await createUser(h.ctx, { email: "boss@acme.test" })
     await createMember(h.ctx, { app: "acme", userId: boss.id, role: "admin" })
 
-    const result = await updateAppMember(h.ctx, {
+    const result = await updateAppMember(h.ctx, tokenSuperadmin(), {
       app: "acme",
       userId: boss.id,
       role: "member",
@@ -228,7 +273,9 @@ describe("member management", () => {
     const boss = await createUser(h.ctx, { email: "boss@acme.test" })
     await createMember(h.ctx, { app: "acme", userId: boss.id, role: "admin" })
 
-    expect(await removeAppMember(h.ctx, { app: "acme", userId: boss.id })).toEqual({
+    expect(
+      await removeAppMember(h.ctx, tokenSuperadmin(), { app: "acme", userId: boss.id }),
+    ).toEqual({
       error: "Can't remove the last admin — promote someone else first.",
     })
   })
@@ -240,7 +287,7 @@ describe("member management", () => {
     await createMember(h.ctx, { app: "acme", userId: deputy.id, role: "admin" })
 
     expect(
-      await updateAppMember(h.ctx, {
+      await updateAppMember(h.ctx, tokenSuperadmin(), {
         app: "acme",
         userId: deputy.id,
         role: "member",
@@ -251,8 +298,52 @@ describe("member management", () => {
     ).toEqual({ ok: true })
   })
 
+  it("refuses to update or remove a member without member:manage", async () => {
+    const boss = await createUser(h.ctx, { email: "boss@acme.test" })
+    await createMember(h.ctx, { app: "acme", userId: boss.id, role: "admin" })
+    // member:invite is deliberately *not* member:manage — inviting someone is
+    // not the same authority as rewriting or deleting an existing member.
+    const inviter = fakeUserCaller({ userId: "u1", app: "acme", permissions: ["member:invite"] })
+
+    await expect(
+      updateAppMember(h.ctx, inviter, {
+        app: "acme",
+        userId: boss.id,
+        role: "member",
+        permissions: [],
+      }),
+    ).rejects.toMatchObject({ status: 403 })
+    await expect(
+      removeAppMember(h.ctx, inviter, { app: "acme", userId: boss.id }),
+    ).rejects.toMatchObject({ status: 403 })
+  })
+
+  it("audits an update and a removal with the before/after the trail needs", async () => {
+    const boss = await createUser(h.ctx, { email: "boss@acme.test" })
+    const deputy = await createUser(h.ctx, { email: "deputy@acme.test" })
+    await createMember(h.ctx, { app: "acme", userId: boss.id, role: "admin" })
+    await createMember(h.ctx, { app: "acme", userId: deputy.id, role: "member" })
+
+    await updateAppMember(h.ctx, tokenSuperadmin(), {
+      app: "acme",
+      userId: deputy.id,
+      role: "member",
+      permissions: ["member:read"],
+    })
+    await removeAppMember(h.ctx, tokenSuperadmin(), { app: "acme", userId: deputy.id })
+
+    const entries = await listAuditForApp(h.ctx, "acme")
+    expect(entries.map((e) => [e.tableName, e.operation, e.rowId])).toEqual([
+      ["application_member", "delete", deputy.id],
+      ["application_member", "update", deputy.id],
+    ])
+    expect(entries[0].actor).toBe("superadmin-token")
+  })
+
   it("reports a missing member rather than silently succeeding", async () => {
-    expect(await removeAppMember(h.ctx, { app: "acme", userId: "ghost" })).toEqual({
+    expect(
+      await removeAppMember(h.ctx, tokenSuperadmin(), { app: "acme", userId: "ghost" }),
+    ).toEqual({
       error: "Member not found.",
     })
   })

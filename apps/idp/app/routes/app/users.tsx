@@ -1,5 +1,6 @@
 import type { Route } from "./+types/users"
-import { listUsers, requireAdminSession } from "~/lib/admin.server"
+import { listUsers } from "~/lib/admin.server"
+import { requireConsoleCaller } from "~/lib/caller.server"
 import { Badge } from "~/components/ui/badge"
 import {
   Table,
@@ -11,7 +12,7 @@ import {
 } from "~/components/ui/table"
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  await requireAdminSession(request, context, context.services.auth)
+  await requireConsoleCaller(request, context, context.services.auth, { superadmin: true })
   return { users: await listUsers(context) }
 }
 

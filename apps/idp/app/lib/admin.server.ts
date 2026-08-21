@@ -1,47 +1,17 @@
 import { and, desc, eq } from "drizzle-orm"
-import { redirect } from "react-router"
 
 import * as schema from "../db/schema"
+import { recordAudit } from "./audit.server"
 import type { AuthService } from "./auth.server"
+import { assertCan, type Caller } from "./caller.server"
+import {
+  generateClientId,
+  generateClientSecret,
+  hashClientSecret,
+} from "./client-secret.server"
 import { type AppConfig, parseAppMetadata, unwrapJson as unwrap } from "./metadata"
 import type { BaseServiceContext } from "./services"
-
-function adminEmails(ctx: BaseServiceContext): string[] {
-  return ctx
-    .getAppEnv("ADMIN_EMAILS")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean)
-}
-
-export function isAdminEmail(ctx: BaseServiceContext, email?: string | null) {
-  return !!email && adminEmails(ctx).includes(email.toLowerCase())
-}
-
-/** UI gate: require any signed-in session, else redirect to /login. */
-export async function requireSession(
-  request: Request,
-  ctx: BaseServiceContext,
-  auth: AuthService,
-) {
-  const session = await auth.api.getSession({ headers: request.headers })
-  if (!session) throw redirect("/login")
-  return session
-}
-
-/** UI gate: require a signed-in admin. Non-admins go to their account, not a dead 403. */
-export async function requireAdminSession(
-  request: Request,
-  ctx: BaseServiceContext,
-  auth: AuthService,
-) {
-  const session = await auth.api.getSession({ headers: request.headers })
-  const admin = isAdminEmail(ctx, session?.user.email)
-  ctx.logger.info("admin.gate", { hasSession: !!session, email: session?.user.email, admin })
-  if (!session) throw redirect("/login")
-  if (!admin) throw redirect("/account")
-  return session
-}
+import { firstInvalidRedirectUri } from "./validate"
 
 function coerceUriList(v: unknown): string[] {
   const x = unwrap(v)
@@ -105,24 +75,46 @@ export async function getApplicationByApp(
 }
 
 /**
- * Merge new product config into an app's metadata, preserving the immutable
- * `app` key. Validated config only (allow_signup + declared permission catalog).
+ * The app key an OAuth client is tagged with, or "" when it has none. Empty
+ * string is deliberately unmatchable by any member grant, so only a superadmin
+ * gets past a gate on an untagged client.
  */
-export async function updateApplicationMetadata(
-  ctx: BaseServiceContext,
-  clientId: string,
-  config: AppConfig,
-) {
+async function appKeyOf(ctx: BaseServiceContext, clientId: string): Promise<string> {
   const [row] = await ctx.db
     .select({ metadata: schema.oauthClient.metadata })
     .from(schema.oauthClient)
     .where(eq(schema.oauthClient.clientId, clientId))
     .limit(1)
-  const app = parseAppMetadata(unwrap(row?.metadata)).app
+  return parseAppMetadata(unwrap(row?.metadata)).app ?? ""
+}
+
+/**
+ * Merge new product config into an app's metadata, preserving the immutable
+ * `app` key. Validated config only (allow_signup + declared permission catalog).
+ *
+ * Requires `app:update`. The check lives here rather than in the route so the
+ * console and the management API cannot authorize this differently.
+ */
+export async function updateApplicationMetadata(
+  ctx: BaseServiceContext,
+  caller: Caller,
+  clientId: string,
+  config: AppConfig,
+) {
+  const app = await appKeyOf(ctx, clientId)
+  await assertCan(caller, app, "app:update")
   await ctx.db
     .update(schema.oauthClient)
-    .set({ metadata: { app, allow_signup: config.allow_signup, permissions: config.permissions } })
+    .set({ metadata: { app: app || null, allow_signup: config.allow_signup, permissions: config.permissions } })
     .where(eq(schema.oauthClient.clientId, clientId))
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "oauth_client",
+    operation: "update",
+    applicationId: app,
+    rowId: clientId,
+    after: config,
+  })
 }
 
 /**
@@ -132,6 +124,7 @@ export async function updateApplicationMetadata(
  */
 export async function updateApplicationPermissions(
   ctx: BaseServiceContext,
+  caller: Caller,
   clientId: string,
   permissions: string[],
 ) {
@@ -141,42 +134,130 @@ export async function updateApplicationPermissions(
     .where(eq(schema.oauthClient.clientId, clientId))
     .limit(1)
   const meta = parseAppMetadata(unwrap(row?.metadata))
+  await assertCan(caller, meta.app ?? "", "app:update")
+  const next = [...new Set(permissions.map((p) => p.trim()).filter(Boolean))]
   await ctx.db
     .update(schema.oauthClient)
-    .set({ metadata: { app: meta.app, allow_signup: meta.allow_signup, permissions } })
+    .set({ metadata: { app: meta.app, allow_signup: meta.allow_signup, permissions: next } })
     .where(eq(schema.oauthClient.clientId, clientId))
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "oauth_client",
+    operation: "update",
+    applicationId: meta.app ?? "",
+    rowId: clientId,
+    after: { permissions: next },
+  })
+  return next
 }
 
+export type CreateApplicationInput = {
+  name: string
+  app: string
+  redirectUris: string[]
+  /**
+   * Who becomes the app's first IdP admin. Defaults to the calling user. Pass
+   * `null` explicitly for an app with no members at all — a legitimate outcome
+   * when an agent registers an app with the static admin token: there is no
+   * human to enrol, so the app starts superadmin-managed and members are added
+   * later through the member endpoints.
+   */
+  firstAdminUserId?: string | null
+}
+
+/** App keys are used in URLs and claim filters, so keep them boring. */
+const APP_KEY_RE = /^[a-z0-9][a-z0-9-]*$/
+
 /**
- * Registers an OAuth client and tags it with metadata.app (the application key
- * consumers' workspace claims are filtered by). Creation goes through better-auth
- * (which hashes the secret and requires the admin's session), then we set the
- * app tag with a direct update.
+ * Registers an OAuth client (confidential web client) and tags it with
+ * `metadata.app` — the application key consumers' workspace claims are filtered
+ * by. Superadmin only.
+ *
+ * The row is inserted directly rather than through the plugin's
+ * `/oauth2/create-client`, which is behind `sessionMiddleware` and would tie
+ * application registration to a browser. The column values below replicate what
+ * that endpoint writes for a confidential web client; the secret is hashed with
+ * the very hasher the plugin is configured with (see client-secret.server.ts),
+ * so the two paths produce interchangeable rows.
+ *
+ * The plaintext secret is returned exactly once and is not recoverable after.
  */
 export async function createApplication(
-  request: Request,
   ctx: BaseServiceContext,
-  auth: AuthService,
-  input: { name: string; redirectUris: string[]; app: string; creatorUserId: string },
-) {
-  const created = (await auth.api.createOAuthClient({
-    headers: request.headers,
-    body: { client_name: input.name, redirect_uris: input.redirectUris },
-  })) as { client_id: string; client_secret: string }
+  caller: Caller,
+  input: CreateApplicationInput,
+): Promise<
+  | { clientId: string; clientSecret: string; app: string }
+  | { error: "app_taken" }
+  | { error: "invalid_app" | "invalid_redirect_uri"; detail?: string }
+> {
+  // Creating an application is an IdP-level act: there is no app to scope it to
+  // yet, so no per-app permission could ever authorize it.
+  if (caller.kind !== "superadmin") throw Response.json({ error: "forbidden" }, { status: 403 })
 
-  await ctx.db
-    .update(schema.oauthClient)
-    // mode:"json" column — pass the object; drizzle serializes it.
-    .set({ metadata: { app: input.app } })
-    .where(eq(schema.oauthClient.clientId, created.client_id))
+  const app = input.app.trim().toLowerCase()
+  if (!APP_KEY_RE.test(app)) return { error: "invalid_app", detail: input.app }
+  const name = input.name.trim()
+  if (!name) return { error: "invalid_app", detail: "name is required" }
+  if (input.redirectUris.length === 0)
+    return { error: "invalid_redirect_uri", detail: "at least one redirect URI is required" }
+  const invalid = firstInvalidRedirectUri(input.redirectUris)
+  if (invalid) return { error: "invalid_redirect_uri", detail: invalid }
 
-  // Whoever creates the app is its first admin.
-  await ctx.db
-    .insert(schema.applicationMember)
-    .values({ applicationId: input.app, userId: input.creatorUserId, role: "admin" })
-    .onConflictDoNothing()
+  // The app key is the join key for members, workspaces, keys and claims, so it
+  // has to be unique. It lives inside a JSON column, hence the scan.
+  const existing = await listApplications(ctx)
+  if (existing.some((a) => a.app === app)) return { error: "app_taken" }
 
-  return { clientId: created.client_id, clientSecret: created.client_secret }
+  const clientId = generateClientId()
+  const clientSecret = generateClientSecret()
+  const now = new Date()
+
+  await ctx.db.insert(schema.oauthClient).values({
+    id: crypto.randomUUID(),
+    clientId,
+    clientSecret: await hashClientSecret(clientSecret),
+    name,
+    redirectUris: input.redirectUris,
+    // Confidential web client — the plugin's documented defaults for a client
+    // registered with a secret. `requirePKCE: true` matches its runtime default
+    // (`client.requirePKCE ?? true`), written out so the row is self-describing.
+    tokenEndpointAuthMethod: "client_secret_basic",
+    // The SDK refreshes with grant_type=refresh_token; declare it so a plugin
+    // version that enforces grants per client doesn't break new apps only.
+    grantTypes: ["authorization_code", "refresh_token"],
+    responseTypes: ["code"],
+    type: "web",
+    public: false,
+    disabled: false,
+    skipConsent: false,
+    requirePKCE: true,
+    scopes: null,
+    userId: caller.userId,
+    metadata: { app },
+    createdAt: now,
+    updatedAt: now,
+  })
+
+  const firstAdminUserId =
+    input.firstAdminUserId === undefined ? caller.userId : input.firstAdminUserId
+  if (firstAdminUserId) {
+    await ctx.db
+      .insert(schema.applicationMember)
+      .values({ applicationId: app, userId: firstAdminUserId, role: "admin" })
+      .onConflictDoNothing()
+  }
+
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "oauth_client",
+    operation: "create",
+    applicationId: app,
+    rowId: clientId,
+    after: { name, app, redirectUris: input.redirectUris, firstAdminUserId: firstAdminUserId ?? null },
+  })
+
+  return { clientId, clientSecret, app }
 }
 
 /** App admins/members (IdP-level), with their user details. */
@@ -196,35 +277,162 @@ export async function listAppMembers(ctx: BaseServiceContext, app: string) {
 }
 
 /**
- * Generates a new client secret and replaces the stored hash. The old secret
- * stops working immediately. The new plaintext is returned once.
+ * Starts an impersonation session as one of `app`'s members, returning the
+ * `set-cookie` headers Better Auth minted so the caller can hand them back to
+ * the browser.
+ *
+ * Requires `user:impersonate` *and* IdP superadmin: the Better Auth admin role
+ * is superadmin-only (see auth.server.ts), so a mere permission grant must not
+ * be enough. The target is scoped to this app's members, which is what makes
+ * the act app-bound and auditable.
  */
-export async function rotateApplicationSecret(
-  request: Request,
-  auth: AuthService,
-  clientId: string,
-) {
-  const res = (await auth.api.rotateClientSecret({
-    headers: request.headers,
-    body: { client_id: clientId },
-  })) as { client_secret?: string; clientSecret?: string }
-  return { clientId, clientSecret: res.client_secret ?? res.clientSecret ?? "" }
+export async function impersonateAppMember(
+  ctx: BaseServiceContext,
+  caller: Caller,
+  input: { app: string; userId: string; auth: AuthService; headers: Headers },
+): Promise<{ setCookies: string[] } | { error: string }> {
+  await assertCan(caller, input.app, "user:impersonate")
+  if (caller.kind !== "superadmin") return { error: "Only superadmins can impersonate." }
+
+  const members = await listAppMembers(ctx, input.app)
+  const target = members.find((m) => m.userId === input.userId)
+  if (!target) return { error: "That user isn't a member of this app." }
+
+  const res = await input.auth.api.impersonateUser({
+    body: { userId: input.userId },
+    headers: input.headers,
+    asResponse: true,
+  })
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "user",
+    operation: "impersonate",
+    applicationId: input.app,
+    rowId: input.userId,
+    after: { email: target.email },
+  })
+  return { setCookies: res.headers.getSetCookie() }
 }
 
+/**
+ * Generates a new client secret and replaces the stored hash. The old secret
+ * stops working immediately. The new plaintext is returned once. Requires
+ * `app:update`.
+ */
+export async function rotateApplicationSecret(
+  ctx: BaseServiceContext,
+  caller: Caller,
+  clientId: string,
+): Promise<{ clientId: string; clientSecret: string }> {
+  const app = await appKeyOf(ctx, clientId)
+  await assertCan(caller, app, "app:update")
+  const clientSecret = generateClientSecret()
+  await ctx.db
+    .update(schema.oauthClient)
+    .set({ clientSecret: await hashClientSecret(clientSecret), updatedAt: new Date() })
+    .where(eq(schema.oauthClient.clientId, clientId))
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "oauth_client",
+    operation: "update",
+    applicationId: app,
+    rowId: clientId,
+    after: { rotatedSecret: true },
+  })
+  return { clientId, clientSecret }
+}
+
+/** Replaces an app's registered redirect URIs. Requires `app:update`. */
 export async function updateApplicationRedirectUris(
-  request: Request,
-  auth: AuthService,
+  ctx: BaseServiceContext,
+  caller: Caller,
   clientId: string,
   redirectUris: string[],
 ) {
-  await auth.api.updateOAuthClient({
-    headers: request.headers,
-    body: { client_id: clientId, update: { redirect_uris: redirectUris } },
+  const app = await appKeyOf(ctx, clientId)
+  await assertCan(caller, app, "app:update")
+  await ctx.db
+    .update(schema.oauthClient)
+    .set({ redirectUris, updatedAt: new Date() })
+    .where(eq(schema.oauthClient.clientId, clientId))
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "oauth_client",
+    operation: "update",
+    applicationId: app,
+    rowId: clientId,
+    after: { redirectUris },
   })
 }
 
-export async function deleteApplication(ctx: BaseServiceContext, clientId: string) {
+/**
+ * Partial update of an application's registration: display name, redirect URIs
+ * and the open-signup flag. Omitted fields are left alone. One permission check
+ * and one audit entry for the whole patch. Requires `app:update`.
+ */
+export async function updateApplication(
+  ctx: BaseServiceContext,
+  caller: Caller,
+  clientId: string,
+  patch: { name?: string; redirectUris?: string[]; allowSignup?: boolean },
+): Promise<ApplicationSummary | { error: "invalid_redirect_uri"; detail: string } | null> {
+  const current = await getApplication(ctx, clientId)
+  if (!current) return null
+  await assertCan(caller, current.app ?? "", "app:update")
+
+  if (patch.redirectUris) {
+    const invalid = firstInvalidRedirectUri(patch.redirectUris)
+    if (invalid) return { error: "invalid_redirect_uri", detail: invalid }
+  }
+
+  await ctx.db
+    .update(schema.oauthClient)
+    .set({
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.redirectUris !== undefined ? { redirectUris: patch.redirectUris } : {}),
+      ...(patch.allowSignup !== undefined
+        ? {
+            metadata: {
+              app: current.app,
+              allow_signup: patch.allowSignup,
+              permissions: current.permissions,
+            },
+          }
+        : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.oauthClient.clientId, clientId))
+
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "oauth_client",
+    operation: "update",
+    applicationId: current.app ?? "",
+    rowId: clientId,
+    after: patch,
+  })
+
+  return (await getApplication(ctx, clientId))!
+}
+
+/** Deregisters an application. Requires `app:delete`. */
+export async function deleteApplication(
+  ctx: BaseServiceContext,
+  caller: Caller,
+  clientId: string,
+) {
+  const app = await appKeyOf(ctx, clientId)
+  await assertCan(caller, app, "app:delete")
   await ctx.db.delete(schema.oauthClient).where(eq(schema.oauthClient.clientId, clientId))
+  // Audited after the fact and against the app key, so the trail survives the
+  // client row it describes.
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "oauth_client",
+    operation: "delete",
+    applicationId: app,
+    rowId: clientId,
+  })
 }
 
 /** Workspaces belonging to one application. */
@@ -287,28 +495,21 @@ export async function listWorkspaces(ctx: BaseServiceContext) {
     .orderBy(desc(schema.organization.createdAt))
 }
 
-export async function createWorkspace(
-  request: Request,
-  auth: AuthService,
-  input: { name: string; slug: string; applicationId: string },
-) {
-  return auth.api.createOrganization({
-    headers: request.headers,
-    body: { name: input.name, slug: input.slug, applicationId: input.applicationId },
-  })
-}
-
 /**
- * Session-less workspace creation for the management API. Better Auth's
- * createOrganization needs a user session (it makes the caller the owner); a
- * scoped API key has no user, so the row is inserted directly. Members are
- * added separately (via the member endpoints / invitations). Slug must be
- * unique across all apps (the organization table enforces it).
+ * Session-less workspace creation — the only workspace-creation path. Better
+ * Auth's createOrganization needs a user session (it makes the caller the
+ * owner); a scoped API key has no user, so the row is inserted directly.
+ * Members are added separately (via the member endpoints / invitations). Slug
+ * must be unique across all apps (the organization table enforces it).
+ *
+ * Requires `workspace:create` on the target app.
  */
 export async function createWorkspaceForApp(
   ctx: BaseServiceContext,
+  caller: Caller,
   input: { app: string; name: string; slug: string },
 ): Promise<{ id: string; name: string; slug: string } | { error: string }> {
+  await assertCan(caller, input.app, "workspace:create")
   const slug = input.slug.trim().toLowerCase()
   const name = input.name.trim()
   if (!name || !slug) return { error: "Workspace name and slug are required." }
@@ -327,6 +528,14 @@ export async function createWorkspaceForApp(
     slug,
     applicationId: input.app,
     createdAt: new Date(),
+  })
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "organization",
+    operation: "create",
+    applicationId: input.app,
+    rowId: id,
+    after: { name, slug },
   })
   return { id, name, slug }
 }

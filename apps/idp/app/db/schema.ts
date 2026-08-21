@@ -84,6 +84,10 @@ export type ApplicationInvitation = typeof applicationInvitation.$inferSelect
  * stays as the superadmin escape hatch). The plaintext token is shown once at
  * creation and never stored — only its SHA-256 hash and a non-secret prefix
  * (for identification in the UI) are persisted.
+ *
+ * A row with a NULL `application_id` is an IdP-level superadmin key: named,
+ * revocable and expiring, and a distinct identity in the audit log — which is
+ * what the static ADMIN_API_TOKEN can never be. That token stays as break-glass.
  */
 export const apiKey = sqliteTable(
   "api_key",
@@ -93,7 +97,11 @@ export const apiKey = sqliteTable(
       .$defaultFn(() => crypto.randomUUID()),
     // The app this key administers — matches oauth_client.metadata.app and the
     // applicationId workspaces/members are scoped by.
-    applicationId: text("application_id").notNull(),
+    //
+    // NULL means the key is *IdP-level*: a named superadmin key with every
+    // permission on every app. The nullability of the scope is the kind — a
+    // separate `kind` column could disagree with the scope, this cannot.
+    applicationId: text("application_id"),
     name: text("name").notNull(),
     // First chars of the token (e.g. "wim_a1b2c3d4"), shown so a key is
     // identifiable in the UI. Not a secret.

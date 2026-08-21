@@ -1,4 +1,7 @@
 import * as schema from "../../app/db/schema"
+import { createAdminKey, createApiKey } from "../../app/lib/api-keys.server"
+import type { Caller } from "../../app/lib/caller.server"
+import { APP_PERMISSIONS, type AppPermission } from "../../app/lib/permissions"
 import type { BaseServiceContext } from "../../app/lib/services"
 
 /**
@@ -126,4 +129,71 @@ export async function createSession(
 /** A Request carrying a bearer token, for the management-API gates. */
 export function bearerRequest(token: string, url = "https://idp.willy.im/api/v1/apps") {
   return new Request(url, { headers: { authorization: `Bearer ${token}` } })
+}
+
+/**
+ * The caller the static ADMIN_API_TOKEN resolves to: every permission on every
+ * app, no human identity. Built literally so tests that only need *a* caller
+ * don't have to stand up a request + auth stub.
+ */
+export function tokenSuperadmin(): Caller {
+  return {
+    kind: "superadmin",
+    via: "token",
+    userId: null,
+    email: null,
+    keyId: null,
+    applicationId: null,
+    can: async () => true,
+    permissionsFor: async () => [...APP_PERMISSIONS],
+    actor: { userId: null, label: "superadmin-token" },
+  }
+}
+
+/** A signed-in human caller with an explicit permission set on one app. */
+export function fakeUserCaller(input: {
+  userId: string
+  email?: string
+  app: string
+  permissions: AppPermission[]
+}): Caller {
+  return {
+    kind: "user",
+    via: "session",
+    userId: input.userId,
+    email: input.email ?? `${input.userId}@test`,
+    keyId: null,
+    applicationId: null,
+    can: async (app, permission) => app === input.app && input.permissions.includes(permission),
+    permissionsFor: async (app) => (app === input.app ? [...input.permissions] : []),
+    actor: { userId: input.userId, label: `user:${input.userId}` },
+  }
+}
+
+/** Mints a scoped key as the superadmin token, unwrapping the error union. */
+export async function mintApiKey(
+  ctx: BaseServiceContext,
+  input: { app: string; name?: string; permissions?: string[]; expiresAt?: Date | null },
+  caller: Caller = tokenSuperadmin(),
+) {
+  const res = await createApiKey(ctx, caller, {
+    app: input.app,
+    name: input.name ?? "CI runner",
+    permissions: input.permissions ?? ["member:read", "member:invite"],
+    expiresAt: input.expiresAt ?? null,
+  })
+  if ("error" in res) throw new Error(`mintApiKey: ${res.error} ${res.detail.join(",")}`)
+  return res
+}
+
+/** Mints an IdP-level admin key (unscoped ⇒ superadmin) as the static token. */
+export async function mintAdminKey(
+  ctx: BaseServiceContext,
+  input: { name?: string; expiresAt?: Date | null } = {},
+  caller: Caller = tokenSuperadmin(),
+) {
+  return createAdminKey(ctx, caller, {
+    name: input.name ?? "Agent alpha",
+    expiresAt: input.expiresAt ?? null,
+  })
 }

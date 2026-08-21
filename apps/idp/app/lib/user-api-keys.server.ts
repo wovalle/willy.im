@@ -3,6 +3,8 @@ import { and, desc, eq } from "drizzle-orm"
 import * as schema from "../db/schema"
 import { getApplicationByApp } from "./admin.server"
 import { generateToken, hashToken } from "./api-keys.server"
+import { recordAudit } from "./audit.server"
+import { assertCan, type Caller } from "./caller.server"
 import type { BaseServiceContext } from "./services"
 
 /**
@@ -36,11 +38,16 @@ function statusOf(row: { revokedAt: Date | null; expiresAt: Date | null }, now: 
   return "active" as const
 }
 
-/** Keys for one app, optionally filtered by user/workspace. Never returns hashes. */
+/**
+ * Keys for one app, optionally filtered by user/workspace. Never returns hashes.
+ * Requires `userkey:read`.
+ */
 export async function listUserApiKeys(
   ctx: BaseServiceContext,
+  caller: Caller,
   input: { app: string; userId?: string; workspaceId?: string },
 ): Promise<UserApiKeySummary[]> {
+  await assertCan(caller, input.app, "userkey:read")
   const now = new Date()
   const conditions = [eq(schema.userApiKey.applicationId, input.app)]
   if (input.userId) conditions.push(eq(schema.userApiKey.userId, input.userId))
@@ -71,9 +78,12 @@ export async function listUserApiKeys(
  * Mints a key for one of the app's users. Returns the plaintext exactly once.
  * Scopes are validated against the app's declared catalog; unknown scopes are
  * rejected (not silently dropped) so the caller learns about the mismatch.
+ *
+ * Requires `userkey:create`.
  */
 export async function createUserApiKey(
   ctx: BaseServiceContext,
+  caller: Caller,
   input: {
     app: string
     userId: string
@@ -86,6 +96,7 @@ export async function createUserApiKey(
   | { id: string; token: string; prefix: string }
   | { error: "unknown_user" | "unknown_scopes"; detail?: string[] }
 > {
+  await assertCan(caller, input.app, "userkey:create")
   const [u] = await ctx.db
     .select({ id: schema.user.id })
     .from(schema.user)
@@ -106,26 +117,41 @@ export async function createUserApiKey(
   const prefix = token.slice(0, DISPLAY_PREFIX_LEN)
   const id = crypto.randomUUID()
 
+  const name = input.name.trim() || "Untitled key"
   await ctx.db.insert(schema.userApiKey).values({
     id,
     applicationId: input.app,
     userId: input.userId,
     workspaceId: input.workspaceId ?? null,
-    name: input.name.trim() || "Untitled key",
+    name,
     prefix,
     keyHash,
     scopes,
     expiresAt: input.expiresAt ?? null,
   })
 
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "user_api_key",
+    operation: "create",
+    applicationId: input.app,
+    rowId: id,
+    after: { userId: input.userId, name, scopes },
+  })
+
   return { id, token, prefix }
 }
 
-/** Revokes a key (idempotent). Scoped to `app` so one app can't revoke another's. */
+/**
+ * Revokes a key (idempotent). Scoped to `app` so one app can't revoke another's.
+ * Requires `userkey:revoke`.
+ */
 export async function revokeUserApiKey(
   ctx: BaseServiceContext,
+  caller: Caller,
   input: { app: string; id: string },
 ): Promise<{ ok: true } | { error: string }> {
+  await assertCan(caller, input.app, "userkey:revoke")
   const [row] = await ctx.db
     .select({ id: schema.userApiKey.id, revokedAt: schema.userApiKey.revokedAt })
     .from(schema.userApiKey)
@@ -137,6 +163,13 @@ export async function revokeUserApiKey(
       .update(schema.userApiKey)
       .set({ revokedAt: new Date() })
       .where(eq(schema.userApiKey.id, input.id))
+    await recordAudit(ctx, {
+      actor: caller.actor,
+      table: "user_api_key",
+      operation: "revoke",
+      applicationId: input.app,
+      rowId: input.id,
+    })
   }
   return { ok: true }
 }
@@ -156,11 +189,17 @@ export type UserApiKeyValidation =
  * Validates a presented token for `app`. The lookup is by SHA-256 hash and
  * scoped to the calling app, so a key minted for app A never validates for app
  * B. A hit bumps lastUsedAt (best effort).
+ *
+ * Requires `userkey:validate`, so leaked keys can't be probed by a caller that
+ * only holds read access. Not audited: validation is a hot read path, and a row
+ * per API call would drown the trail it shares with the write operations.
  */
 export async function validateUserApiKey(
   ctx: BaseServiceContext,
+  caller: Caller,
   input: { app: string; token: string },
 ): Promise<UserApiKeyValidation> {
+  await assertCan(caller, input.app, "userkey:validate")
   if (!input.token.startsWith(USER_TOKEN_PREFIX)) return { valid: false, reason: "not_found" }
 
   const keyHash = await hashToken(input.token)

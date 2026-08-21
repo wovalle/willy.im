@@ -12,6 +12,7 @@ import { Resend } from "resend"
 
 import * as schema from "../db/schema"
 import { customClaimsFor } from "./claims.server"
+import { hashClientSecret } from "./client-secret.server"
 import { claimInvitationsForUser } from "./members.server"
 import type { BaseServiceContext } from "./services"
 import {
@@ -200,7 +201,11 @@ export function createAuthService(context: BaseServiceContext, requestUrl?: stri
       oauthProvider({
         loginPage: "/login",
         consentPage: "/consent",
-        storeClientSecret: "hashed",
+        // Same hasher the plugin's "hashed" default uses (SHA-256 -> base64url,
+        // no padding) — but ours, so our direct client inserts and the plugin's
+        // own writes/verifies can never drift apart. `verify` is omitted on
+        // purpose: the plugin then hashes-and-constant-time-compares.
+        storeClientSecret: { hash: hashClientSecret },
         // We serve the RFC 8414 root metadata ourselves (routes/well-known/*),
         // so silence Better Auth's "ensure it exists" startup warnings.
         silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },

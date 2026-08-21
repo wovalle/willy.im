@@ -3,7 +3,7 @@ import { useNavigate, useRevalidator } from "react-router"
 import { Fingerprint, Loader2, Plus, Trash2 } from "lucide-react"
 
 import type { Route } from "./+types/account"
-import { requireSession } from "~/lib/admin.server"
+import { requireConsoleCaller } from "~/lib/caller.server"
 import { authClient } from "~/lib/auth-client"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
@@ -16,13 +16,16 @@ export function meta() {
 type Passkey = { id: string; name?: string | null }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const session = await requireSession(request, context, context.services.auth)
+  const caller = await requireConsoleCaller(request, context, context.services.auth)
   // Server-rendered: passkeys come from the loader (session-authenticated), not a
   // client fetch. Add/delete still run client-side (WebAuthn), then revalidate.
   const passkeys = (await context.services.auth.api.listPasskeys({
     headers: request.headers,
   })) as Passkey[]
-  return { user: { name: session.user.name, email: session.user.email }, passkeys }
+  // Display name is a profile detail, not an authorization fact, so it comes
+  // from the session rather than the caller.
+  const session = await context.services.auth.api.getSession({ headers: request.headers })
+  return { user: { name: session?.user.name ?? null, email: caller.email }, passkeys }
 }
 
 export default function Account({ loaderData }: Route.ComponentProps) {

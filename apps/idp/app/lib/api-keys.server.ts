@@ -1,6 +1,8 @@
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, isNull } from "drizzle-orm"
 
 import * as schema from "../db/schema"
+import { IDP_AUDIT_SCOPE, recordAudit } from "./audit.server"
+import { assertCan, type Caller } from "./caller.server"
 import { isAppPermission, type AppPermission } from "./permissions"
 import type { BaseServiceContext } from "./services"
 
@@ -61,11 +63,13 @@ function statusOf(row: { revokedAt: Date | null; expiresAt: Date | null }, now: 
   return "active" as const
 }
 
-/** Keys for one application, newest first. Never returns the hash. */
+/** Keys for one application, newest first. Never returns the hash. Requires `apikey:read`. */
 export async function listApiKeys(
   ctx: BaseServiceContext,
+  caller: Caller,
   app: string,
 ): Promise<ApiKeySummary[]> {
+  await assertCan(caller, app, "apikey:read")
   const now = new Date()
   const rows = await ctx.db
     .select({
@@ -98,41 +102,73 @@ export async function listApiKeys(
 /**
  * Mints a new key for `app`. Returns the plaintext `token` exactly once — it is
  * never recoverable afterwards. `permissions` is filtered to the catalog.
+ *
+ * Requires `apikey:create`, *and* the requested permissions must be a subset of
+ * the caller's own on that app. Without the subset rule any key holding
+ * `apikey:create` could mint itself a strictly more powerful successor, which
+ * makes every other permission on it decorative.
  */
 export async function createApiKey(
   ctx: BaseServiceContext,
+  caller: Caller,
   input: {
     app: string
     name: string
     permissions: string[]
-    createdByUserId: string
     expiresAt?: Date | null
   },
-): Promise<{ id: string; token: string; prefix: string }> {
+): Promise<
+  | { id: string; token: string; prefix: string }
+  | { error: "permissions_exceed_caller"; detail: string[] }
+> {
+  await assertCan(caller, input.app, "apikey:create")
+
+  const requested = sanitizePermissions(input.permissions)
+  const held = new Set(await caller.permissionsFor(input.app))
+  const excess = requested.filter((p) => !held.has(p))
+  if (excess.length > 0) return { error: "permissions_exceed_caller", detail: excess }
+
   const token = generateToken()
   const keyHash = await hashToken(token)
   const prefix = token.slice(0, DISPLAY_PREFIX_LEN)
   const id = crypto.randomUUID()
+  const name = input.name.trim() || "Untitled key"
+  const expiresAt = input.expiresAt ?? null
 
   await ctx.db.insert(schema.apiKey).values({
     id,
     applicationId: input.app,
-    name: input.name.trim() || "Untitled key",
+    name,
     prefix,
     keyHash,
-    permissions: sanitizePermissions(input.permissions),
-    createdByUserId: input.createdByUserId,
-    expiresAt: input.expiresAt ?? null,
+    permissions: requested,
+    // Nullable: a scoped key or the static admin token has no human behind it.
+    createdByUserId: caller.userId,
+    expiresAt,
+  })
+
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "api_key",
+    operation: "create",
+    applicationId: input.app,
+    rowId: id,
+    after: { name, permissions: requested, expiresAt: expiresAt?.toISOString() ?? null },
   })
 
   return { id, token, prefix }
 }
 
-/** Revokes a key (idempotent). Scoped to `app` so one app can't revoke another's. */
+/**
+ * Revokes a key (idempotent). Scoped to `app` so one app can't revoke another's.
+ * Requires `apikey:revoke`.
+ */
 export async function revokeApiKey(
   ctx: BaseServiceContext,
+  caller: Caller,
   input: { app: string; id: string },
 ): Promise<{ ok: true } | { error: string }> {
+  await assertCan(caller, input.app, "apikey:revoke")
   const [row] = await ctx.db
     .select({ id: schema.apiKey.id, revokedAt: schema.apiKey.revokedAt })
     .from(schema.apiKey)
@@ -144,130 +180,146 @@ export async function revokeApiKey(
       .update(schema.apiKey)
       .set({ revokedAt: new Date() })
       .where(eq(schema.apiKey.id, input.id))
+    await recordAudit(ctx, {
+      actor: caller.actor,
+      table: "api_key",
+      operation: "revoke",
+      applicationId: input.app,
+      rowId: input.id,
+    })
   }
   return { ok: true }
 }
 
 /**
- * The principal behind a management-API request. Either the superadmin token
- * (the static ADMIN_API_TOKEN — every app, every permission) or a scoped key
- * bound to one application with an explicit permission set.
+ * IdP-level admin keys: `api_key` rows with a NULL `application_id`, which the
+ * resolver turns into superadmin callers. They exist so automation stops
+ * sharing the one static ADMIN_API_TOKEN — each agent gets its own named,
+ * expiring, revocable credential that shows up in the audit log as
+ * `adminkey:<id>` instead of an anonymous `superadmin-token`.
  */
-export type ApiPrincipal = {
-  kind: "superadmin" | "key"
-  /** The app a scoped key is bound to; null for superadmin (all apps). */
-  applicationId: string | null
-  keyId: string | null
-  /** Can this principal perform `permission` against `app`? */
-  can: (app: string, permission: AppPermission) => boolean
+
+/** Superadmin-only gate, throwing the same 403 shape `assertCan` does. */
+function assertSuperadmin(caller: Caller): void {
+  if (caller.kind !== "superadmin") throw Response.json({ error: "forbidden" }, { status: 403 })
 }
 
-function extractBearer(request: Request): string | null {
-  const header = request.headers.get("authorization")
-  if (!header) return null
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim())
-  return match ? match[1].trim() : null
-}
-
-/** Constant-time string compare (avoids leaking the admin token via timing). */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let mismatch = 0
-  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return mismatch === 0
-}
-
-/**
- * Resolves the bearer token on `request` to an {@link ApiPrincipal}, or null if
- * absent/invalid/expired/revoked. The static ADMIN_API_TOKEN authenticates as
- * superadmin; anything else is hashed and looked up in `api_key`. A successful
- * scoped-key lookup bumps `lastUsedAt` (best effort).
- */
-export async function authenticateApiKey(
-  request: Request,
+/** Every IdP-level admin key, newest first. Never returns the hash. Superadmin only. */
+export async function listAdminKeys(
   ctx: BaseServiceContext,
-): Promise<ApiPrincipal | null> {
-  const token = extractBearer(request)
-  if (!token) return null
-
-  const superToken = ctx.getAppEnv("ADMIN_API_TOKEN")
-  if (superToken && timingSafeEqual(token, superToken)) {
-    return { kind: "superadmin", applicationId: null, keyId: null, can: () => true }
-  }
-
-  // Only opaque keys we issued are worth a DB round-trip.
-  if (!token.startsWith(TOKEN_PREFIX)) return null
-
-  const keyHash = await hashToken(token)
-  const [row] = await ctx.db
+  caller: Caller,
+): Promise<ApiKeySummary[]> {
+  assertSuperadmin(caller)
+  const now = new Date()
+  const rows = await ctx.db
     .select({
       id: schema.apiKey.id,
-      applicationId: schema.apiKey.applicationId,
-      permissions: schema.apiKey.permissions,
+      name: schema.apiKey.name,
+      prefix: schema.apiKey.prefix,
+      createdAt: schema.apiKey.createdAt,
+      lastUsedAt: schema.apiKey.lastUsedAt,
       expiresAt: schema.apiKey.expiresAt,
       revokedAt: schema.apiKey.revokedAt,
     })
     .from(schema.apiKey)
-    .where(eq(schema.apiKey.keyHash, keyHash))
+    .where(isNull(schema.apiKey.applicationId))
+    .orderBy(desc(schema.apiKey.createdAt))
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    prefix: r.prefix,
+    // Always empty: an admin key holds every permission by virtue of being
+    // unscoped, so the column would only ever be a misleading second opinion.
+    permissions: [],
+    createdAt: r.createdAt,
+    lastUsedAt: r.lastUsedAt ?? null,
+    expiresAt: r.expiresAt ?? null,
+    revokedAt: r.revokedAt ?? null,
+    status: statusOf({ revokedAt: r.revokedAt ?? null, expiresAt: r.expiresAt ?? null }, now),
+  }))
+}
+
+/**
+ * Mints an IdP-level admin key. Superadmin only — and since the new key *is* a
+ * superadmin, there is no subset rule to apply: the caller already holds
+ * everything it could possibly grant.
+ *
+ * Returns the plaintext `token` exactly once; it is never recoverable after.
+ */
+export async function createAdminKey(
+  ctx: BaseServiceContext,
+  caller: Caller,
+  input: { name: string; expiresAt?: Date | null },
+): Promise<{ id: string; token: string; prefix: string }> {
+  assertSuperadmin(caller)
+
+  const token = generateToken()
+  const keyHash = await hashToken(token)
+  const prefix = token.slice(0, DISPLAY_PREFIX_LEN)
+  const id = crypto.randomUUID()
+  const name = input.name.trim() || "Untitled admin key"
+  const expiresAt = input.expiresAt ?? null
+
+  await ctx.db.insert(schema.apiKey).values({
+    id,
+    // The whole point: no app scope ⇒ every permission on every app.
+    applicationId: null,
+    name,
+    prefix,
+    keyHash,
+    // Meaningless for an admin key — see listAdminKeys.
+    permissions: [],
+    // Null when the static token or another admin key mints this one.
+    createdByUserId: caller.userId,
+    expiresAt,
+  })
+
+  await recordAudit(ctx, {
+    actor: caller.actor,
+    table: "api_key",
+    operation: "create",
+    applicationId: IDP_AUDIT_SCOPE,
+    rowId: id,
+    after: { name, expiresAt: expiresAt?.toISOString() ?? null },
+  })
+
+  return { id, token, prefix }
+}
+
+/**
+ * Revokes an admin key (idempotent). Superadmin only. Scoped to unscoped rows,
+ * so this can never reach into an app's own keys.
+ *
+ * A key may revoke *itself*: an agent cleaning up its own credential when it
+ * finishes is the point, not an accident. It is logged at warn so the
+ * surprising aftermath ("my key stopped working") is greppable.
+ */
+export async function revokeAdminKey(
+  ctx: BaseServiceContext,
+  caller: Caller,
+  id: string,
+): Promise<{ ok: true } | { error: string }> {
+  assertSuperadmin(caller)
+  const [row] = await ctx.db
+    .select({ id: schema.apiKey.id, revokedAt: schema.apiKey.revokedAt })
+    .from(schema.apiKey)
+    .where(and(eq(schema.apiKey.id, id), isNull(schema.apiKey.applicationId)))
     .limit(1)
-
-  if (!row) return null
-  if (row.revokedAt) return null
-  if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return null
-
-  const granted = sanitizePermissions(row.permissions ?? [])
-
-  // Best effort — a failed lastUsedAt update must not deny an otherwise-valid key.
-  ctx.db
-    .update(schema.apiKey)
-    .set({ lastUsedAt: new Date() })
-    .where(eq(schema.apiKey.id, row.id))
-    .then(undefined, (err) =>
-      ctx.logger.warn("apikey.last_used_update_failed", {
-        keyId: row.id,
-        error: err instanceof Error ? err.message : String(err),
-      }),
-    )
-
-  return {
-    kind: "key",
-    applicationId: row.applicationId,
-    keyId: row.id,
-    can: (app, permission) => app === row.applicationId && granted.includes(permission),
+  if (!row) return { error: "Key not found." }
+  if (caller.keyId === id) ctx.logger.warn("adminkey.self_revoke", { keyId: id })
+  if (!row.revokedAt) {
+    await ctx.db
+      .update(schema.apiKey)
+      .set({ revokedAt: new Date() })
+      .where(eq(schema.apiKey.id, id))
+    await recordAudit(ctx, {
+      actor: caller.actor,
+      table: "api_key",
+      operation: "revoke",
+      applicationId: IDP_AUDIT_SCOPE,
+      rowId: id,
+    })
   }
-}
-
-/**
- * Management-API gate. Authenticates the bearer token and (optionally) requires
- * `permission` on `app`. Throws a JSON 401/403 Response on failure; returns the
- * principal otherwise. Superadmins pass everything.
- */
-export async function requireApiPrincipal(
-  request: Request,
-  ctx: BaseServiceContext,
-  required?: { app: string; permission: AppPermission },
-): Promise<ApiPrincipal> {
-  const principal = await authenticateApiKey(request, ctx)
-  if (!principal) {
-    throw Response.json({ error: "unauthorized" }, { status: 401 })
-  }
-  if (required && !principal.can(required.app, required.permission)) {
-    throw Response.json({ error: "forbidden" }, { status: 403 })
-  }
-  return principal
-}
-
-/**
- * Gate for cross-app (global) management endpoints — only the superadmin token
- * may list every app/user/workspace. Scoped keys are app-bound and get 403.
- */
-export async function requireSuperadminApi(
-  request: Request,
-  ctx: BaseServiceContext,
-): Promise<ApiPrincipal> {
-  const principal = await requireApiPrincipal(request, ctx)
-  if (principal.kind !== "superadmin") {
-    throw Response.json({ error: "forbidden" }, { status: 403 })
-  }
-  return principal
+  return { ok: true }
 }
