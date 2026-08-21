@@ -11,14 +11,27 @@
 import { z } from "zod"
 
 import {
+  AdminKeyCreatedSchema,
+  AdminKeyListSchema,
+  ApiKeyCreatedSchema,
+  ApiKeyListSchema,
+  ApplicationCreatedSchema,
   ApplicationListSchema,
+  ApplicationSchema,
+  AppPermissionsSchema,
   AuditListSchema,
+  ClientSecretSchema,
+  CreateAdminKeyInput,
+  CreateApiKeyInput,
+  CreateApplicationInput,
   CreateUserApiKeyInput,
   CreateWorkspaceInput,
   InviteMemberInput,
   InviteMemberResult,
   MemberListSchema,
   OkSchema,
+  SetAppPermissionsInput,
+  UpdateApplicationInput,
   UpdateMemberInput,
   UserApiKeyCreatedSchema,
   UserApiKeyListSchema,
@@ -45,18 +58,120 @@ export type OperationDef = {
   query?: readonly QueryParam[]
   /** Path-parameter descriptions, keyed by name. Purely documentation. */
   params?: Readonly<Record<string, string>>
+  /** Set when the operation addresses a single row that may not exist. */
+  notFound?: string
   input?: z.ZodType
   successCode: "200" | "201"
   success: z.ZodType
 }
 
 const APP_PARAM = { app: "Application key (oauth_client.metadata.app)." } as const
+const CLIENT_PARAM = { clientId: "OAuth client id of the application." } as const
 
 export const operations = {
   "get /api/v1/applications": {
     summary: "List registered applications",
     successCode: "200",
     success: ApplicationListSchema,
+  },
+  "post /api/v1/applications": {
+    summary: "Register an application (client secret returned once)",
+    description:
+      "Requires the superadmin token. Creating an application is an IdP-level act — there is no app to scope a permission to yet.",
+    input: CreateApplicationInput,
+    successCode: "201",
+    success: ApplicationCreatedSchema,
+  },
+  "get /api/v1/applications/{clientId}": {
+    summary: "Get one application",
+    permission: "app:read",
+    params: CLIENT_PARAM,
+    notFound: "No application with that client id",
+    successCode: "200",
+    success: ApplicationSchema,
+  },
+  "patch /api/v1/applications/{clientId}": {
+    summary: "Update an application",
+    permission: "app:update",
+    params: CLIENT_PARAM,
+    notFound: "No application with that client id",
+    input: UpdateApplicationInput,
+    successCode: "200",
+    success: ApplicationSchema,
+  },
+  "delete /api/v1/applications/{clientId}": {
+    summary: "Deregister an application",
+    permission: "app:delete",
+    params: CLIENT_PARAM,
+    notFound: "No application with that client id",
+    successCode: "200",
+    success: OkSchema,
+  },
+  "post /api/v1/applications/{clientId}/rotate-secret": {
+    summary: "Rotate the client secret (returned once; the old one stops working)",
+    permission: "app:update",
+    params: CLIENT_PARAM,
+    notFound: "No application with that client id",
+    successCode: "200",
+    success: ClientSecretSchema,
+  },
+  "put /api/v1/apps/{app}/permissions": {
+    summary: "Replace the app's product-permission catalog",
+    permission: "app:update",
+    params: APP_PARAM,
+    notFound: "No application with that app key",
+    input: SetAppPermissionsInput,
+    successCode: "200",
+    success: AppPermissionsSchema,
+  },
+  "get /api/v1/apps/{app}/keys": {
+    summary: "List scoped management API keys (never the hashes)",
+    permission: "apikey:read",
+    params: APP_PARAM,
+    successCode: "200",
+    success: ApiKeyListSchema,
+  },
+  "post /api/v1/apps/{app}/keys": {
+    summary: "Mint a scoped management API key (plaintext returned once)",
+    description:
+      "Requires `apikey:create` on the path app (or the superadmin token). The requested permissions must be a subset of the caller's own, otherwise 403 `permissions_exceed_caller` — without that rule any key holding `apikey:create` could mint itself a more powerful successor.",
+    permission: "apikey:create",
+    params: APP_PARAM,
+    input: CreateApiKeyInput,
+    successCode: "201",
+    success: ApiKeyCreatedSchema,
+  },
+  "delete /api/v1/apps/{app}/keys/{id}": {
+    summary: "Revoke a scoped management API key (idempotent)",
+    permission: "apikey:revoke",
+    params: APP_PARAM,
+    notFound: "No key with that id on this app",
+    successCode: "200",
+    success: OkSchema,
+  },
+  "get /api/v1/admin-keys": {
+    summary: "List IdP-level admin keys (never the hashes)",
+    description:
+      "Requires the superadmin token or an admin key. Admin keys are `api_key` rows with no application scope, so they hold every permission on every app.",
+    successCode: "200",
+    success: AdminKeyListSchema,
+  },
+  "post /api/v1/admin-keys": {
+    summary: "Mint an IdP-level admin key (plaintext returned once)",
+    description:
+      "Requires the superadmin token or an admin key. Mint one per agent: unlike the static ADMIN_API_TOKEN, an admin key has a name, an optional expiry, a revoke switch, and its own `adminkey:<id>` identity in the audit log.",
+    input: CreateAdminKeyInput,
+    successCode: "201",
+    success: AdminKeyCreatedSchema,
+  },
+  "delete /api/v1/admin-keys/{id}": {
+    summary: "Revoke an IdP-level admin key (idempotent)",
+    description:
+      "A key may revoke itself — an agent cleaning up after itself is legitimate — after which its next request is simply unauthorized.",
+    params: { id: "Admin key id." },
+    notFound: "No admin key with that id",
+    successCode: "200",
+    success: OkSchema,
   },
   "get /api/v1/users": {
     summary: "List users",

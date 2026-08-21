@@ -8,6 +8,13 @@
       "when": 1786651646506,
       "tag": "0000_third_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787327807450,
+      "tag": "0001_smart_deadpool",
+      "breakpoints": true
     }
   ]
 }

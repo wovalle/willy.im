@@ -24,6 +24,18 @@ export default [
   // Management API (Bearer: superadmin ADMIN_API_TOKEN or scoped API key) + docs.
   // Cross-app reads (superadmin only):
   route("api/v1/applications", "routes/api/applications.ts"),
+  // Application lifecycle — registration, patch, delete, secret rotation. Every
+  // one is bearer-drivable, so an agent can stand an app up without a browser.
+  route("api/v1/applications/:clientId", "routes/api/applications.$clientId.ts"),
+  route(
+    "api/v1/applications/:clientId/rotate-secret",
+    "routes/api/applications.$clientId.rotate-secret.ts",
+  ),
+  // IdP-level admin keys — named, expiring, revocable superadmin credentials.
+  // One per agent, so the audit log names who acted; the static ADMIN_API_TOKEN
+  // stays as break-glass.
+  route("api/v1/admin-keys", "routes/api/admin-keys.ts"),
+  route("api/v1/admin-keys/:id", "routes/api/admin-keys.$id.ts"),
   route("api/v1/users", "routes/api/users.ts"),
   route("api/v1/workspaces", "routes/api/workspaces.ts"),
   // Per-app writes/reads (scoped-key authenticated, permission-checked):
@@ -31,6 +43,10 @@ export default [
   route("api/v1/apps/:app/members/:userId", "routes/api/apps.$app.members.$userId.ts"),
   route("api/v1/apps/:app/workspaces", "routes/api/apps.$app.workspaces.ts"),
   route("api/v1/apps/:app/audit", "routes/api/apps.$app.audit.ts"),
+  route("api/v1/apps/:app/permissions", "routes/api/apps.$app.permissions.ts"),
+  // Scoped management keys for this app:
+  route("api/v1/apps/:app/keys", "routes/api/apps.$app.keys.ts"),
+  route("api/v1/apps/:app/keys/:id", "routes/api/apps.$app.keys.$id.ts"),
   // End-user API keys for the app's own API (minted + validated by the IdP):
   route("api/v1/apps/:app/user-keys", "routes/api/apps.$app.user-keys.ts"),
   route("api/v1/apps/:app/user-keys/validate", "routes/api/apps.$app.user-keys.validate.ts"),

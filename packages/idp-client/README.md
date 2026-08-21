@@ -340,6 +340,28 @@ const { members } = await api.request("get", "/api/v1/apps/{app}/members", {
 })
 ```
 
+### Admin keys
+
+Most management endpoints take a scoped `wim_` key, which is bound to one
+application and carries an explicit permission set. IdP-level work — registering
+an application, listing users across apps — needs superadmin instead, and for
+that there are **admin keys**: `/api/v1/admin-keys` mints a named, optionally
+expiring, revocable credential that holds every permission on every app. Mint
+one per agent, so the audit trail records `adminkey:<id>` rather than an
+anonymous shared secret, and revoke it when that agent is done.
+
+```ts
+const { token } = await api.request("post", "/api/v1/admin-keys", {
+  body: { name: "release-bot", expiresAt: "2026-12-31T00:00:00.000Z" },
+})
+// Shown exactly once. Presented like any other key:
+//   Authorization: Bearer wim_…
+```
+
+The IdP's static `ADMIN_API_TOKEN` still works and still grants superadmin, but
+it is break-glass only: one shared secret, no name, no expiry, and no way to
+revoke it short of a redeploy.
+
 The OIDC endpoints are not in that document and never will be: they are
 standards-defined and discovered at runtime from `.well-known`.
 

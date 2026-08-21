@@ -3,7 +3,8 @@ import { Form, Link, useActionData, useNavigation } from "react-router"
 import { ChevronRight, Loader2, Plus } from "lucide-react"
 
 import type { Route } from "./+types/applications"
-import { createApplication, listApplications, requireAdminSession } from "~/lib/admin.server"
+import { createApplication, listApplications } from "~/lib/admin.server"
+import { requireConsoleCaller } from "~/lib/caller.server"
 import { firstInvalidRedirectUri, parseUriList } from "~/lib/validate"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
@@ -20,12 +21,14 @@ import {
 } from "~/components/ui/table"
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  await requireAdminSession(request, context, context.services.auth)
+  await requireConsoleCaller(request, context, context.services.auth, { superadmin: true })
   return { applications: await listApplications(context) }
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-  const session = await requireAdminSession(request, context, context.services.auth)
+  const caller = await requireConsoleCaller(request, context, context.services.auth, {
+    superadmin: true,
+  })
   const form = await request.formData()
 
   const name = String(form.get("name") ?? "").trim()
@@ -39,12 +42,15 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (invalid)
     return { error: `"${invalid}" isn't a valid URL. Use an absolute URL like https://app.example.com/callback.`, field: "redirectUris" }
 
-  const created = await createApplication(request, context, context.services.auth, {
-    name,
-    app,
-    redirectUris,
-    creatorUserId: session.user.id,
-  })
+  // The signed-in superadmin becomes the app's first admin (the service default).
+  const created = await createApplication(context, caller, { name, app, redirectUris })
+  if ("error" in created) {
+    if (created.error === "app_taken")
+      return { error: `The app key "${app}" is already taken.`, field: "app" }
+    if (created.error === "invalid_redirect_uri")
+      return { error: "Add at least one valid redirect URI.", field: "redirectUris" }
+    return { error: "App keys are lowercase letters, numbers and dashes.", field: "app" }
+  }
   return { created }
 }
 

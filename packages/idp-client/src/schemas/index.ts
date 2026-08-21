@@ -16,6 +16,8 @@ export const ApplicationSchema = z.object({
   clientId: z.string(),
   name: z.string().nullable(),
   app: z.string().nullable().describe("Application key; consumer workspace claims are filtered by this"),
+  allowSignup: z.boolean().describe("Whether unknown users may sign themselves up"),
+  permissions: z.array(z.string()).describe("The app's declared product-permission catalog"),
   redirectUris: z.array(z.string()),
   disabled: z.boolean(),
   createdAt: z.string().describe("ISO 8601 timestamp"),
@@ -38,6 +40,49 @@ export const WorkspaceSchema = z.object({
 })
 
 export const ApplicationListSchema = z.object({ applications: z.array(ApplicationSchema) })
+
+/**
+ * Register an application. Superadmin only — there is no app to scope it to
+ * yet, so no per-app permission could authorize it.
+ */
+export const CreateApplicationInput = z.object({
+  name: z.string().min(1),
+  app: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9][a-z0-9-]*$/, "lowercase letters, numbers and dashes only")
+    .describe("Stable application key — the join key for members, workspaces and keys"),
+  redirectUris: z.array(z.string().min(1)).min(1),
+  firstAdminUserId: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      "Who becomes the app's first IdP admin. Defaults to the calling user; null leaves the app with no members (superadmin-managed).",
+    ),
+})
+export const ApplicationCreatedSchema = z.object({
+  clientId: z.string(),
+  clientSecret: z.string().describe("Plaintext client secret — shown exactly once, never stored"),
+  app: z.string(),
+})
+
+/** Partial update of an application. Omitted fields are left alone. */
+export const UpdateApplicationInput = z.object({
+  name: z.string().min(1).optional(),
+  redirectUris: z.array(z.string().min(1)).min(1).optional(),
+  allowSignup: z.boolean().optional(),
+})
+
+export const ClientSecretSchema = z.object({
+  clientSecret: z.string().describe("Plaintext client secret — shown exactly once, never stored"),
+})
+
+/** Replaces the app's product-permission catalog wholesale. */
+export const SetAppPermissionsInput = z.object({
+  permissions: z.array(z.string().min(1)),
+})
+export const AppPermissionsSchema = z.object({ permissions: z.array(z.string()) })
 export const UserListSchema = z.object({ users: z.array(UserSchema) })
 export const WorkspaceListSchema = z.object({ workspaces: z.array(WorkspaceSchema) })
 
@@ -137,3 +182,55 @@ export const AuditEntrySchema = z.object({
   createdAt: z.string(),
 })
 export const AuditListSchema = z.object({ entries: z.array(AuditEntrySchema) })
+
+// --- Scoped management API keys (drive this API for one app) ---
+
+export const ApiKeySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  prefix: z.string().describe("Non-secret token prefix (wim_…) for display"),
+  permissions: z.array(z.string()).describe("IdP management permissions this key holds"),
+  status: z.enum(["active", "expired", "revoked"]),
+  createdAt: z.string(),
+  lastUsedAt: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+  revokedAt: z.string().nullable(),
+})
+export const ApiKeyListSchema = z.object({ keys: z.array(ApiKeySchema) })
+
+export const CreateApiKeyInput = z.object({
+  name: z.string().min(1),
+  permissions: z
+    .array(z.string().min(1))
+    .describe("IdP management permissions; must be a subset of the caller's own on this app"),
+  expiresAt: z.iso.datetime().optional().describe("ISO 8601; omit for non-expiring"),
+})
+export const ApiKeyCreatedSchema = z.object({
+  id: z.string(),
+  token: z.string().describe("Plaintext key — shown exactly once, never stored"),
+  prefix: z.string(),
+})
+
+// --- IdP-level admin keys (superadmin over every app) ---
+
+export const AdminKeySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  prefix: z.string().describe("Non-secret token prefix (wim_…) for display"),
+  status: z.enum(["active", "expired", "revoked"]),
+  createdAt: z.string(),
+  lastUsedAt: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+  revokedAt: z.string().nullable(),
+})
+export const AdminKeyListSchema = z.object({ keys: z.array(AdminKeySchema) })
+
+export const CreateAdminKeyInput = z.object({
+  name: z.string().min(1).describe("Who holds it — one key per agent, so the audit log reads"),
+  expiresAt: z.iso.datetime().optional().describe("ISO 8601; omit for non-expiring"),
+})
+export const AdminKeyCreatedSchema = z.object({
+  id: z.string(),
+  token: z.string().describe("Plaintext key — shown exactly once, never stored"),
+  prefix: z.string(),
+})

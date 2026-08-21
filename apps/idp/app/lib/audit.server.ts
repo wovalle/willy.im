@@ -1,8 +1,6 @@
 import { and, desc, eq } from "drizzle-orm"
 
 import * as schema from "../db/schema"
-import type { ApiPrincipal } from "./api-keys.server"
-import type { User } from "./auth.server"
 import type { BaseServiceContext } from "./services"
 
 /**
@@ -11,21 +9,20 @@ import type { BaseServiceContext } from "./services"
  * D1 schema (see schema.ts) so it can be swapped to the package later.
  */
 
+/**
+ * Application scope for rows that belong to the IdP itself rather than to any
+ * one app (admin keys, for instance). `application_id` is NOT NULL and every
+ * reader filters by it, so IdP-level rows need a reserved value instead: the
+ * double underscores keep it from ever colliding with a real app key.
+ */
+export const IDP_AUDIT_SCOPE = "__idp__"
+
 /** Who performed an action, normalized for the `user_id` + `actor` columns. */
 export type Actor = {
   /** Human user id, when there is one. Null for machine callers. */
   userId: string | null
-  /** Descriptor: "user:<id>" | "apikey:<id>" | "superadmin-token". */
+  /** Descriptor: "user:<id>" | "apikey:<id>" | "adminkey:<id>" | "superadmin-token". */
   label: string
-}
-
-export function actorFromUser(user: Pick<User, "id">): Actor {
-  return { userId: user.id, label: `user:${user.id}` }
-}
-
-export function actorFromPrincipal(principal: ApiPrincipal): Actor {
-  if (principal.kind === "superadmin") return { userId: null, label: "superadmin-token" }
-  return { userId: null, label: `apikey:${principal.keyId}` }
 }
 
 export type AuditOperation =

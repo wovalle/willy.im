@@ -3,7 +3,7 @@
   "info": {
     "title": "willy.im IdP — Management API",
     "version": "1.0.0",
-    "description": "Management API for the willy.im identity provider. Authenticate with `Authorization: Bearer <token>`. Two kinds of token: the superadmin `ADMIN_API_TOKEN` (every app) and per-app **scoped API keys** minted in the admin console (one app, a fixed permission set). The cross-app list endpoints below require the superadmin token. Application registration is done in the admin console (better-auth ties client creation to an admin session)."
+    "description": "Management API for the willy.im identity provider. Authenticate with `Authorization: Bearer <token>`. Two kinds of token: the superadmin `ADMIN_API_TOKEN` (every app) and per-app **scoped API keys** minted in the admin console (one app, a fixed permission set). The cross-app endpoints below require the superadmin token."
   },
   "servers": [
     {
@@ -67,6 +67,17 @@
                             ],
                             "description": "Application key; consumer workspace claims are filtered by this"
                           },
+                          "allowSignup": {
+                            "type": "boolean",
+                            "description": "Whether unknown users may sign themselves up"
+                          },
+                          "permissions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "The app's declared product-permission catalog"
+                          },
                           "redirectUris": {
                             "type": "array",
                             "items": {
@@ -85,6 +96,8 @@
                           "clientId",
                           "name",
                           "app",
+                          "allowSignup",
+                          "permissions",
                           "redirectUris",
                           "disabled",
                           "createdAt"
@@ -103,6 +116,1089 @@
           },
           "401": {
             "description": "Missing or invalid bearer token"
+          }
+        }
+      },
+      "post": {
+        "summary": "Register an application (client secret returned once)",
+        "description": "Requires the superadmin token. Creating an application is an IdP-level act — there is no app to scope a permission to yet.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "app": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9][a-z0-9-]*$",
+                    "description": "Stable application key — the join key for members, workspaces and keys"
+                  },
+                  "redirectUris": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "firstAdminUserId": {
+                    "description": "Who becomes the app's first IdP admin. Defaults to the calling user; null leaves the app with no members (superadmin-managed).",
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "app",
+                  "redirectUris"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "clientSecret": {
+                      "type": "string",
+                      "description": "Plaintext client secret — shown exactly once, never stored"
+                    },
+                    "app": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "clientId",
+                    "clientSecret",
+                    "app"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          },
+          "422": {
+            "description": "Body failed validation"
+          }
+        }
+      }
+    },
+    "/api/v1/applications/{clientId}": {
+      "get": {
+        "summary": "Get one application",
+        "description": "Requires `app:read` on the path app (or the superadmin token).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "description": "OAuth client id of the application.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "app": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Application key; consumer workspace claims are filtered by this"
+                    },
+                    "allowSignup": {
+                      "type": "boolean",
+                      "description": "Whether unknown users may sign themselves up"
+                    },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The app's declared product-permission catalog"
+                    },
+                    "redirectUris": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "disabled": {
+                      "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    }
+                  },
+                  "required": [
+                    "clientId",
+                    "name",
+                    "app",
+                    "allowSignup",
+                    "permissions",
+                    "redirectUris",
+                    "disabled",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          },
+          "404": {
+            "description": "No application with that client id"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update an application",
+        "description": "Requires `app:update` on the path app (or the superadmin token).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "description": "OAuth client id of the application.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "redirectUris": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "allowSignup": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "app": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Application key; consumer workspace claims are filtered by this"
+                    },
+                    "allowSignup": {
+                      "type": "boolean",
+                      "description": "Whether unknown users may sign themselves up"
+                    },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The app's declared product-permission catalog"
+                    },
+                    "redirectUris": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "disabled": {
+                      "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    }
+                  },
+                  "required": [
+                    "clientId",
+                    "name",
+                    "app",
+                    "allowSignup",
+                    "permissions",
+                    "redirectUris",
+                    "disabled",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          },
+          "404": {
+            "description": "No application with that client id"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          },
+          "422": {
+            "description": "Body failed validation"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Deregister an application",
+        "description": "Requires `app:delete` on the path app (or the superadmin token).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "description": "OAuth client id of the application.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          },
+          "404": {
+            "description": "No application with that client id"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          }
+        }
+      }
+    },
+    "/api/v1/applications/{clientId}/rotate-secret": {
+      "post": {
+        "summary": "Rotate the client secret (returned once; the old one stops working)",
+        "description": "Requires `app:update` on the path app (or the superadmin token).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "description": "OAuth client id of the application.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "clientSecret": {
+                      "type": "string",
+                      "description": "Plaintext client secret — shown exactly once, never stored"
+                    }
+                  },
+                  "required": [
+                    "clientSecret"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          },
+          "404": {
+            "description": "No application with that client id"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app}/permissions": {
+      "put": {
+        "summary": "Replace the app's product-permission catalog",
+        "description": "Requires `app:update` on the path app (or the superadmin token).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "description": "Application key (oauth_client.metadata.app).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "permissions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "required": [
+                  "permissions"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "permissions"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          },
+          "404": {
+            "description": "No application with that app key"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          },
+          "422": {
+            "description": "Body failed validation"
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app}/keys": {
+      "get": {
+        "summary": "List scoped management API keys (never the hashes)",
+        "description": "Requires `apikey:read` on the path app (or the superadmin token).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "description": "Application key (oauth_client.metadata.app).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "keys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "prefix": {
+                            "type": "string",
+                            "description": "Non-secret token prefix (wim_…) for display"
+                          },
+                          "permissions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "IdP management permissions this key holds"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "expired",
+                              "revoked"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "lastUsedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "expiresAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "revokedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "prefix",
+                          "permissions",
+                          "status",
+                          "createdAt",
+                          "lastUsedAt",
+                          "expiresAt",
+                          "revokedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "keys"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          }
+        }
+      },
+      "post": {
+        "summary": "Mint a scoped management API key (plaintext returned once)",
+        "description": "Requires `apikey:create` on the path app (or the superadmin token). The requested permissions must be a subset of the caller's own, otherwise 403 `permissions_exceed_caller` — without that rule any key holding `apikey:create` could mint itself a more powerful successor.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "description": "Application key (oauth_client.metadata.app).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "permissions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": "IdP management permissions; must be a subset of the caller's own on this app"
+                  },
+                  "expiresAt": {
+                    "description": "ISO 8601; omit for non-expiring",
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  }
+                },
+                "required": [
+                  "name",
+                  "permissions"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "Plaintext key — shown exactly once, never stored"
+                    },
+                    "prefix": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "token",
+                    "prefix"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          },
+          "422": {
+            "description": "Body failed validation"
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app}/keys/{id}": {
+      "delete": {
+        "summary": "Revoke a scoped management API key (idempotent)",
+        "description": "Requires `apikey:revoke` on the path app (or the superadmin token).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "description": "Application key (oauth_client.metadata.app).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          },
+          "404": {
+            "description": "No key with that id on this app"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          }
+        }
+      }
+    },
+    "/api/v1/admin-keys": {
+      "get": {
+        "summary": "List IdP-level admin keys (never the hashes)",
+        "description": "Requires the superadmin token or an admin key. Admin keys are `api_key` rows with no application scope, so they hold every permission on every app.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "keys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "prefix": {
+                            "type": "string",
+                            "description": "Non-secret token prefix (wim_…) for display"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "expired",
+                              "revoked"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "lastUsedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "expiresAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "revokedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "prefix",
+                          "status",
+                          "createdAt",
+                          "lastUsedAt",
+                          "expiresAt",
+                          "revokedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "keys"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          }
+        }
+      },
+      "post": {
+        "summary": "Mint an IdP-level admin key (plaintext returned once)",
+        "description": "Requires the superadmin token or an admin key. Mint one per agent: unlike the static ADMIN_API_TOKEN, an admin key has a name, an optional expiry, a revoke switch, and its own `adminkey:<id>` identity in the audit log.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Who holds it — one key per agent, so the audit log reads"
+                  },
+                  "expiresAt": {
+                    "description": "ISO 8601; omit for non-expiring",
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "Plaintext key — shown exactly once, never stored"
+                    },
+                    "prefix": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "token",
+                    "prefix"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          },
+          "422": {
+            "description": "Body failed validation"
+          }
+        }
+      }
+    },
+    "/api/v1/admin-keys/{id}": {
+      "delete": {
+        "summary": "Revoke an IdP-level admin key (idempotent)",
+        "description": "A key may revoke itself — an agent cleaning up after itself is legitimate — after which its next request is simply unauthorized.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Admin key id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "404": {
+            "description": "No admin key with that id"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
           }
         }
       }

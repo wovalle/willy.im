@@ -2,16 +2,19 @@ import { Form, Link, Outlet, useLocation, useNavigate } from "react-router"
 import { ShieldCheck, UserCog } from "lucide-react"
 
 import type { Route } from "./+types/layout"
-import { isAdminEmail, requireSession } from "~/lib/admin.server"
+import { requireConsoleCaller } from "~/lib/caller.server"
 import { cn } from "~/lib/utils"
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const session = await requireSession(request, context, context.services.auth)
+  const caller = await requireConsoleCaller(request, context, context.services.auth)
+  // The impersonation banner reads the session directly — it's a property of the
+  // cookie, not of the caller's authority.
+  const session = await context.services.auth.api.getSession({ headers: request.headers })
   return {
-    email: session.user.email,
-    isAdmin: isAdminEmail(context, session.user.email),
+    email: caller.email,
+    isAdmin: caller.kind === "superadmin",
     // Set on impersonation sessions (Better Auth admin plugin).
-    impersonating: !!session.session.impersonatedBy,
+    impersonating: !!session?.session.impersonatedBy,
   }
 }
 
