@@ -21,7 +21,7 @@ const json = (schema: z.ZodType) => z.toJSONSchema(schema)
 const jsonInput = (schema: z.ZodType) => z.toJSONSchema(schema, { io: "input" })
 
 const DESCRIPTION =
-  "Management API for the willy.im identity provider. Authenticate with `Authorization: Bearer <token>`. Two kinds of token: the superadmin `ADMIN_API_TOKEN` (every app) and per-app **scoped API keys** minted in the admin console (one app, a fixed permission set). The cross-app endpoints below require the superadmin token."
+  "Management API for the willy.im identity provider. Authenticate with `Authorization: Bearer <token>`. Two kinds of bearer, both `wim_` keys: IdP-level **admin keys** (every permission on every app, minted at `/api/v1/admin-keys`) and per-app **scoped keys** minted in the admin console (one app, a fixed permission set). The cross-app endpoints below require an admin key."
 
 function pathParamNames(path: string): string[] {
   return [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1])
@@ -54,8 +54,8 @@ function operationObject(method: string, path: string, def: OperationDef) {
     description:
       def.description ??
       (scoped
-        ? `Requires \`${def.permission}\` on the path app (or the superadmin token).`
-        : "Requires the superadmin token."),
+        ? `Requires \`${def.permission}\` on the path app (or an admin key).`
+        : "Requires an admin key."),
     security: [{ bearerAuth: [] }],
     ...(parameters.length ? { parameters } : {}),
     ...(def.input
@@ -112,7 +112,7 @@ export function buildOpenApiDocument(input: { baseUrl: string }) {
         bearerAuth: {
           type: "http",
           scheme: "bearer",
-          description: "Superadmin ADMIN_API_TOKEN or a scoped API key (wim_…).",
+          description: "An IdP-level admin key or a per-app scoped key (wim_…).",
         },
       },
     },

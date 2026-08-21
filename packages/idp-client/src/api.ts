@@ -54,7 +54,7 @@ export type RequestOptions<P extends string, O> = PathParams<P> &
 export type ManagementApiOptions = {
   /** IdP origin — the API lives at the root, not under the `/auth` basepath. */
   baseUrl: string
-  /** Superadmin `ADMIN_API_TOKEN` or a scoped `wim_…` key. */
+  /** An IdP-level admin key or a per-app scoped `wim_…` key. */
   token: string
   fetch?: typeof fetch
 }

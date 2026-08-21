@@ -3,7 +3,7 @@
   "info": {
     "title": "willy.im IdP — Management API",
     "version": "1.0.0",
-    "description": "Management API for the willy.im identity provider. Authenticate with `Authorization: Bearer <token>`. Two kinds of token: the superadmin `ADMIN_API_TOKEN` (every app) and per-app **scoped API keys** minted in the admin console (one app, a fixed permission set). The cross-app endpoints below require the superadmin token."
+    "description": "Management API for the willy.im identity provider. Authenticate with `Authorization: Bearer <token>`. Two kinds of bearer, both `wim_` keys: IdP-level **admin keys** (every permission on every app, minted at `/api/v1/admin-keys`) and per-app **scoped keys** minted in the admin console (one app, a fixed permission set). The cross-app endpoints below require an admin key."
   },
   "servers": [
     {
@@ -15,7 +15,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Superadmin ADMIN_API_TOKEN or a scoped API key (wim_…)."
+        "description": "An IdP-level admin key or a per-app scoped key (wim_…)."
       }
     }
   },
@@ -23,7 +23,7 @@
     "/api/v1/applications": {
       "get": {
         "summary": "List registered applications",
-        "description": "Requires the superadmin token.",
+        "description": "Requires an admin key.",
         "security": [
           {
             "bearerAuth": []
@@ -121,7 +121,7 @@
       },
       "post": {
         "summary": "Register an application (client secret returned once)",
-        "description": "Requires the superadmin token. Creating an application is an IdP-level act — there is no app to scope a permission to yet.",
+        "description": "Requires an admin key. Creating an application is an IdP-level act — there is no app to scope a permission to yet.",
         "security": [
           {
             "bearerAuth": []
@@ -222,7 +222,7 @@
     "/api/v1/applications/{clientId}": {
       "get": {
         "summary": "Get one application",
-        "description": "Requires `app:read` on the path app (or the superadmin token).",
+        "description": "Requires `app:read` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -325,7 +325,7 @@
       },
       "patch": {
         "summary": "Update an application",
-        "description": "Requires `app:update` on the path app (or the superadmin token).",
+        "description": "Requires `app:update` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -465,7 +465,7 @@
       },
       "delete": {
         "summary": "Deregister an application",
-        "description": "Requires `app:delete` on the path app (or the superadmin token).",
+        "description": "Requires `app:delete` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -525,7 +525,7 @@
     "/api/v1/applications/{clientId}/rotate-secret": {
       "post": {
         "summary": "Rotate the client secret (returned once; the old one stops working)",
-        "description": "Requires `app:update` on the path app (or the superadmin token).",
+        "description": "Requires `app:update` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -585,7 +585,7 @@
     "/api/v1/apps/{app}/permissions": {
       "put": {
         "summary": "Replace the app's product-permission catalog",
-        "description": "Requires `app:update` on the path app (or the superadmin token).",
+        "description": "Requires `app:update` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -673,7 +673,7 @@
     "/api/v1/apps/{app}/keys": {
       "get": {
         "summary": "List scoped management API keys (never the hashes)",
-        "description": "Requires `apikey:read` on the path app (or the superadmin token).",
+        "description": "Requires `apikey:read` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -796,7 +796,7 @@
       },
       "post": {
         "summary": "Mint a scoped management API key (plaintext returned once)",
-        "description": "Requires `apikey:create` on the path app (or the superadmin token). The requested permissions must be a subset of the caller's own, otherwise 403 `permissions_exceed_caller` — without that rule any key holding `apikey:create` could mint itself a more powerful successor.",
+        "description": "Requires `apikey:create` on the path app (or an admin key). The requested permissions must be a subset of the caller's own, otherwise 403 `permissions_exceed_caller` — without that rule any key holding `apikey:create` could mint itself a more powerful successor.",
         "security": [
           {
             "bearerAuth": []
@@ -899,7 +899,7 @@
     "/api/v1/apps/{app}/keys/{id}": {
       "delete": {
         "summary": "Revoke a scoped management API key (idempotent)",
-        "description": "Requires `apikey:revoke` on the path app (or the superadmin token).",
+        "description": "Requires `apikey:revoke` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -967,7 +967,7 @@
     "/api/v1/admin-keys": {
       "get": {
         "summary": "List IdP-level admin keys (never the hashes)",
-        "description": "Requires the superadmin token or an admin key. Admin keys are `api_key` rows with no application scope, so they hold every permission on every app.",
+        "description": "Requires an admin key. Admin keys are `api_key` rows with no application scope, so they hold every permission on every app.",
         "security": [
           {
             "bearerAuth": []
@@ -1068,7 +1068,7 @@
       },
       "post": {
         "summary": "Mint an IdP-level admin key (plaintext returned once)",
-        "description": "Requires the superadmin token or an admin key. Mint one per agent: unlike the static ADMIN_API_TOKEN, an admin key has a name, an optional expiry, a revoke switch, and its own `adminkey:<id>` identity in the audit log.",
+        "description": "Requires an admin key. Mint one per agent: an admin key has a name, an optional expiry, a revoke switch, and its own `adminkey:<id>` identity in the audit log, so every superadmin action is attributable.",
         "security": [
           {
             "bearerAuth": []
@@ -1206,7 +1206,7 @@
     "/api/v1/users": {
       "get": {
         "summary": "List users",
-        "description": "Requires the superadmin token.",
+        "description": "Requires an admin key.",
         "security": [
           {
             "bearerAuth": []
@@ -1277,7 +1277,7 @@
     "/api/v1/workspaces": {
       "get": {
         "summary": "List workspaces",
-        "description": "Requires the superadmin token.",
+        "description": "Requires an admin key.",
         "security": [
           {
             "bearerAuth": []
@@ -1348,7 +1348,7 @@
     "/api/v1/apps/{app}/members": {
       "get": {
         "summary": "List app members",
-        "description": "Requires `member:read` on the path app (or the superadmin token).",
+        "description": "Requires `member:read` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -1438,7 +1438,7 @@
       },
       "post": {
         "summary": "Add or invite a member",
-        "description": "Requires `member:invite` on the path app (or the superadmin token).",
+        "description": "Requires `member:invite` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -1537,7 +1537,7 @@
     "/api/v1/apps/{app}/members/{userId}": {
       "patch": {
         "summary": "Update a member's role + permissions",
-        "description": "Requires `member:manage` on the path app (or the superadmin token).",
+        "description": "Requires `member:manage` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -1633,7 +1633,7 @@
       },
       "delete": {
         "summary": "Remove a member",
-        "description": "Requires `member:manage` on the path app (or the superadmin token).",
+        "description": "Requires `member:manage` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -1698,7 +1698,7 @@
     "/api/v1/apps/{app}/workspaces": {
       "get": {
         "summary": "List app workspaces",
-        "description": "Requires `workspace:read` on the path app (or the superadmin token).",
+        "description": "Requires `workspace:read` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -1781,7 +1781,7 @@
       },
       "post": {
         "summary": "Create a workspace",
-        "description": "Requires `workspace:create` on the path app (or the superadmin token).",
+        "description": "Requires `workspace:create` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -1874,7 +1874,7 @@
     "/api/v1/apps/{app}/user-keys": {
       "get": {
         "summary": "List end-user API keys",
-        "description": "Requires `userkey:read` on the path app (or the superadmin token).",
+        "description": "Requires `userkey:read` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -2018,7 +2018,7 @@
       },
       "post": {
         "summary": "Mint an end-user API key (plaintext returned once)",
-        "description": "Requires `userkey:create` on the path app (or the superadmin token).",
+        "description": "Requires `userkey:create` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -2128,7 +2128,7 @@
     "/api/v1/apps/{app}/user-keys/validate": {
       "post": {
         "summary": "Validate a presented end-user key (200 + valid discriminator)",
-        "description": "Requires `userkey:validate` on the path app (or the superadmin token).",
+        "description": "Requires `userkey:validate` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -2264,7 +2264,7 @@
     "/api/v1/apps/{app}/user-keys/{id}": {
       "delete": {
         "summary": "Revoke an end-user API key (idempotent)",
-        "description": "Requires `userkey:revoke` on the path app (or the superadmin token).",
+        "description": "Requires `userkey:revoke` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []
@@ -2329,7 +2329,7 @@
     "/api/v1/apps/{app}/audit": {
       "get": {
         "summary": "List recent audit entries",
-        "description": "Requires `audit:read` on the path app (or the superadmin token).",
+        "description": "Requires `audit:read` on the path app (or an admin key).",
         "security": [
           {
             "bearerAuth": []

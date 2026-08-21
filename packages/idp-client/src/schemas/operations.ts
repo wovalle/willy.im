@@ -77,7 +77,7 @@ export const operations = {
   "post /api/v1/applications": {
     summary: "Register an application (client secret returned once)",
     description:
-      "Requires the superadmin token. Creating an application is an IdP-level act — there is no app to scope a permission to yet.",
+      "Requires an admin key. Creating an application is an IdP-level act — there is no app to scope a permission to yet.",
     input: CreateApplicationInput,
     successCode: "201",
     success: ApplicationCreatedSchema,
@@ -134,7 +134,7 @@ export const operations = {
   "post /api/v1/apps/{app}/keys": {
     summary: "Mint a scoped management API key (plaintext returned once)",
     description:
-      "Requires `apikey:create` on the path app (or the superadmin token). The requested permissions must be a subset of the caller's own, otherwise 403 `permissions_exceed_caller` — without that rule any key holding `apikey:create` could mint itself a more powerful successor.",
+      "Requires `apikey:create` on the path app (or an admin key). The requested permissions must be a subset of the caller's own, otherwise 403 `permissions_exceed_caller` — without that rule any key holding `apikey:create` could mint itself a more powerful successor.",
     permission: "apikey:create",
     params: APP_PARAM,
     input: CreateApiKeyInput,
@@ -152,14 +152,14 @@ export const operations = {
   "get /api/v1/admin-keys": {
     summary: "List IdP-level admin keys (never the hashes)",
     description:
-      "Requires the superadmin token or an admin key. Admin keys are `api_key` rows with no application scope, so they hold every permission on every app.",
+      "Requires an admin key. Admin keys are `api_key` rows with no application scope, so they hold every permission on every app.",
     successCode: "200",
     success: AdminKeyListSchema,
   },
   "post /api/v1/admin-keys": {
     summary: "Mint an IdP-level admin key (plaintext returned once)",
     description:
-      "Requires the superadmin token or an admin key. Mint one per agent: unlike the static ADMIN_API_TOKEN, an admin key has a name, an optional expiry, a revoke switch, and its own `adminkey:<id>` identity in the audit log.",
+      "Requires an admin key. Mint one per agent: an admin key has a name, an optional expiry, a revoke switch, and its own `adminkey:<id>` identity in the audit log, so every superadmin action is attributable.",
     input: CreateAdminKeyInput,
     successCode: "201",
     success: AdminKeyCreatedSchema,
