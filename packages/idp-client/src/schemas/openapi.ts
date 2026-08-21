@@ -21,7 +21,7 @@ const json = (schema: z.ZodType) => z.toJSONSchema(schema)
 const jsonInput = (schema: z.ZodType) => z.toJSONSchema(schema, { io: "input" })
 
 const DESCRIPTION =
-  "Management API for the willy.im identity provider. Authenticate with `Authorization: Bearer <token>`. Two kinds of token: the superadmin `ADMIN_API_TOKEN` (every app) and per-app **scoped API keys** minted in the admin console (one app, a fixed permission set). The cross-app list endpoints below require the superadmin token. Application registration is done in the admin console (better-auth ties client creation to an admin session)."
+  "Management API for the willy.im identity provider. Authenticate with `Authorization: Bearer <token>`. Two kinds of token: the superadmin `ADMIN_API_TOKEN` (every app) and per-app **scoped API keys** minted in the admin console (one app, a fixed permission set). The cross-app endpoints below require the superadmin token."
 
 function pathParamNames(path: string): string[] {
   return [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1])
@@ -83,6 +83,7 @@ function operationObject(method: string, path: string, def: OperationDef) {
             "409": { description: "Conflict (already a member, last admin, slug taken, …)" },
           }
         : {}),
+      ...(def.notFound ? { "404": { description: def.notFound } } : {}),
       ...(def.input ? { "422": { description: "Body failed validation" } } : {}),
     },
   }

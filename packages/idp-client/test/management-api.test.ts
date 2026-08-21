@@ -94,10 +94,88 @@ describe("createManagementApi", () => {
     expect(users.users).toEqual([])
   })
 
+  it("types the application-lifecycle endpoints off the operations table", async () => {
+    const { api, seen } = apiFor(() =>
+      json({ clientId: "abc", clientSecret: "s3cret", app: "invoices" }, 201),
+    )
+    const created = await api.request("post", "/api/v1/applications", {
+      body: { name: "Invoices", app: "invoices", redirectUris: ["https://inv.test/cb"] },
+    })
+
+    expect(seen[0]?.method).toBe("POST")
+    expectTypeOf(created).toEqualTypeOf<{ clientId: string; clientSecret: string; app: string }>()
+    expect(created.app).toBe("invoices")
+  })
+
+  it("fills the clientId path parameter for the single-application routes", async () => {
+    const { api, seen } = apiFor(() => json({ clientSecret: "rotated" }))
+    const rotated = await api.request("post", "/api/v1/applications/{clientId}/rotate-secret", {
+      params: { clientId: "abc" },
+    })
+
+    expect(seen[0]?.url).toBe("https://idp.test/api/v1/applications/abc/rotate-secret")
+    expectTypeOf(rotated).toEqualTypeOf<{ clientSecret: string }>()
+  })
+
+  it("types the admin-key endpoints off the operations table", async () => {
+    const { api, seen } = apiFor(() => json({ id: "k1", token: "wim_plain", prefix: "wim_plain" }, 201))
+    const minted = await api.request("post", "/api/v1/admin-keys", {
+      body: { name: "Agent alpha" },
+    })
+
+    expect(seen[0]?.url).toBe("https://idp.test/api/v1/admin-keys")
+    expect(await seen[0]?.clone().json()).toEqual({ name: "Agent alpha" })
+    expectTypeOf(minted).toEqualTypeOf<{ id: string; token: string; prefix: string }>()
+    expect(minted.token).toBe("wim_plain")
+  })
+
+  it("lists admin keys without a permissions field — an admin key holds them all", async () => {
+    const { api } = apiFor(() =>
+      json({
+        keys: [
+          {
+            id: "k1",
+            name: "Agent alpha",
+            prefix: "wim_abcd1234",
+            status: "active",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            lastUsedAt: null,
+            expiresAt: null,
+            revokedAt: null,
+          },
+        ],
+      }),
+    )
+    const listed = await api.request("get", "/api/v1/admin-keys")
+
+    expectTypeOf(listed.keys[0]).toEqualTypeOf<{
+      id: string
+      name: string
+      prefix: string
+      status: "active" | "expired" | "revoked"
+      createdAt: string
+      lastUsedAt: string | null
+      expiresAt: string | null
+      revokedAt: string | null
+    }>()
+    expect(listed.keys[0]?.name).toBe("Agent alpha")
+  })
+
+  it("fills the id path parameter when revoking an admin key", async () => {
+    const { api, seen } = apiFor(() => json({ ok: true }))
+    const revoked = await api.request("delete", "/api/v1/admin-keys/{id}", {
+      params: { id: "k1" },
+    })
+
+    expect(seen[0]?.method).toBe("DELETE")
+    expect(seen[0]?.url).toBe("https://idp.test/api/v1/admin-keys/k1")
+    expectTypeOf(revoked).toEqualTypeOf<{ ok: true }>()
+  })
+
   it("rejects a path the spec doesn't declare for that method", () => {
     const { api } = apiFor(() => json({}))
-    // @ts-expect-error — /api/v1/applications is GET-only in the OpenAPI document.
-    void (() => api.request("post", "/api/v1/applications"))
+    // @ts-expect-error — /api/v1/users is GET-only in the OpenAPI document.
+    void (() => api.request("delete", "/api/v1/users"))
     // @ts-expect-error — not a path in the document at all.
     void (() => api.request("get", "/api/v1/nope"))
     expect(api).toBeTruthy()
