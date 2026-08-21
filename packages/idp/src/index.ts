@@ -52,6 +52,28 @@ export {
   type Workspace,
 } from "./claims.js"
 
+export {
+  createManagementApi,
+  type ManagementApi,
+  type ManagementApiOptions,
+} from "./api.js"
+
+export {
+  createUserKeys,
+  readApiKey,
+  type AuthenticatedKey,
+  type AuthenticateOptions,
+  type AuthenticateResult,
+  type CreateUserApiKeyInput,
+  type ListFilter,
+  type MintedUserApiKey,
+  type UserApiKey,
+  type UserKeyCacheOptions,
+  type UserKeys,
+  type UserKeysOptions,
+  type UserKeyValidation,
+} from "./user-keys.js"
+
 export { parseDuration, type Duration } from "./duration.js"
 export {
   clearCookie,

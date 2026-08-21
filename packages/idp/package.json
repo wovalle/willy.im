@@ -1,7 +1,7 @@
 {
   "name": "@willyim/idp",
-  "version": "0.1.1",
-  "description": "Login for apps that don't own identity — OIDC client, server sessions, and react-router guards against the willy.im IdP",
+  "version": "0.2.0",
+  "description": "Login for apps that don't own identity \u2014 OIDC client, server sessions, and react-router guards against the willy.im IdP",
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",

@@ -272,6 +272,52 @@ const idp = createIdp({
 })
 ```
 
+## End-user API keys
+
+Keys an app's own users create to call *that app's* API. The IdP is the key
+store: the app mints, lists, revokes and validates `wak_…` tokens over the
+management API and never persists a plaintext or a hash.
+
+```ts
+import { createUserKeys } from "@willyim/idp"
+
+const keys = createUserKeys({
+  baseUrl: "https://idp.willy.im", // the API is at the root, not under /auth
+  token: env.IDP_MANAGEMENT_KEY, //  the app's own wim_… key
+  app: "luchy",
+  cache: { ttlMs: 60_000 }, // validation cache; revocation lag is bounded by it
+})
+
+// Mint — the plaintext exists exactly once, in this response.
+const minted = await keys.create({
+  userId: session.userId,
+  name: "cli",
+  scopes: ["analytics:read"], // must be in the app's product permission catalog
+  workspaceId: session.workspaceId,
+})
+
+// Check, on the request path.
+const auth = await keys.authenticate(request, { scopes: ["analytics:read"] })
+if (!auth.ok) return new Response(auth.reason, { status: auth.status })
+auth.key // { keyId, userId, workspaceId, scopes, name }
+```
+
+`authenticate` reads `Authorization: Bearer …`, then `X-API-Key`, and returns a
+result rather than throwing so the caller owns the response shape. Underneath,
+`validate` caches verdicts by digest of the token (60s for a hit, 10s for a
+miss, never for a failed round trip) and collapses concurrent checks of the same
+token into one request. Revoking through some other channel is visible only once
+the entry expires; `forget(token)` drops it immediately when you hold the
+plaintext.
+
+Filter with `list({ userId, workspaceId })`, revoke with `revoke(id)`. Scope
+enforcement is the app's job — the IdP stores the scopes and reports them.
+
+Only for **secret** credentials. A key embedded in a web page — an analytics
+ingest token, say — identifies a site rather than a user, cannot be kept secret,
+and must not pay a round trip per hit. Keep those in the app's own table and
+gate them on `Origin` plus rate limiting.
+
 ## Management API types
 
 The IdP's `/api/v1/*` management surface is not part of this package's public
