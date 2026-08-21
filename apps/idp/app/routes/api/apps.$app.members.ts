@@ -2,7 +2,7 @@ import type { Route } from "./+types/apps.$app.members"
 import { listAppMembers } from "~/lib/admin.server"
 import { requireApiPrincipal } from "~/lib/api-keys.server"
 import { readJson } from "~/lib/api.server"
-import { InviteMemberInput } from "~/lib/api-schemas"
+import { InviteMemberInput } from "@willyim/idp/schemas"
 import { actorFromPrincipal, recordAudit } from "~/lib/audit.server"
 import { addOrInviteAppMember } from "~/lib/members.server"
 

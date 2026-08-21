@@ -1,56 +1,52 @@
 /**
  * The typed door to the IdP's `/api/v1/*` management surface.
  *
- * Nothing in v1 goes through it — the management key, the directory API and
- * end-user API keys were all cut — but it exists now so that the *first*
- * management call can't be hand-written. Paths, methods, path parameters,
- * request bodies and success shapes all come from `src/generated/idp-api.d.ts`,
- * which `npm run openapi` regenerates from apps/idp's OpenAPI document. A typo
- * in a path is a compile error, not a 404 in production.
+ * Paths, methods, request bodies and success shapes all come from the
+ * operations table in `./schemas/operations.ts` — the same table that builds
+ * the OpenAPI document and that `apps/idp` validates requests with. A typo in
+ * a path is a compile error, not a 404 in production, and a response that
+ * doesn't match its schema raises an `IdpError` naming the field rather than
+ * surfacing as `undefined` somewhere downstream.
  *
- * Deliberately not exported from any entrypoint: it is internal until the
- * management surface is back in scope. Types only at runtime, so core stays
- * dependency-free.
+ * Path parameters are read off the path template itself, so `{app}` in the
+ * string is what makes `params.app` required.
+ *
+ * This is the escape hatch for any endpoint without sugar of its own; see
+ * `user-keys.ts` for the shaped client over the end-user key endpoints.
  */
 
-import { IdpError } from "./client.js"
-import type { paths } from "./generated/idp-api.js"
+import type { z } from "zod"
 
-export type ApiPaths = paths
-export type Method = "get" | "put" | "post" | "delete" | "patch"
+import { IdpError } from "./errors.js"
+import {
+  lookup,
+  type HttpMethod,
+  type OperationDef,
+  type OperationFor,
+  type PathParamNames,
+  type PathsFor,
+} from "./schemas/operations.js"
+import { parseWire } from "./validate.js"
 
-/** The paths that actually declare `M` — `paths` types the rest as `never`. */
-export type PathsFor<M extends Method> = {
-  [P in keyof paths]: paths[P] extends { [K in M]: object } ? P : never
-}[keyof paths]
+export type Method = HttpMethod
+export type { PathsFor }
 
-export type Operation<P extends keyof paths, M extends Method> = M extends keyof paths[P]
-  ? paths[P][M]
-  : never
+/** What the caller must supply: `{app}` in the path becomes `params.app`. */
+type PathParams<P extends string> = [PathParamNames<P>] extends [never]
+  ? { params?: undefined }
+  : { params: Record<PathParamNames<P>, string> }
 
-type PathParams<O> = O extends { parameters: { path: infer T } }
-  ? T extends object
-    ? T
-    : never
-  : never
-
-type RequestBody<O> = O extends { requestBody: { content: { "application/json": infer B } } }
-  ? B
-  : never
+type RequestBody<O> = O extends { input: infer S extends z.ZodType }
+  ? { body: z.input<S> }
+  : { body?: undefined }
 
 /** The 200 or 201 JSON body, whichever this operation declares. */
-type SuccessBody<O> = O extends { responses: infer R }
-  ? R extends { 200: { content: { "application/json": infer T } } }
-    ? T
-    : R extends { 201: { content: { "application/json": infer T } } }
-      ? T
-      : never
+export type SuccessBody<O> = O extends { success: infer S extends z.ZodType }
+  ? z.output<S>
   : never
 
-export type RequestOptions<O> = ([PathParams<O>] extends [never]
-  ? { params?: undefined }
-  : { params: PathParams<O> }) &
-  ([RequestBody<O>] extends [never] ? { body?: undefined } : { body: RequestBody<O> }) & {
+export type RequestOptions<P extends string, O> = PathParams<P> &
+  RequestBody<O> & {
     query?: Record<string, string | number | boolean | undefined>
     signal?: AbortSignal
   }
@@ -71,8 +67,9 @@ export function createManagementApi(options: ManagementApiOptions) {
     async request<M extends Method, P extends PathsFor<M>>(
       method: M,
       path: P,
-      init: RequestOptions<Operation<P, M>> = {} as RequestOptions<Operation<P, M>>,
-    ): Promise<SuccessBody<Operation<P, M>>> {
+      init: RequestOptions<P, OperationFor<M, P>> = {} as RequestOptions<P, OperationFor<M, P>>,
+    ): Promise<SuccessBody<OperationFor<M, P>>> {
+      const operation = lookup(method, path) as OperationDef
       const params = (init.params ?? {}) as Record<string, string>
       const rendered = String(path).replace(/\{([^}]+)\}/g, (_, name: string) => {
         const value = params[name]
@@ -103,7 +100,11 @@ export function createManagementApi(options: ManagementApiOptions) {
           json,
         )
       }
-      return json as SuccessBody<Operation<P, M>>
+      return parseWire(
+        operation.success,
+        json,
+        `${method.toUpperCase()} ${rendered}`,
+      ) as SuccessBody<OperationFor<M, P>>
     },
   }
 }

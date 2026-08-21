@@ -1,7 +1,7 @@
 import type { Route } from "./+types/apps.$app.user-keys.validate"
 import { requireApiPrincipal } from "~/lib/api-keys.server"
 import { methodNotAllowed, readJson } from "~/lib/api.server"
-import { ValidateUserApiKeyInput } from "~/lib/api-schemas"
+import { ValidateUserApiKeyInput } from "@willyim/idp/schemas"
 import { validateUserApiKey } from "~/lib/user-api-keys.server"
 
 /**

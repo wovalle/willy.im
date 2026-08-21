@@ -1,63 +1,30 @@
 /**
- * The claim set the IdP hands back, with the `https://willy.im/*` namespace
- * unwrapped. Namespaced URI claims are an OIDC requirement, not something app
- * code should ever have to type — `claims.permissions`, not
- * `claims["https://willy.im/permissions"]`.
+ * Claim types and the permission check over them. The shapes themselves live
+ * in `./wire.ts` as zod schemas — this module re-exports them so app code has
+ * one obvious import, and owns `grants`, which is logic rather than parsing.
  */
 
-export const PERMISSIONS_CLAIM = "https://willy.im/permissions"
-export const WORKSPACES_CLAIM = "https://willy.im/workspaces"
+import { ClaimsSchema, type Claims } from "./wire.js"
+import { parseWire } from "./validate.js"
 
-/** A tenant inside THIS app. `domain` is set for multi-domain apps, else null. */
-export type Workspace = {
-  id: string
-  slug: string
-  name: string
-  domain: string | null
-  role: string
-}
+export {
+  ActorSchema,
+  ClaimsSchema,
+  PERMISSIONS_CLAIM,
+  WORKSPACES_CLAIM,
+  WorkspaceSchema,
+  type Actor,
+  type Claims,
+  type Workspace,
+} from "./wire.js"
 
 /**
- * The RFC 8693 `act` claim: present while an IdP admin is impersonating the
- * user. Audit-only — tag your logs with it, never branch authorization on it.
+ * Wire claims -> `Claims`. Tolerant by design: a missing or malformed optional
+ * claim degrades to an empty value. Only `sub` is required — without it there
+ * is no identity to seat a session on.
  */
-export type Actor = { sub: string; email?: string }
-
-export type Claims = {
-  sub: string
-  email: string
-  emailVerified: boolean
-  name: string | null
-  image: string | null
-  /** Product permissions granted in this app. Unwrapped from the namespace. */
-  permissions: string[]
-  /** Workspaces the user belongs to in this app. Unwrapped from the namespace. */
-  workspaces: Workspace[]
-  actor: Actor | null
-}
-
-/** Wire claims -> `Claims`. Tolerant: a missing claim is an empty value, not a throw. */
-export function normalizeClaims(payload: Record<string, unknown>): Claims {
-  return {
-    sub: str(payload.sub) ?? "",
-    email: str(payload.email) ?? "",
-    emailVerified: payload.email_verified === true,
-    name: str(payload.name),
-    image: str(payload.picture) ?? str(payload.image),
-    permissions: Array.isArray(payload[PERMISSIONS_CLAIM])
-      ? (payload[PERMISSIONS_CLAIM] as unknown[]).map(String)
-      : [],
-    workspaces: Array.isArray(payload[WORKSPACES_CLAIM])
-      ? (payload[WORKSPACES_CLAIM] as Record<string, unknown>[]).map((w) => ({
-          id: String(w.id ?? ""),
-          slug: String(w.slug ?? ""),
-          name: String(w.name ?? ""),
-          domain: str(w.domain),
-          role: String(w.role ?? "member"),
-        }))
-      : [],
-    actor: actorOf(payload.act),
-  }
+export function normalizeClaims(payload: unknown): Claims {
+  return parseWire(ClaimsSchema, payload, "userinfo")
 }
 
 /**
@@ -73,17 +40,4 @@ export function grants(permissions: readonly string[], permission: string): bool
     if (permission.startsWith(granted.slice(0, -1))) return true
   }
   return false
-}
-
-function str(value: unknown): string | null {
-  return typeof value === "string" && value ? value : null
-}
-
-function actorOf(value: unknown): Actor | null {
-  if (!value || typeof value !== "object") return null
-  const act = value as Record<string, unknown>
-  const sub = str(act.sub)
-  if (!sub) return null
-  const email = str(act.email)
-  return email ? { sub, email } : { sub }
 }

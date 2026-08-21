@@ -7,13 +7,18 @@ someone is and what they may do. An app installing this package runs no auth
 framework: it owns one session table, which is a _handle_ to IdP truth rather
 than a record of it. No user table, no account table, no `ADMIN_EMAILS` list.
 
-Zero runtime dependencies — `fetch`, WebCrypto and `Request`/`Response` only, so
-the same build runs on Cloudflare Workers, Node 20+ and Bun.
+`zod` is the one runtime dependency: every payload the IdP sends — discovery,
+tokens, claims, management API responses — is parsed against a schema rather
+than cast, so a malformed response is an `IdpError` naming the field instead of
+a `TypeError` several frames later. Otherwise it is `fetch`, WebCrypto and
+`Request`/`Response` only, so the same build runs on Cloudflare Workers,
+Node 20+ and Bun.
 
 ```
-@willyim/idp               core: OIDC client + server sessions
-@willyim/idp/drizzle       the session store, and the `idp_session` table
-@willyim/idp/react-router  the auth route and the loader guards
+@willyim/idp                core: OIDC client + server sessions
+@willyim/idp/drizzle        the session store, and the `idp_session` table
+@willyim/idp/react-router   the auth route and the loader guards
+@willyim/idp/schemas        the management API wire shapes, as zod schemas
 ```
 
 ## Install
@@ -320,13 +325,23 @@ gate them on `Origin` plus rate limiting.
 
 ## Management API types
 
-The IdP's `/api/v1/*` management surface is not part of this package's public
-API in v1. The types for it are generated from the IdP's OpenAPI document —
-`npm run openapi` refreshes both `openapi/idp-api.json` and
-`src/generated/idp-api.d.ts` — so that when management calls are added they
-cannot be hand-written. The OIDC endpoints are not in that document and never
-will be: they are standards-defined and discovered at runtime from
-`.well-known`.
+Endpoints without sugar of their own go through `createManagementApi`, whose
+paths, methods, path parameters, bodies and response shapes all come from the
+operations table in `@willyim/idp/schemas` — one zod definition per shape,
+which also builds `openapi/idp-api.json` (`npm run openapi`) and which the IdP
+itself validates incoming requests with. A typo in a path is a compile error,
+not a 404 in production, and a response that doesn't match its schema throws
+instead of reaching your code as `undefined`.
+
+```ts
+const api = createManagementApi({ baseUrl, token })
+const { members } = await api.request("get", "/api/v1/apps/{app}/members", {
+  params: { app: "luchy" },
+})
+```
+
+The OIDC endpoints are not in that document and never will be: they are
+standards-defined and discovered at runtime from `.well-known`.
 
 ## Licence
 

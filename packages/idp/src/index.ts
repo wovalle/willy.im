@@ -18,10 +18,12 @@ export {
   createPkce,
   DEFAULT_SCOPES,
   IdpError,
+  SUPPORTED_SCOPES,
   type AuthorizationUrlInput,
   type Discovery,
   type IdpClient,
   type IdpClientOptions,
+  type IdpScope,
   type Tokens,
 } from "./client.js"
 

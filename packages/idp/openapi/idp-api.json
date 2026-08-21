@@ -23,6 +23,7 @@
     "/api/v1/applications": {
       "get": {
         "summary": "List registered applications",
+        "description": "Requires the superadmin token.",
         "security": [
           {
             "bearerAuth": []
@@ -109,6 +110,7 @@
     "/api/v1/users": {
       "get": {
         "summary": "List users",
+        "description": "Requires the superadmin token.",
         "security": [
           {
             "bearerAuth": []
@@ -179,6 +181,7 @@
     "/api/v1/workspaces": {
       "get": {
         "summary": "List workspaces",
+        "description": "Requires the superadmin token.",
         "security": [
           {
             "bearerAuth": []
@@ -592,9 +595,6 @@
           },
           "409": {
             "description": "Conflict (already a member, last admin, slug taken, …)"
-          },
-          "422": {
-            "description": "Body failed validation"
           }
         }
       }
@@ -1226,9 +1226,6 @@
           },
           "409": {
             "description": "Conflict (already a member, last admin, slug taken, …)"
-          },
-          "422": {
-            "description": "Body failed validation"
           }
         }
       }

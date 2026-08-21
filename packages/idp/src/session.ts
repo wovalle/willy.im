@@ -9,6 +9,8 @@
  * the app, in minutes rather than in session-lengths.
  */
 
+import { z } from "zod"
+
 import type { Actor, Claims, Workspace } from "./claims.js"
 import { grants } from "./claims.js"
 import {
@@ -89,7 +91,18 @@ export type Session = {
 
 export type Idp = ReturnType<typeof createIdp>
 
-type StatePayload = { state: string; codeVerifier: string; next?: string }
+/**
+ * What rides in the login state cookie. HMAC-signed, so tampering is caught
+ * before this ever parses — the schema is here to catch a cookie left over
+ * from an older version of the SDK, not an attacker.
+ */
+const StatePayloadSchema = z.object({
+  state: z.string().min(1),
+  codeVerifier: z.string().min(1),
+  next: z.string().optional(),
+})
+
+type StatePayload = z.output<typeof StatePayloadSchema>
 
 export function createIdp(options: IdpOptions) {
   const client: IdpClient = createIdpClient(options)
@@ -366,7 +379,7 @@ export function createIdp(options: IdpOptions) {
       if (!raw) throw new IdpError("login state cookie is missing or invalid", 400)
       let payload: StatePayload
       try {
-        payload = JSON.parse(base64urlDecodeString(raw)) as StatePayload
+        payload = StatePayloadSchema.parse(JSON.parse(base64urlDecodeString(raw)))
       } catch {
         throw new IdpError("login state cookie is malformed", 400)
       }

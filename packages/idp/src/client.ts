@@ -8,8 +8,24 @@
 
 import { normalizeClaims, type Claims } from "./claims.js"
 import { randomToken, sha256Base64url } from "./crypto.js"
+import { IdpError } from "./errors.js"
+import { parseWire } from "./validate.js"
+import { DiscoverySchema, TokensSchema, type Discovery, type Tokens } from "./wire.js"
 
-export const DEFAULT_SCOPES = ["openid", "profile", "email", "offline_access"]
+export { IdpError } from "./errors.js"
+export type { Discovery, Tokens } from "./wire.js"
+
+/**
+ * Every scope the IdP advertises in `scopes_supported`. Typed rather than
+ * `string[]` so a typo (`"offline-access"`) is a compile error instead of a
+ * redirect the IdP rejects at runtime. Widen this when the IdP grows a scope.
+ */
+export const SUPPORTED_SCOPES = ["openid", "profile", "email", "offline_access"] as const
+
+export type IdpScope = (typeof SUPPORTED_SCOPES)[number]
+
+/** What `authorizationUrl` asks for when a caller says nothing. */
+export const DEFAULT_SCOPES: readonly IdpScope[] = SUPPORTED_SCOPES
 
 export type IdpClientOptions = {
   /**
@@ -21,46 +37,9 @@ export type IdpClientOptions = {
   clientId: string
   clientSecret: string
   /** Default scopes for `authorizationUrl`. `offline_access` buys refresh tokens. */
-  scopes?: string[]
+  scopes?: readonly IdpScope[]
   /** Override `fetch` — tests, instrumentation, a Worker's bound fetcher. */
   fetch?: typeof fetch
-}
-
-/** The subset of the discovery document we use, plus the fields we may. */
-export type Discovery = {
-  issuer: string
-  authorization_endpoint: string
-  token_endpoint: string
-  userinfo_endpoint: string
-  end_session_endpoint?: string
-  jwks_uri?: string
-  /**
-   * Per-app session ceiling, in seconds. Not standard OIDC — an IdP extension
-   * the SDK clamps `session.expiresIn` against when present.
-   */
-  session_max_age?: number
-}
-
-/** Token-endpoint output, camelCased so app code never sees the wire shape. */
-export type Tokens = {
-  accessToken: string
-  tokenType: string
-  /** Seconds until the access token expires, when the IdP says. */
-  expiresIn: number | null
-  refreshToken: string | null
-  idToken: string | null
-  scope: string | null
-}
-
-export class IdpError extends Error {
-  readonly status: number
-  readonly body: unknown
-  constructor(message: string, status: number, body?: unknown) {
-    super(message)
-    this.name = "IdpError"
-    this.status = status
-    this.body = body
-  }
 }
 
 export type AuthorizationUrlInput = {
@@ -68,7 +47,7 @@ export type AuthorizationUrlInput = {
   state: string
   /** The S256 challenge. PKCE is not optional — see `createPkce`. */
   codeChallenge: string
-  scopes?: string[]
+  scopes?: readonly IdpScope[]
   /** `login` to force re-authentication, `none` for a silent check. */
   prompt?: string
   loginHint?: string
@@ -107,7 +86,7 @@ export function createIdpClient(options: IdpClientOptions) {
           await text(response),
         )
       }
-      return (await response.json()) as Discovery
+      return parseWire(DiscoverySchema, await response.json().catch(() => null), "discovery")
     })()
     return cached
   }
@@ -121,18 +100,11 @@ export function createIdpClient(options: IdpClientOptions) {
       headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
       body,
     })
-    const json = (await response.json().catch(() => null)) as Record<string, unknown> | null
+    const json = await response.json().catch(() => null)
     if (!response.ok || !json) {
       throw new IdpError(`${what} failed (${response.status})`, response.status, json)
     }
-    return {
-      accessToken: String(json.access_token ?? ""),
-      tokenType: String(json.token_type ?? "Bearer"),
-      expiresIn: typeof json.expires_in === "number" ? json.expires_in : null,
-      refreshToken: typeof json.refresh_token === "string" ? json.refresh_token : null,
-      idToken: typeof json.id_token === "string" ? json.id_token : null,
-      scope: typeof json.scope === "string" ? json.scope : null,
-    }
+    return parseWire(TokensSchema, json, what)
   }
 
   return {
@@ -192,7 +164,7 @@ export function createIdpClient(options: IdpClientOptions) {
           await text(response),
         )
       }
-      return normalizeClaims((await response.json()) as Record<string, unknown>)
+      return normalizeClaims(await response.json().catch(() => null))
     },
 
     /**

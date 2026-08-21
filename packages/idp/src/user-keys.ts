@@ -23,27 +23,27 @@
  * own table.
  */
 
-import type { paths } from "./generated/idp-api.js"
+import type { z } from "zod"
+
 import { createManagementApi, type ManagementApiOptions } from "./api.js"
 import { sha256Base64url } from "./crypto.js"
+import type {
+  CreateUserApiKeyInput,
+  UserApiKeyCreatedSchema,
+  UserApiKeySchema,
+  UserApiKeyValidationSchema,
+} from "./schemas/index.js"
 
-type ListOk =
-  paths["/api/v1/apps/{app}/user-keys"]["get"]["responses"][200]["content"]["application/json"]
-type CreateBody =
-  paths["/api/v1/apps/{app}/user-keys"]["post"]["requestBody"]["content"]["application/json"]
-type CreateOk =
-  paths["/api/v1/apps/{app}/user-keys"]["post"]["responses"][201]["content"]["application/json"]
-type ValidateOk =
-  paths["/api/v1/apps/{app}/user-keys/validate"]["post"]["responses"][200]["content"]["application/json"]
+type CreateBody = z.input<typeof CreateUserApiKeyInput>
 
 /** One key as the IdP reports it. Never includes the token or its hash. */
-export type UserApiKey = ListOk["keys"][number]
+export type UserApiKey = z.output<typeof UserApiKeySchema>
 
 /** What `create` hands back. `token` is the only time the plaintext exists. */
-export type MintedUserApiKey = CreateOk
+export type MintedUserApiKey = z.output<typeof UserApiKeyCreatedSchema>
 
 /** A validation verdict. A miss is data, not an error — hence `valid: false`. */
-export type UserKeyValidation = ValidateOk
+export type UserKeyValidation = z.output<typeof UserApiKeyValidationSchema>
 
 /** The `valid: true` half, i.e. an authenticated key. */
 export type AuthenticatedKey = Extract<UserKeyValidation, { valid: true }>

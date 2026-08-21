@@ -1,3 +1,15 @@
+/**
+ * The wire shapes of the IdP management API (`/api/v1/*`), as zod schemas.
+ *
+ * One definition, three consumers: `apps/idp` validates incoming requests with
+ * them, `scripts/generate-openapi.mjs` turns them into the OpenAPI document,
+ * and the SDK's `api.ts` parses responses against them. Types are `z.infer`,
+ * so there is no generated `.d.ts` to drift out of sync.
+ *
+ * The OIDC endpoints are NOT here — those are standards-defined and live in
+ * `../wire.ts`, next to the code that talks to them.
+ */
+
 import { z } from "zod"
 
 export const ApplicationSchema = z.object({
