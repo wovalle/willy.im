@@ -37,6 +37,10 @@ export default [
   route("api/v1/admin-keys", "routes/api/admin-keys.ts"),
   route("api/v1/admin-keys/:id", "routes/api/admin-keys.$id.ts"),
   route("api/v1/users", "routes/api/users.ts"),
+  // Linked identities — a user's ids on other systems (Slack, WhatsApp…).
+  // Linking is superadmin-only; resolving is app-scoped, below.
+  route("api/v1/users/:userId/identities", "routes/api/users.$userId.identities.ts"),
+  route("api/v1/users/:userId/identities/:id", "routes/api/users.$userId.identities.$id.ts"),
   route("api/v1/workspaces", "routes/api/workspaces.ts"),
   // Per-app writes/reads (scoped-key authenticated, permission-checked):
   route("api/v1/apps/:app/members", "routes/api/apps.$app.members.ts"),
@@ -51,6 +55,11 @@ export default [
   route("api/v1/apps/:app/user-keys", "routes/api/apps.$app.user-keys.ts"),
   route("api/v1/apps/:app/user-keys/validate", "routes/api/apps.$app.user-keys.validate.ts"),
   route("api/v1/apps/:app/user-keys/:id", "routes/api/apps.$app.user-keys.$id.ts"),
+  // "Who is <slack id>, and what may they do in this app?" (identity:resolve)
+  route(
+    "api/v1/apps/:app/identities/:provider/:externalId",
+    "routes/api/apps.$app.identities.$provider.$externalId.ts",
+  ),
   route("api/openapi.json", "routes/api/openapi.ts"),
   route("api/docs", "routes/api/docs.tsx"),
 ] satisfies RouteConfig

@@ -28,6 +28,10 @@ const PERMISSIONS = [
   "userkey:create",
   "userkey:revoke",
   "userkey:validate",
+  // Linked identities: "who is <slack id> and what may they do in this app?"
+  // Resolve only — linking is superadmin-only and has no app permission on
+  // purpose (see db/schema.ts, linkedIdentity).
+  "identity:resolve",
   "audit:read",
   "user:impersonate",
 ] as const

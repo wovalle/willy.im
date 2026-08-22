@@ -36,6 +36,10 @@ import {
   UserApiKeyCreatedSchema,
   UserApiKeyListSchema,
   UserApiKeyValidationSchema,
+  LinkedIdentityListSchema,
+  LinkIdentityInput,
+  LinkedIdentityCreatedSchema,
+  IdentityResolutionSchema,
   UserListSchema,
   ValidateUserApiKeyInput,
   WorkspaceCreatedSchema,
@@ -264,6 +268,40 @@ export const operations = {
     params: APP_PARAM,
     successCode: "200",
     success: OkSchema,
+  },
+
+  "get /api/v1/users/{userId}/identities": {
+    summary: "List a user's linked identities (their ids on other systems)",
+    description:
+      "Requires an admin key. Identities are global to the user, not per app — a Slack id identifies a person regardless of who is asking.",
+    params: { userId: "IdP user id." },
+    successCode: "200",
+    success: LinkedIdentityListSchema,
+  },
+  "post /api/v1/users/{userId}/identities": {
+    summary: "Link an external id to a user",
+    description:
+      "Requires an admin key: a link asserts identity with nothing to prove it, so no app or member may do it. 201 on a new link, 200 when the same pair was already this user's, 409 `already_linked` when it belongs to someone else — an identity is never silently re-pointed.",
+    params: { userId: "IdP user id." },
+    input: LinkIdentityInput,
+    successCode: "201",
+    success: LinkedIdentityCreatedSchema,
+  },
+  "delete /api/v1/users/{userId}/identities/{id}": {
+    summary: "Unlink an external id (idempotent)",
+    description: "Requires an admin key.",
+    params: { userId: "IdP user id.", id: "Linked identity id." },
+    successCode: "200",
+    success: OkSchema,
+  },
+  "get /api/v1/apps/{app}/identities/{provider}/{externalId}": {
+    summary: "Resolve an external id to a user and their permissions in this app",
+    description:
+      "The hot path for an app that hears from someone on another system. Always 200 with a `found` discriminator — a miss is data, and the common case in any shared channel. `permissions` are the user's product permissions for THIS app, computed exactly as the claims hook computes them at token mint, so a Slack message and a browser session from the same person carry the same grants. A user with no membership resolves as found with no permissions.",
+    permission: "identity:resolve",
+    params: { ...APP_PARAM, provider: "The other system, e.g. slack.", externalId: "The id as that system spells it." },
+    successCode: "200",
+    success: IdentityResolutionSchema,
   },
 
   "get /api/v1/apps/{app}/audit": {

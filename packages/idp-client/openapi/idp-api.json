@@ -2326,6 +2326,360 @@
         }
       }
     },
+    "/api/v1/users/{userId}/identities": {
+      "get": {
+        "summary": "List a user's linked identities (their ids on other systems)",
+        "description": "Requires an admin key. Identities are global to the user, not per app — a Slack id identifies a person regardless of who is asking.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "IdP user id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "identities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string",
+                            "description": "The other system, lowercase — slack, whatsapp, telegram"
+                          },
+                          "externalId": {
+                            "type": "string",
+                            "description": "The id exactly as that system spells it"
+                          },
+                          "label": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "userId",
+                          "provider",
+                          "externalId",
+                          "label",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "identities"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          }
+        }
+      },
+      "post": {
+        "summary": "Link an external id to a user",
+        "description": "Requires an admin key: a link asserts identity with nothing to prove it, so no app or member may do it. 201 on a new link, 200 when the same pair was already this user's, 409 `already_linked` when it belongs to someone else — an identity is never silently re-pointed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "IdP user id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "slack, whatsapp, telegram… — normalised to lowercase"
+                  },
+                  "externalId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The id as that system spells it, e.g. a Slack member id"
+                  },
+                  "label": {
+                    "description": "A human label for the console",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "provider",
+                  "externalId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "created": {
+                      "type": "boolean",
+                      "description": "false when the same pair was already this user's"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "created"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          },
+          "422": {
+            "description": "Body failed validation"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{userId}/identities/{id}": {
+      "delete": {
+        "summary": "Unlink an external id (idempotent)",
+        "description": "Requires an admin key.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "IdP user id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Linked identity id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app}/identities/{provider}/{externalId}": {
+      "get": {
+        "summary": "Resolve an external id to a user and their permissions in this app",
+        "description": "The hot path for an app that hears from someone on another system. Always 200 with a `found` discriminator — a miss is data, and the common case in any shared channel. `permissions` are the user's product permissions for THIS app, computed exactly as the claims hook computes them at token mint, so a Slack message and a browser session from the same person carry the same grants. A user with no membership resolves as found with no permissions.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "description": "Application key (oauth_client.metadata.app).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "description": "The other system, e.g. slack.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "externalId",
+            "in": "path",
+            "required": true,
+            "description": "The id as that system spells it.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "found": {
+                          "type": "boolean",
+                          "const": true
+                        },
+                        "userId": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "permissions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "The user's product permissions for the asking app; admins get the whole catalog"
+                        }
+                      },
+                      "required": [
+                        "found",
+                        "userId",
+                        "email",
+                        "name",
+                        "permissions"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "found": {
+                          "type": "boolean",
+                          "const": false
+                        }
+                      },
+                      "required": [
+                        "found"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          }
+        }
+      }
+    },
     "/api/v1/apps/{app}/audit": {
       "get": {
         "summary": "List recent audit entries",

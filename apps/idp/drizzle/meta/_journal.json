@@ -15,6 +15,13 @@
       "when": 1787327807450,
       "tag": "0001_smart_deadpool",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787433491598,
+      "tag": "0002_certain_vampiro",
+      "breakpoints": true
     }
   ]
 }
