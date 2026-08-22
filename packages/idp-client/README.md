@@ -323,6 +323,55 @@ ingest token, say — identifies a site rather than a user, cannot be kept secre
 and must not pay a round trip per hit. Keep those in the app's own table and
 gate them on `Origin` plus rate limiting.
 
+## Linked identities
+
+A user's ids on *other* systems — their Slack member id, their WhatsApp number,
+a Telegram id — pinned to their IdP user. The point is that an app hearing from
+someone on Slack asks the IdP "who is this, and what may they do here?" and gets
+the same answer a browser session for that person would carry. The app keeps no
+table of Slack ids: the one it would write is exactly the allowlist the IdP
+exists to replace.
+
+Linking is **superadmin-only** — a link asserts identity with nothing to prove
+it, so no app and no member may do it:
+
+```sh
+curl -X POST https://idp.willy.im/api/v1/users/<userId>/identities \
+  -H "authorization: Bearer wim_<admin key>" -H "content-type: application/json" \
+  -d '{"provider":"slack","externalId":"U0AAE7LAATD","label":"house workspace"}'
+```
+
+Resolving is app-scoped and needs `identity:resolve` on the app's own key:
+
+```ts
+import { createIdentities, grants } from "@willyim/idp"
+
+const identities = createIdentities({
+  baseUrl: "https://idp.willy.im",
+  token: env.IDP_MANAGEMENT_KEY, // the app's wim_… key, with identity:resolve
+  app: "bender",
+})
+
+// On every inbound Slack message:
+const who = await identities.resolve("slack", event.user)
+if (!who.found) return                               // store it, do not answer
+if (!grants(who.permissions, "chat:respond")) return // they exist, this app never granted them
+who.userId // the IdP user — the same id a session or a wak_ key would carry
+```
+
+`permissions` are the user's product permissions for **the asking app**,
+computed by the same code the claims hook runs at token mint: an admin member
+gets the whole catalog, a plain member gets their grants, a linked user with no
+membership resolves as `found: true` with none. `found: false` is a miss, not an
+error, and is the common case in any shared channel.
+
+Verdicts are cached by `(provider, externalId)` — 60s for a hit and for a miss,
+both tunable via `cache` — and concurrent lookups of the same pair share one
+round trip. A failed round trip is never cached. The miss TTL bounds how fast a
+*new* link takes effect; call `forget(provider, externalId)` after one you made
+yourself. The provider is case-insensitive; the id is exact, as the other
+system spells it.
+
 ## Management API types
 
 Endpoints without sugar of their own go through `createManagementApi`, whose

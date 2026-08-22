@@ -76,6 +76,15 @@ export {
   type UserKeyValidation,
 } from "./user-keys.js"
 
+export {
+  createIdentities,
+  type Identities,
+  type IdentitiesOptions,
+  type IdentityCacheOptions,
+  type ResolvedIdentity,
+  type IdentityResolution,
+} from "./identities.js"
+
 export { parseDuration, type Duration } from "./duration.js"
 export {
   clearCookie,

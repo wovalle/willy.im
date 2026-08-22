@@ -172,6 +172,41 @@ export const UserApiKeyValidationSchema = z.union([
   z.object({ valid: z.literal(false), reason: z.enum(["not_found", "revoked", "expired"]) }),
 ])
 
+// --- Linked identities (a user's ids on other systems) ---
+
+export const LinkedIdentitySchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  provider: z.string().describe("The other system, lowercase — slack, whatsapp, telegram"),
+  externalId: z.string().describe("The id exactly as that system spells it"),
+  label: z.string().nullable(),
+  createdAt: z.string(),
+})
+export const LinkedIdentityListSchema = z.object({ identities: z.array(LinkedIdentitySchema) })
+
+export const LinkIdentityInput = z.object({
+  provider: z.string().min(1).describe("slack, whatsapp, telegram… — normalised to lowercase"),
+  externalId: z.string().min(1).describe("The id as that system spells it, e.g. a Slack member id"),
+  label: z.string().optional().describe("A human label for the console"),
+})
+export const LinkedIdentityCreatedSchema = z.object({
+  id: z.string(),
+  created: z.boolean().describe("false when the same pair was already this user's"),
+})
+
+export const IdentityResolutionSchema = z.union([
+  z.object({
+    found: z.literal(true),
+    userId: z.string(),
+    email: z.string(),
+    name: z.string().nullable(),
+    permissions: z
+      .array(z.string())
+      .describe("The user's product permissions for the asking app; admins get the whole catalog"),
+  }),
+  z.object({ found: z.literal(false) }),
+])
+
 export const AuditEntrySchema = z.object({
   id: z.number(),
   tableName: z.string(),

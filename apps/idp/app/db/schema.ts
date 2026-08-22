@@ -176,6 +176,52 @@ export const userApiKey = sqliteTable(
 export type UserApiKey = typeof userApiKey.$inferSelect
 
 /**
+ * A user's identity on some OTHER system — their Slack user id, their WhatsApp
+ * number, a Telegram id — pinned to their IdP user, so an app that hears from
+ * them on that system can ask "who is this, and what may they do here?" and
+ * get the same answer every other surface gets.
+ *
+ * Global, not per app: a Slack id identifies a person regardless of which app
+ * is asking. What IS per app is the answer to the second half of the question,
+ * which is why the resolve endpoint is app-scoped and the link endpoints are
+ * not. The (provider, external_id) pair is unique — one Slack account cannot
+ * belong to two people — but one person may hold many.
+ *
+ * Linking is a superadmin act. It asserts "this external account IS this
+ * person" with nothing to prove it, so it must never be self-serve or
+ * app-driven: an app that could link identities could grant itself anyone.
+ */
+export const linkedIdentity = sqliteTable(
+  "linked_identity",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // The system the id belongs to — "slack", "whatsapp", "telegram". Lowercase
+    // by convention; the service normalises.
+    provider: text("provider").notNull(),
+    // The id AS THAT SYSTEM SPELLS IT. A Slack member id is "U0AAE7LAATD"; a
+    // WhatsApp identity is the E.164 number. Never transformed, so a lookup
+    // from the system's own event is an exact match.
+    externalId: text("external_id").notNull(),
+    // A human label ("willy's phone"), for the console. Optional.
+    label: text("label"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("linked_identity_provider_external_uidx").on(t.provider, t.externalId),
+    index("linked_identity_user_idx").on(t.userId),
+  ],
+)
+
+export type LinkedIdentity = typeof linkedIdentity.$inferSelect
+
+/**
  * Audit trail for privileged actions (member/key/workspace/app writes,
  * impersonation). Mirrors the D1 `audit_logs` shape from @willyim/drizzle-audit
  * (so it can be swapped to that package once it's a workspace dependency — same
