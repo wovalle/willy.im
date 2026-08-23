@@ -18,6 +18,9 @@ export const ApplicationSchema = z.object({
   app: z.string().nullable().describe("Application key; consumer workspace claims are filtered by this"),
   allowSignup: z.boolean().describe("Whether unknown users may sign themselves up"),
   permissions: z.array(z.string()).describe("The app's declared product-permission catalog"),
+  resources: z
+    .array(z.string())
+    .describe("Protected resource URIs (e.g. the app's MCP server) — valid `resource` audiences for access tokens"),
   redirectUris: z.array(z.string()),
   disabled: z.boolean(),
   createdAt: z.string().describe("ISO 8601 timestamp"),
@@ -72,6 +75,10 @@ export const UpdateApplicationInput = z.object({
   name: z.string().min(1).optional(),
   redirectUris: z.array(z.string().min(1)).min(1).optional(),
   allowSignup: z.boolean().optional(),
+  resources: z
+    .array(z.string().url())
+    .optional()
+    .describe("Replace the app's protected resource URIs — absolute https, no fragment"),
 })
 
 export const ClientSecretSchema = z.object({

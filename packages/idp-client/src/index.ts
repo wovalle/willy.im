@@ -85,6 +85,14 @@ export {
   type IdentityResolution,
 } from "./identities.js"
 
+export {
+  createResourceServer,
+  type ResourceServer,
+  type ResourceServerOptions,
+  type VerifiedAccessToken,
+  type AuthResult,
+} from "./resource-server.js"
+
 export { parseDuration, type Duration } from "./duration.js"
 export {
   clearCookie,

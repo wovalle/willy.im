@@ -101,6 +101,67 @@ export async function workspaceClaimsFor(
     .where(and(eq(schema.member.userId, userId), eq(schema.organization.applicationId, app)))
 }
 
+/** The application key a token is for — carried in the access token so a resource server can say which app's grants it holds. */
+export const APP_CLAIM = "https://willy.im/app"
+
+/**
+ * Which application owns `resource` — the app whose metadata lists that URI.
+ * Null when nobody does, which the token endpoint has already refused by then
+ * (validAudiences), so this is a lookup, not a gate. Exact match, because an
+ * audience is compared exactly on the other side.
+ */
+export async function appForResource(
+  db: BaseServiceContext["db"],
+  resource: string,
+): Promise<{ app: string; catalog: string[] } | null> {
+  const rows = await db.select({ metadata: schema.oauthClient.metadata }).from(schema.oauthClient)
+  for (const row of rows) {
+    const meta = parseAppMetadata(row.metadata)
+    if (meta.app && meta.resources.includes(resource)) {
+      return { app: meta.app, catalog: meta.permissions }
+    }
+  }
+  return null
+}
+
+/** Every resource URI any application declares — the token endpoint's valid audiences. */
+export async function allResources(db: BaseServiceContext["db"]): Promise<string[]> {
+  const rows = await db.select({ metadata: schema.oauthClient.metadata }).from(schema.oauthClient)
+  return [...new Set(rows.flatMap((row) => parseAppMetadata(row.metadata).resources))]
+}
+
+/**
+ * The claims on an ACCESS token. An access token is what a resource server
+ * (an MCP server, an API) reads, so unlike the id_token it carries the
+ * permissions for the app that owns the requested `resource`, not for the
+ * OAuth client that asked. That distinction is the whole point: Claude is one
+ * client registered once, and the same access token flow hands it bender's
+ * grants when it asks for bender's resource and another app's when it asks
+ * for theirs. Without a resource we fall back to the client's own app, which
+ * is the pre-MCP behaviour for first-party clients.
+ */
+export async function accessTokenClaimsFor(
+  db: BaseServiceContext["db"],
+  userId: string,
+  resource: string | string[] | undefined,
+  metadata: unknown,
+): Promise<Record<string, unknown>> {
+  const requested = Array.isArray(resource) ? resource[0] : resource
+  const owner = requested ? await appForResource(db, requested) : null
+  const meta = parseAppMetadata(metadata)
+  const app = owner?.app ?? meta.app ?? undefined
+  const catalog = owner?.catalog ?? meta.permissions
+  const [permissions, act] = await Promise.all([
+    productPermissionsFor(db, userId, app, catalog),
+    actClaimFor(db, userId),
+  ])
+  return {
+    ...(app ? { [APP_CLAIM]: app } : {}),
+    ...(permissions.length ? { [PERMISSIONS_CLAIM]: permissions } : {}),
+    ...(act ? { act } : {}),
+  }
+}
+
 /**
  * The custom claim set we attach for one app: workspaces + product permissions
  * + the `act` impersonation marker. Shared by the id_token and userinfo hooks
