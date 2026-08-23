@@ -14,6 +14,14 @@ export const appConfigSchema = z.object({
   allow_signup: z.boolean().default(false),
   // The app's declared product-permission catalog (unique, non-empty strings).
   permissions: z.array(z.string().min(1)).default([]).transform(dedupe),
+  // The app's protected RESOURCES, as absolute URIs — e.g. its MCP server,
+  // `https://bender.romo.fyi/mcp`. An OAuth client (say, Claude) that asks for
+  // a token with `resource=<one of these>` (RFC 8707) gets a JWT whose `aud`
+  // is that URI and whose permissions claim is the user's grants for THIS app
+  // (claims.server.ts). That is what lets any app expose itself over MCP by
+  // registering here and nothing else: the resource server just verifies the
+  // JWT against our JWKS and reads the claim.
+  resources: z.array(z.string().url()).default([]).transform(dedupe),
 })
 export type AppConfig = z.infer<typeof appConfigSchema>
 
@@ -43,6 +51,6 @@ export function parseAppMetadata(raw: unknown): AppMetadata {
   const obj = (unwrapped && typeof unwrapped === "object" ? (unwrapped as Record<string, unknown>) : {}) ?? {}
   const app = typeof obj.app === "string" ? obj.app : null
   const parsed = appConfigSchema.safeParse(obj)
-  const config = parsed.success ? parsed.data : { allow_signup: false, permissions: [] }
+  const config = parsed.success ? parsed.data : { allow_signup: false, permissions: [], resources: [] }
   return { app, ...config }
 }

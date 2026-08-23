@@ -24,6 +24,8 @@ export type ApplicationSummary = {
   app: string | null
   allowSignup: boolean
   permissions: string[]
+  /** Protected resource URIs (e.g. the app's MCP server) — valid `resource` audiences. */
+  resources: string[]
   redirectUris: string[]
   disabled: boolean
   createdAt: Date
@@ -50,6 +52,7 @@ export async function listApplications(ctx: BaseServiceContext): Promise<Applica
       app: meta.app,
       allowSignup: meta.allow_signup,
       permissions: meta.permissions,
+      resources: meta.resources,
       redirectUris: coerceUriList(r.redirectUris),
       disabled: !!r.disabled,
       createdAt: r.createdAt ?? new Date(0),
@@ -105,7 +108,7 @@ export async function updateApplicationMetadata(
   await assertCan(caller, app, "app:update")
   await ctx.db
     .update(schema.oauthClient)
-    .set({ metadata: { app: app || null, allow_signup: config.allow_signup, permissions: config.permissions } })
+    .set({ metadata: { app: app || null, allow_signup: config.allow_signup, permissions: config.permissions, resources: config.resources } })
     .where(eq(schema.oauthClient.clientId, clientId))
   await recordAudit(ctx, {
     actor: caller.actor,
@@ -138,7 +141,7 @@ export async function updateApplicationPermissions(
   const next = [...new Set(permissions.map((p) => p.trim()).filter(Boolean))]
   await ctx.db
     .update(schema.oauthClient)
-    .set({ metadata: { app: meta.app, allow_signup: meta.allow_signup, permissions: next } })
+    .set({ metadata: { app: meta.app, allow_signup: meta.allow_signup, permissions: next, resources: meta.resources } })
     .where(eq(schema.oauthClient.clientId, clientId))
   await recordAudit(ctx, {
     actor: caller.actor,
@@ -374,8 +377,12 @@ export async function updateApplication(
   ctx: BaseServiceContext,
   caller: Caller,
   clientId: string,
-  patch: { name?: string; redirectUris?: string[]; allowSignup?: boolean },
-): Promise<ApplicationSummary | { error: "invalid_redirect_uri"; detail: string } | null> {
+  patch: { name?: string; redirectUris?: string[]; allowSignup?: boolean; resources?: string[] },
+): Promise<
+  | ApplicationSummary
+  | { error: "invalid_redirect_uri" | "invalid_resource"; detail: string }
+  | null
+> {
   const current = await getApplication(ctx, clientId)
   if (!current) return null
   await assertCan(caller, current.app ?? "", "app:update")
@@ -384,18 +391,33 @@ export async function updateApplication(
     const invalid = firstInvalidRedirectUri(patch.redirectUris)
     if (invalid) return { error: "invalid_redirect_uri", detail: invalid }
   }
+  // A resource is an audience a token will be minted FOR, so it has to be an
+  // absolute https URI with no fragment (RFC 8707 §2) — anything looser and a
+  // token could be minted for a string no resource server will ever match.
+  const resources = patch.resources?.map((r) => r.trim()).filter(Boolean)
+  if (resources) {
+    for (const r of resources) {
+      let parsed: URL | null = null
+      try { parsed = new URL(r) } catch { /* handled below */ }
+      if (!parsed || parsed.protocol !== "https:" || parsed.hash) {
+        return { error: "invalid_resource", detail: r }
+      }
+    }
+  }
+  const metadataChanged = patch.allowSignup !== undefined || resources !== undefined
 
   await ctx.db
     .update(schema.oauthClient)
     .set({
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.redirectUris !== undefined ? { redirectUris: patch.redirectUris } : {}),
-      ...(patch.allowSignup !== undefined
+      ...(metadataChanged
         ? {
             metadata: {
               app: current.app,
-              allow_signup: patch.allowSignup,
+              allow_signup: patch.allowSignup ?? current.allowSignup,
               permissions: current.permissions,
+              resources: resources ?? current.resources,
             },
           }
         : {}),

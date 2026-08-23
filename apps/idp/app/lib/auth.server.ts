@@ -11,7 +11,7 @@ import { oauthProvider } from "@better-auth/oauth-provider"
 import { Resend } from "resend"
 
 import * as schema from "../db/schema"
-import { customClaimsFor } from "./claims.server"
+import { accessTokenClaimsFor, customClaimsFor } from "./claims.server"
 import { hashClientSecret } from "./client-secret.server"
 import { claimInvitationsForUser } from "./members.server"
 import type { BaseServiceContext } from "./services"
@@ -48,7 +48,19 @@ function renderOtpEmail(baseUrl: string, email: string, otp: string) {
  * store are shared, so an account works on every domain; sessions and passkeys
  * are per-domain by design (no cross-domain SSO).
  */
-export function createAuthService(context: BaseServiceContext, requestUrl?: string) {
+export function createAuthService(
+  context: BaseServiceContext,
+  requestUrl?: string,
+  options: {
+    /**
+     * Every resource URI any application declares (claims.server allResources),
+     * loaded by the worker before this is built. The token endpoint refuses a
+     * `resource` outside this list, so an access token can only ever be minted
+     * for an audience some registered app actually is.
+     */
+    audiences?: string[]
+  } = {},
+) {
   const env = context.getAppEnv()
   const isProd = env.APP_ENV === "production"
   const canonical = new URL(env.BETTER_AUTH_URL)
@@ -212,6 +224,20 @@ export function createAuthService(context: BaseServiceContext, requestUrl?: stri
         // Each OAuth client is tagged with metadata.app (its application key).
         // We surface only that application's workspaces + roles as a claim.
         customIdTokenClaims: ({ user, metadata }) => customClaimsFor(context.db, user.id, metadata),
+        // ── MCP / resource servers ──────────────────────────────────────────
+        // An MCP client (Claude, Claude Code, …) discovers this server from the
+        // resource's protected-resource metadata, registers itself (RFC 7591,
+        // anonymously — it is a public client with PKCE), and asks for a token
+        // with `resource=<the MCP url>` (RFC 8707). The plugin then mints a JWT
+        // access token with that audience, and the claims below stamp the
+        // user's permissions FOR THE APP THAT OWNS THE RESOURCE on it — so the
+        // resource server verifies one signature and reads one claim.
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+        clientRegistrationDefaultScopes: ["openid", "profile", "email", "offline_access"],
+        validAudiences: [url.origin + "/auth", ...(options.audiences ?? [])],
+        customAccessTokenClaims: ({ user, resource, metadata }) =>
+          user ? accessTokenClaimsFor(context.db, user.id, resource, metadata) : {},
         // Same claims on /userinfo, so apps that refresh server-side (or skip
         // id_token parsing) still see workspaces/permissions and — crucially —
         // a LIVE `act` claim while an admin is impersonating the user, letting
