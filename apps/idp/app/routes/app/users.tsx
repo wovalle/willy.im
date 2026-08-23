@@ -1,3 +1,5 @@
+import { Link } from "react-router"
+
 import type { Route } from "./+types/users"
 import { listUsers } from "~/lib/admin.server"
 import { requireConsoleCaller } from "~/lib/caller.server"
@@ -38,7 +40,16 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
         ) : (
           users.map((u) => (
             <TableRow key={u.id}>
-              <TableCell>{u.email}</TableCell>
+              <TableCell>
+                {/* The email is the row's handle into the user's detail view, where
+                    a superadmin manages their linked identities. */}
+                <Link
+                  to={`/users/${u.id}`}
+                  className="font-medium underline-offset-4 hover:underline"
+                >
+                  {u.email}
+                </Link>
+              </TableCell>
               <TableCell>{u.name || "—"}</TableCell>
               <TableCell>
                 {u.emailVerified ? <Badge variant="secondary">verified</Badge> : "—"}

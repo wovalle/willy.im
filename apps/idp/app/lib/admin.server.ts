@@ -504,6 +504,22 @@ export async function listUsers(ctx: BaseServiceContext) {
     .orderBy(desc(schema.user.createdAt))
 }
 
+/** One user by id, or null. Backs the user detail page's header. */
+export async function getUser(ctx: BaseServiceContext, userId: string) {
+  const [row] = await ctx.db
+    .select({
+      id: schema.user.id,
+      email: schema.user.email,
+      name: schema.user.name,
+      emailVerified: schema.user.emailVerified,
+      createdAt: schema.user.createdAt,
+    })
+    .from(schema.user)
+    .where(eq(schema.user.id, userId))
+    .limit(1)
+  return row ?? null
+}
+
 export async function listWorkspaces(ctx: BaseServiceContext) {
   return ctx.db
     .select({

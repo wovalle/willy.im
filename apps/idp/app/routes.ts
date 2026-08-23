@@ -18,6 +18,7 @@ export default [
     index("routes/app/applications.tsx"),
     route("apps/:clientId", "routes/app/app-detail.tsx"),
     route("users", "routes/app/users.tsx"),
+    route("users/:userId", "routes/app/user-detail.tsx"),
     route("account", "routes/app/account.tsx"),
   ]),
 
