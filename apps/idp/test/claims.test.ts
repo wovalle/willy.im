@@ -4,6 +4,7 @@ import {
   PERMISSIONS_CLAIM,
   WORKSPACES_CLAIM,
   customClaimsFor,
+  pictureClaimFor,
 } from "../app/lib/claims.server"
 import {
   addWorkspaceMember,
@@ -135,5 +136,29 @@ describe("customClaimsFor", () => {
 
     const claims = await customClaimsFor(h.ctx.db, user.id, { allow_signup: true })
     expect(claims).toEqual({})
+  })
+})
+
+/**
+ * The `picture` claim, which is a guarantee rather than a passthrough: consumer
+ * apps are entitled to assume every user has a face.
+ */
+describe("pictureClaimFor", () => {
+  it("falls back to this issuer's blobatar, seeded on the user id", () => {
+    expect(pictureClaimFor({ id: "usr_123", image: null }, "https://idp.willy.im")).toEqual({
+      picture: "https://idp.willy.im/avatar/usr_123",
+    })
+  })
+
+  it("leaves an uploaded picture alone", () => {
+    expect(
+      pictureClaimFor({ id: "usr_123", image: "https://cdn.test/me.png" }, "https://idp.willy.im"),
+    ).toEqual({ picture: "https://cdn.test/me.png" })
+  })
+
+  it("uses the requested host, so a vanity domain's tokens stay first-party", () => {
+    expect(pictureClaimFor({ id: "usr_123" }, "https://idp.kasso.do")).toEqual({
+      picture: "https://idp.kasso.do/avatar/usr_123",
+    })
   })
 })

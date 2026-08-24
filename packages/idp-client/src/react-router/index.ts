@@ -9,6 +9,9 @@
  *   const session = await requireSession(args)
  *   const session = await requirePermission(args, "admin")
  *
+ *   // from the browser, when there's no loader to read
+ *   await fetch("/auth/me").then((r) => r.json())  // { user: PublicSession | null }
+ *
  * No react-router import: the adapter only ever produces `Response`s and
  * functions, both of which react-router already understands. That keeps the
  * subpath dependency-free too, and makes it usable from any framework whose
@@ -16,7 +19,7 @@
  */
 
 import type { Idp, Session } from "../session.js"
-import { safeNext } from "../session.js"
+import { publicSession, safeNext } from "../session.js"
 
 /** The loader/action argument shape, narrowed to what the adapter reads. */
 export type RouteArgs = {
@@ -94,6 +97,26 @@ export function createAuthRoute(getIdp: IdpResolver, options: AuthRouteOptions =
       // we just land the visitor back on the app; the IdP's SSO session simply
       // outlives the app's.
       return redirect(endSession ?? redirectTo, headers)
+    }
+
+    // The session as JSON, for the code that can't reach a loader: a client-only
+    // route, a widget mounted outside the router, a fetch from a worker. A
+    // server-rendered page should keep reading `requireSession` — this is the
+    // same data one network hop later.
+    if (action === "me") {
+      const session = await idp.getSession(args.request)
+      const headers = new Headers({
+        "content-type": "application/json",
+        // Per-user and revocable — never let a shared cache hold it.
+        "cache-control": "no-store, private",
+      })
+      if (!session) {
+        return new Response(JSON.stringify({ user: null }), { status: 401, headers })
+      }
+      // Polling this keeps a sliding session alive, same as any other request.
+      const renewed = session.renewCookie()
+      if (renewed) headers.append("set-cookie", renewed)
+      return new Response(JSON.stringify({ user: publicSession(session) }), { status: 200, headers })
     }
 
     return new Response("not found", { status: 404 })

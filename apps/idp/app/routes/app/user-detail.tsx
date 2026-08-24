@@ -9,6 +9,7 @@ import {
   listLinkedIdentities,
   unlinkIdentity,
 } from "~/lib/identities.server"
+import { Avatar } from "~/components/avatar"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -106,15 +107,18 @@ export default function UserDetail({ loaderData }: Route.ComponentProps) {
   return (
     <div className="flex flex-col gap-6">
       {/* Breadcrumb-as-title: the back link is the trail, the leaf is the h1. */}
-      <div className="flex items-baseline gap-1.5">
-        <Link
-          to="/users"
-          className="text-muted-foreground hover:text-foreground text-xl font-semibold tracking-tight no-underline transition-colors"
-        >
-          Users
-        </Link>
-        <span className="text-muted-foreground text-xl font-semibold">/</span>
-        <h1 className="text-xl font-semibold tracking-tight">{user.name || user.email}</h1>
+      <div className="flex items-center gap-2">
+        <Avatar userId={user.id} src={user.image} size={32} />
+        <div className="flex items-baseline gap-1.5">
+          <Link
+            to="/users"
+            className="text-muted-foreground hover:text-foreground text-xl font-semibold tracking-tight no-underline transition-colors"
+          >
+            Users
+          </Link>
+          <span className="text-muted-foreground text-xl font-semibold">/</span>
+          <h1 className="text-xl font-semibold tracking-tight">{user.name || user.email}</h1>
+        </div>
       </div>
 
       <Card>

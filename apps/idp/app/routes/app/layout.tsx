@@ -3,15 +3,20 @@ import { ShieldCheck, UserCog } from "lucide-react"
 
 import type { Route } from "./+types/layout"
 import { requireConsoleCaller } from "~/lib/caller.server"
+import { Avatar } from "~/components/avatar"
 import { cn } from "~/lib/utils"
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const caller = await requireConsoleCaller(request, context, context.services.auth)
   // The impersonation banner reads the session directly — it's a property of the
-  // cookie, not of the caller's authority.
+  // cookie, not of the caller's authority. The display name and picture are
+  // profile details, so they come from here too rather than from the caller.
   const session = await context.services.auth.api.getSession({ headers: request.headers })
   return {
     email: caller.email,
+    userId: caller.userId,
+    name: session?.user.name ?? null,
+    image: session?.user.image ?? null,
     isAdmin: caller.kind === "superadmin",
     // Set on impersonation sessions (Better Auth admin plugin).
     impersonating: !!session?.session.impersonatedBy,
@@ -19,7 +24,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 }
 
 export default function ConsoleLayout({ loaderData }: Route.ComponentProps) {
-  const { email, isAdmin, impersonating } = loaderData
+  const { email, userId, name, image, isAdmin, impersonating } = loaderData
   const { pathname } = useLocation()
   const navigate = useNavigate()
 
@@ -75,11 +80,14 @@ export default function ConsoleLayout({ loaderData }: Route.ComponentProps) {
           aria-current={accountActive ? "page" : undefined}
           onClick={() => navigate("/account")}
           className={cn(
-            "text-sm transition-colors",
+            "flex items-center gap-2 text-sm transition-colors",
             accountActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
         >
-          {email}
+          {userId ? <Avatar userId={userId} src={image} size={24} /> : null}
+          {/* The name is who you are; the email is only the fallback for an
+              account that hasn't set one. */}
+          <span>{name || email}</span>
         </button>
       </header>
 

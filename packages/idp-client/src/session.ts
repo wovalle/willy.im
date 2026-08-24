@@ -89,6 +89,39 @@ export type Session = {
   renewCookie(): string | null
 }
 
+/**
+ * A `Session` as JSON — the shape that is safe to hand a browser.
+ *
+ * Two deliberate omissions. The methods are gone because they don't serialize.
+ * The session *id* is gone because it is the thing the signed cookie resolves
+ * to: it never needs to be in reach of script, and a projection that leaves it
+ * out can't leak it by accident later.
+ */
+export type PublicSession = {
+  sub: string
+  email: string
+  name: string | null
+  image: string | null
+  permissions: string[]
+  workspaces: Workspace[]
+  actor: Actor | null
+  expiresAt: string
+}
+
+/** `Session` -> `PublicSession`. What `/auth/me` returns, and what an app's own `/me` should. */
+export function publicSession(session: Session): PublicSession {
+  return {
+    sub: session.sub,
+    email: session.email,
+    name: session.name,
+    image: session.image,
+    permissions: session.permissions,
+    workspaces: session.workspaces,
+    actor: session.actor,
+    expiresAt: session.expiresAt.toISOString(),
+  }
+}
+
 export type Idp = ReturnType<typeof createIdp>
 
 /**

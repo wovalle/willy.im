@@ -3,6 +3,7 @@ import { Link } from "react-router"
 import type { Route } from "./+types/users"
 import { listUsers } from "~/lib/admin.server"
 import { requireConsoleCaller } from "~/lib/caller.server"
+import { Avatar } from "~/components/avatar"
 import { Badge } from "~/components/ui/badge"
 import {
   Table,
@@ -45,8 +46,9 @@ export default function AdminUsers({ loaderData }: Route.ComponentProps) {
                     a superadmin manages their linked identities. */}
                 <Link
                   to={`/users/${u.id}`}
-                  className="font-medium underline-offset-4 hover:underline"
+                  className="flex items-center gap-2 font-medium underline-offset-4 hover:underline"
                 >
+                  <Avatar userId={u.id} src={u.image} size={24} />
                   {u.email}
                 </Link>
               </TableCell>
