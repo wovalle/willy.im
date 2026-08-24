@@ -157,8 +157,8 @@ describe("pictureClaimFor", () => {
   })
 
   it("uses the requested host, so a vanity domain's tokens stay first-party", () => {
-    expect(pictureClaimFor({ id: "usr_123" }, "https://idp.kasso.do")).toEqual({
-      picture: "https://idp.kasso.do/avatar/usr_123",
+    expect(pictureClaimFor({ id: "usr_123" }, "https://idp.app1.com")).toEqual({
+      picture: "https://idp.app1.com/avatar/usr_123",
     })
   })
 })

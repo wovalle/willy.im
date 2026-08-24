@@ -30,7 +30,7 @@ export const DEFAULT_SCOPES: readonly IdpScope[] = SUPPORTED_SCOPES
 export type IdpClientOptions = {
   /**
    * The OIDC issuer, including the basepath the IdP is mounted on:
-   * `https://idp.willy.im/auth` (or a vanity domain, `https://idp.kasso.do/auth`).
+   * `https://idp.willy.im/auth` (or a vanity domain, `https://idp.app1.com/auth`).
    * Discovery is `${issuer}/.well-known/openid-configuration`.
    */
   issuer: string

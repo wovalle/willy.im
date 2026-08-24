@@ -42,7 +42,7 @@ function renderOtpEmail(baseUrl: string, email: string, otp: string) {
 /**
  * Builds the auth service for one request. `requestUrl` makes the IdP
  * host-aware: when the request arrives on a configured vanity domain
- * (IDP_EXTRA_DOMAINS, e.g. idp.kasso.do CNAME'd here), that host becomes the
+ * (IDP_EXTRA_DOMAINS, e.g. idp.app1.com CNAME'd here), that host becomes the
  * issuer, cookie domain, and passkey RP — first-party auth per domain. Unknown
  * hosts fall back to the canonical BETTER_AUTH_URL. Signing keys and the user
  * store are shared, so an account works on every domain; sessions and passkeys
