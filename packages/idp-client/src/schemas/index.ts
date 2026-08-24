@@ -30,6 +30,9 @@ export const UserSchema = z.object({
   id: z.string(),
   email: z.string(),
   name: z.string().nullable(),
+  image: z
+    .string()
+    .describe("Avatar URL — the user's own picture, or the blobatar the IdP renders for them"),
   emailVerified: z.boolean(),
   createdAt: z.string(),
 })

@@ -8,6 +8,10 @@ export default [
   route("consent", "routes/consent.tsx"),
   route("auth/*", "routes/auth/auth.$.ts"),
 
+  // Every user's avatar, seeded on their id. Public and database-free — see the
+  // route. This is what the `picture` claim points at when nobody uploaded one.
+  route("avatar/:seed", "routes/avatar.$seed.ts"),
+
   // RFC 8414 root-level metadata (issuer path suffixed), proxied to basePath.
   route(".well-known/oauth-authorization-server/auth", "routes/well-known/oauth-as.ts"),
   route(".well-known/openid-configuration/auth", "routes/well-known/openid.ts"),

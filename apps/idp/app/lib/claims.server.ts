@@ -1,6 +1,7 @@
 import { and, eq, gt, isNotNull } from "drizzle-orm"
 
 import * as schema from "../db/schema"
+import { avatarUrl } from "./avatar"
 import { parseAppMetadata } from "./metadata"
 import type { BaseServiceContext } from "./services"
 
@@ -44,6 +45,25 @@ export async function productPermissionsFor(
   if (member.role === "admin") return catalog
   const allowed = new Set(catalog)
   return (member.productPermissions ?? []).filter((p) => allowed.has(p))
+}
+
+/**
+ * The `picture` claim, which we guarantee is always present.
+ *
+ * Better Auth emits one only for users who uploaded an image — i.e. almost
+ * nobody here, since sign-in is an email OTP or a passkey. That left every
+ * consumer app writing the same initials-fallback, so the IdP answers it once:
+ * a blobatar rendered by this issuer, seeded on the user id (see ./avatar).
+ *
+ * A claim rather than a write to `user.image`, on purpose. The column keeps
+ * meaning "a picture this user chose", and changing how we generate the rest
+ * stays a deploy instead of a migration.
+ */
+export function pictureClaimFor(
+  user: { id: string; image?: string | null },
+  origin: string,
+): { picture: string } {
+  return { picture: user.image || avatarUrl(origin, user.id) }
 }
 
 /**

@@ -11,7 +11,7 @@ import { oauthProvider } from "@better-auth/oauth-provider"
 import { Resend } from "resend"
 
 import * as schema from "../db/schema"
-import { accessTokenClaimsFor, customClaimsFor } from "./claims.server"
+import { accessTokenClaimsFor, customClaimsFor, pictureClaimFor } from "./claims.server"
 import { hashClientSecret } from "./client-secret.server"
 import { claimInvitationsForUser } from "./members.server"
 import type { BaseServiceContext } from "./services"
@@ -42,7 +42,7 @@ function renderOtpEmail(baseUrl: string, email: string, otp: string) {
 /**
  * Builds the auth service for one request. `requestUrl` makes the IdP
  * host-aware: when the request arrives on a configured vanity domain
- * (IDP_EXTRA_DOMAINS, e.g. idp.kasso.do CNAME'd here), that host becomes the
+ * (IDP_EXTRA_DOMAINS, e.g. idp.app1.com CNAME'd here), that host becomes the
  * issuer, cookie domain, and passkey RP — first-party auth per domain. Unknown
  * hosts fall back to the canonical BETTER_AUTH_URL. Signing keys and the user
  * store are shared, so an account works on every domain; sessions and passkeys
@@ -223,7 +223,11 @@ export function createAuthService(
         silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
         // Each OAuth client is tagged with metadata.app (its application key).
         // We surface only that application's workspaces + roles as a claim.
-        customIdTokenClaims: ({ user, metadata }) => customClaimsFor(context.db, user.id, metadata),
+        customIdTokenClaims: async ({ user, metadata }) => ({
+          // Guaranteed, so no consumer needs an avatar fallback of its own.
+          ...pictureClaimFor(user, url.origin),
+          ...(await customClaimsFor(context.db, user.id, metadata)),
+        }),
         // ── MCP / resource servers ──────────────────────────────────────────
         // An MCP client (Claude, Claude Code, …) discovers this server from the
         // resource's protected-resource metadata, registers itself (RFC 7591,
@@ -244,24 +248,26 @@ export function createAuthService(
         // them tag audit logs per-request. The hook has no client metadata, so
         // resolve the client from the access token's client_id/azp/aud.
         customUserInfoClaims: async ({ user, jwt }) => {
+          // Independent of the client — every early return below still carries it.
+          const picture = pictureClaimFor(user, url.origin)
           const raw = jwt.client_id ?? jwt.azp ?? jwt.aud
           const clientId = Array.isArray(raw) ? raw[0] : raw
-          if (typeof clientId !== "string" || !clientId) return {}
+          if (typeof clientId !== "string" || !clientId) return picture
           const [client] = await context.db
             .select({ metadata: schema.oauthClient.metadata })
             .from(schema.oauthClient)
             .where(eq(schema.oauthClient.clientId, clientId))
             .limit(1)
-          if (!client) return {}
+          if (!client) return picture
           let metadata: unknown = client.metadata
           if (typeof metadata === "string") {
             try {
               metadata = JSON.parse(metadata)
             } catch {
-              return {}
+              return picture
             }
           }
-          return customClaimsFor(context.db, user.id, metadata)
+          return { ...picture, ...(await customClaimsFor(context.db, user.id, metadata)) }
         },
       }),
       // Impersonation. Only users with the `admin` role (= superadmin allowlist,

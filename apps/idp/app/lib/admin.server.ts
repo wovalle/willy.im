@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm"
 import * as schema from "../db/schema"
 import { recordAudit } from "./audit.server"
 import type { AuthService } from "./auth.server"
+import { avatarUrl } from "./avatar"
 import { assertCan, type Caller } from "./caller.server"
 import {
   generateClientId,
@@ -497,6 +498,10 @@ export async function listUsers(ctx: BaseServiceContext) {
       id: schema.user.id,
       email: schema.user.email,
       name: schema.user.name,
+      // Null for anyone who never uploaded one, which is most people. Callers
+      // fall back to the avatar route — `resolveAvatars` below does it for the
+      // API, and console markup does it inline.
+      image: schema.user.image,
       emailVerified: schema.user.emailVerified,
       createdAt: schema.user.createdAt,
     })
@@ -511,6 +516,7 @@ export async function getUser(ctx: BaseServiceContext, userId: string) {
       id: schema.user.id,
       email: schema.user.email,
       name: schema.user.name,
+      image: schema.user.image,
       emailVerified: schema.user.emailVerified,
       createdAt: schema.user.createdAt,
     })
@@ -518,6 +524,18 @@ export async function getUser(ctx: BaseServiceContext, userId: string) {
     .where(eq(schema.user.id, userId))
     .limit(1)
   return row ?? null
+}
+
+/**
+ * Fills in `image` the way the `picture` claim does, so an API consumer gets an
+ * avatar it can render without knowing this IdP has an avatar route at all.
+ * Absolute, because the reader is on another origin.
+ */
+export function resolveAvatars<T extends { id: string; image: string | null }>(
+  users: T[],
+  origin: string,
+): (T & { image: string })[] {
+  return users.map((u) => ({ ...u, image: u.image || avatarUrl(origin, u.id) }))
 }
 
 export async function listWorkspaces(ctx: BaseServiceContext) {

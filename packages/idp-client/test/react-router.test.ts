@@ -100,6 +100,37 @@ describe("createAuthRoute", () => {
     const h = createHarness()
     expect((await routeFor(h)("/auth/whatever")).status).toBe(404)
   })
+
+  it("/auth/me hands the browser the session — and nothing it shouldn't have", async () => {
+    const h = createHarness({ idp: { claims: { picture: "https://idp.test/avatar/user_1" } } })
+    const session = await h.login()
+
+    const response = await routeFor(h)("/auth/me")
+    expect(response.status).toBe(200)
+    expect(response.headers.get("cache-control")).toBe("no-store, private")
+
+    const { user } = (await response.json()) as { user: Record<string, unknown> }
+    expect(user).toMatchObject({
+      sub: session.sub,
+      email: session.email,
+      name: "Willy",
+      image: "https://idp.test/avatar/user_1",
+      permissions: session.permissions,
+      expiresAt: session.expiresAt.toISOString(),
+    })
+    // The session id is the thing the signed cookie resolves to; script never needs it.
+    expect(user).not.toHaveProperty("id")
+    expect(user).not.toHaveProperty("can")
+    expect(user).not.toHaveProperty("renewCookie")
+  })
+
+  it("/auth/me is a 401 with an explicit null for a logged-out visitor", async () => {
+    const h = createHarness()
+    const response = await routeFor(h)("/auth/me")
+
+    expect(response.status).toBe(401)
+    expect(await response.json()).toEqual({ user: null })
+  })
 })
 
 describe("guards", () => {

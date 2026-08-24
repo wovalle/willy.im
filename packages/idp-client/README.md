@@ -82,7 +82,8 @@ return requestHandler(request, {
 })
 ```
 
-**`app/routes/auth.$.tsx`** — serves `/auth/login`, `/auth/callback`, `/auth/logout`:
+**`app/routes/auth.$.tsx`** — serves `/auth/login`, `/auth/callback`, `/auth/logout`
+and `/auth/me`:
 
 ```ts
 import { createAuthRoute } from "@willyim/idp/react-router"
@@ -109,6 +110,17 @@ export async function loader(args: Route.LoaderArgs) {
   const admin = await requirePermission(args, "admin") // 403 without it
 }
 ```
+
+For code that can't reach a loader — a client-only route, a widget mounted
+outside the router, a fetch from a worker — the same route answers `/auth/me`:
+
+```ts
+const { user } = await fetch("/auth/me").then((r) => r.json())
+// 200 { user: PublicSession }  ·  401 { user: null }
+```
+
+A server-rendered page should keep using `requireSession`: `/auth/me` is the
+same data, one network hop later.
 
 ## Env
 
@@ -204,6 +216,18 @@ type Session = {
 ```
 
 `can()` matches exactly, and honours `resource:*` and `*` grants.
+
+`image` is effectively always set against the willy.im IdP: it renders a
+deterministic [blobatar](https://blobatar.dev) for anyone who never uploaded a
+picture, so `<img src={session.image} />` needs no fallback of its own. The type
+stays nullable for other issuers. Show `session.name || session.email` — a name
+is a person, an email is a login.
+
+### `publicSession(session)`
+
+`Session` as JSON, without the methods and without the session id — the shape
+that is safe to hand a browser. This is what `/auth/me` (below) returns, and
+what your own `/me` should.
 
 ### `createIdpClient(options)` — the OIDC relying party on its own
 

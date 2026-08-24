@@ -1434,7 +1434,7 @@ function CreateApiKeyForm({
           <Input
             id="key-name"
             name="name"
-            placeholder="kasso ingestion agent"
+            placeholder="app1 ingestion agent"
             required
             aria-invalid={!!error}
             disabled={busy || disabled}

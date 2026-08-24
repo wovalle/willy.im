@@ -5,6 +5,7 @@ import { Fingerprint, Loader2, Plus, Trash2 } from "lucide-react"
 import type { Route } from "./+types/account"
 import { requireConsoleCaller } from "~/lib/caller.server"
 import { authClient } from "~/lib/auth-client"
+import { Avatar } from "~/components/avatar"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
@@ -25,7 +26,15 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   // Display name is a profile detail, not an authorization fact, so it comes
   // from the session rather than the caller.
   const session = await context.services.auth.api.getSession({ headers: request.headers })
-  return { user: { name: session?.user.name ?? null, email: caller.email }, passkeys }
+  return {
+    user: {
+      id: caller.userId,
+      name: session?.user.name ?? null,
+      image: session?.user.image ?? null,
+      email: caller.email,
+    },
+    passkeys,
+  }
 }
 
 export default function Account({ loaderData }: Route.ComponentProps) {
@@ -79,9 +88,12 @@ export default function Account({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{user.name || user.email}</h1>
-        <p className="text-muted-foreground text-sm">{user.email}</p>
+      <div className="flex items-center gap-3">
+        {user.id ? <Avatar userId={user.id} src={user.image} size={48} /> : null}
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">{user.name || user.email}</h1>
+          <p className="text-muted-foreground text-sm">{user.email}</p>
+        </div>
       </div>
 
       <Card>

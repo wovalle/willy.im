@@ -87,6 +87,8 @@ describe("createManagementApi", () => {
         id: string
         email: string
         name: string | null
+        // Never null: the IdP fills it with a blobatar for anyone without a picture.
+        image: string
         emailVerified: boolean
         createdAt: string
       }[]
