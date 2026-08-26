@@ -48,7 +48,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export default function InviteAccept({ loaderData }: Route.ComponentProps) {
   return (
-    <div className="mx-auto flex min-h-svh max-w-md items-center justify-center p-6">
+    <main id="main" className="mx-auto flex min-h-svh max-w-md items-center justify-center p-6">
       <Card className="w-full">
         {loaderData.state === "ready" ? (
           <>
@@ -93,6 +93,6 @@ export default function InviteAccept({ loaderData }: Route.ComponentProps) {
           </>
         )}
       </Card>
-    </div>
+    </main>
   )
 }

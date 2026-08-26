@@ -46,11 +46,11 @@ export default function Consent() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6">
+    <main id="main" className="flex min-h-screen flex-col items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="bg-primary/10 text-primary mb-2 flex size-10 items-center justify-center rounded-lg">
-            <ShieldCheck className="size-5" />
+            <ShieldCheck aria-hidden="true" className="size-5" />
           </div>
           <CardTitle>Authorize access</CardTitle>
           <CardDescription>
@@ -61,9 +61,9 @@ export default function Consent() {
         <CardContent>
           {scopes.length > 0 ? (
             <>
-              <p className="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide">
+              <h2 className="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide">
                 It will be able to access
-              </p>
+              </h2>
               <ul className="flex flex-col gap-2">
                 {scopes.map((s) => (
                   <li key={s} className="flex items-start gap-2 text-sm">

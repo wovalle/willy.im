@@ -22,6 +22,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body className="bg-background text-foreground min-h-screen antialiased">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:bg-background focus:text-foreground focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:border focus:px-3 focus:py-2 focus:text-sm"
+        >
+          Skip to content
+        </a>
         {children}
         <ScrollRestoration />
         <Scripts />

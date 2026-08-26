@@ -109,16 +109,18 @@ export default function UserDetail({ loaderData }: Route.ComponentProps) {
       {/* Breadcrumb-as-title: the back link is the trail, the leaf is the h1. */}
       <div className="flex items-center gap-2">
         <Avatar userId={user.id} src={user.image} size={32} />
-        <div className="flex items-baseline gap-1.5">
+        <nav aria-label="Breadcrumb" className="flex items-baseline gap-1.5">
           <Link
             to="/users"
             className="text-muted-foreground hover:text-foreground text-xl font-semibold tracking-tight no-underline transition-colors"
           >
             Users
           </Link>
-          <span className="text-muted-foreground text-xl font-semibold">/</span>
+          <span aria-hidden="true" className="text-muted-foreground text-xl font-semibold">
+            /
+          </span>
           <h1 className="text-xl font-semibold tracking-tight">{user.name || user.email}</h1>
-        </div>
+        </nav>
       </div>
 
       <Card>
@@ -168,7 +170,8 @@ function LinkIdentityForm({ busy, error }: { busy: boolean; error: string | null
   return (
     <Form method="post" className="flex flex-col gap-3 rounded-lg border p-4">
       <input type="hidden" name="intent" value="link" />
-      <div className="flex flex-wrap items-end gap-2">
+      <fieldset className="m-0 flex min-w-0 flex-wrap items-end gap-2 border-0 p-0">
+        <legend className="sr-only">Link identity</legend>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="provider">Provider</Label>
           <select id="provider" name="provider" disabled={busy} className={selectClass}>
@@ -199,7 +202,7 @@ function LinkIdentityForm({ busy, error }: { busy: boolean; error: string | null
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
           Link
         </Button>
-      </div>
+      </fieldset>
       {error ? (
         <p role="alert" className="text-destructive text-sm">
           {error}
