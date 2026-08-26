@@ -24,6 +24,7 @@ async function cachedAudiences(ctx: Pick<BaseServiceContext, "db">) {
   }
 }
 import { createBaseContext, type ILogger } from "../app/lib/services"
+import { carriesIntent, isMutatingMethod, serverEventName, trackServerEvent } from "../app/lib/luchy"
 
 declare module "react-router" {
   export interface AppLoadContext {
@@ -63,14 +64,25 @@ export default {
       hasSessionCookie: /better-auth\.session_token=/.test(request.headers.get("cookie") ?? ""),
     })
 
+    // Analytics (Luchy). Every mutation in the IdP is either a form POST whose
+    // `intent` field names it, a method-discriminated API call, or an auth verb
+    // whose path names it — so the event is DERIVED from the request the Worker
+    // already has (see app/lib/luchy.ts) instead of being emitted by hand per
+    // route. The clone is taken before React Router consumes the body and read
+    // after the response is sent.
+    const tracksEvent = env.APP_ENV === "production" && isMutatingMethod(request.method)
+    const trackedBody =
+      tracksEvent && carriesIntent(request.headers.get("content-type")) ? request.clone() : null
+
     try {
+      const auth = createAuthService(baseCtx, request.url, { audiences })
       const response = await requestHandler(request, {
         cloudflare: { env, ctx },
         ...baseCtx,
         services: {
           // Host-aware: a request on a vanity IdP domain (IDP_EXTRA_DOMAINS)
           // gets that host as issuer/cookies/passkey RP.
-          auth: createAuthService(baseCtx, request.url, { audiences }),
+          auth,
         },
       })
       baseCtx.logger.debug("request.end", {
@@ -80,6 +92,42 @@ export default {
         location: response.headers.get("location") ?? undefined,
         ms: Date.now() - started,
       })
+      if (tracksEvent) {
+        const status = response.status
+        ctx.waitUntil(
+          (async () => {
+            // Read the clone first, unconditionally: a cloned body left
+            // unread stays buffered for the life of the request.
+            const intent = trackedBody
+              ? new URLSearchParams(await trackedBody.text()).get("intent")
+              : null
+            const name = serverEventName({
+              method: request.method,
+              pathname: url.pathname,
+              status,
+              intent,
+            })
+            if (!name) return
+            // Only signed-in traffic carries a session; a bearer-token API
+            // call must not pay for a lookup that can only miss.
+            const session = request.headers.get("cookie")
+              ? await auth.api.getSession({ headers: request.headers }).catch(() => null)
+              : null
+            const payload: Record<string, string | number | boolean> = { status }
+            if (session) {
+              payload.user = session.user.id
+              if (session.user.role === "admin") payload.admin = true
+              if (session.session.impersonatedBy) payload.impersonated = true
+            }
+            await trackServerEvent({
+              name,
+              pathname: url.pathname,
+              userAgent: request.headers.get("user-agent") ?? undefined,
+              payload,
+            })
+          })().catch(() => {}),
+        )
+      }
       return response
     } catch (err) {
       baseCtx.logger.error("request.error", {

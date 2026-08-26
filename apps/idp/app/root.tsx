@@ -2,6 +2,7 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration }
 
 import type { Route } from "./+types/root"
 import "./app.css"
+import { LUCHY_API_KEY, LUCHY_ENDPOINT, LUCHY_SCRIPT_SRC } from "./lib/luchy"
 
 export const links: Route.LinksFunction = () => [
   {
@@ -24,6 +25,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {children}
         <ScrollRestoration />
         <Scripts />
+        {import.meta.env.PROD && (
+          <script
+            src={LUCHY_SCRIPT_SRC}
+            data-api-key={LUCHY_API_KEY}
+            data-endpoint={LUCHY_ENDPOINT}
+          ></script>
+        )}
       </body>
     </html>
   )
