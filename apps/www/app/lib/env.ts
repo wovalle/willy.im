@@ -14,6 +14,11 @@ const appEnvSchema = z.object({
 
   INTERNAL_TOKEN: z.string(),
   STATIC_ACCOUNT_ID: z.string(),
+
+  // Bender stores notes as artifacts (see lib/bender.server.ts). Defaulted so
+  // the rest of the site boots without them; the notes routes fail loudly.
+  BENDER_API_URL: z.string().default("https://bender.romo.fyi"),
+  BENDER_API_KEY: z.string().default(""),
 })
 
 export type AppEnv = z.infer<typeof appEnvSchema>
