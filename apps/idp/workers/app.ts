@@ -25,6 +25,7 @@ async function cachedAudiences(ctx: Pick<BaseServiceContext, "db">) {
 }
 import { createBaseContext, type ILogger } from "../app/lib/services"
 import { carriesIntent, isMutatingMethod, serverEventName, trackServerEvent } from "../app/lib/luchy"
+import { resolveCaller } from "../app/lib/caller.server"
 
 declare module "react-router" {
   export interface AppLoadContext {
@@ -108,16 +109,27 @@ export default {
               intent,
             })
             if (!name) return
-            // Only signed-in traffic carries a session; a bearer-token API
-            // call must not pay for a lookup that can only miss.
-            const session = request.headers.get("cookie")
-              ? await auth.api.getSession({ headers: request.headers }).catch(() => null)
-              : null
             const payload: Record<string, string | number | boolean> = { status }
-            if (session) {
-              payload.user = session.user.id
-              if (session.user.role === "admin") payload.admin = true
-              if (session.session.impersonatedBy) payload.impersonated = true
+            if (request.headers.get("authorization")) {
+              // Agentic traffic: name the key so machine usage is segmentable,
+              // not just countable.
+              const caller = await resolveCaller(request, baseCtx, auth).catch(() => null)
+              if (caller) {
+                payload.actor = caller.actor.label
+                payload.kind = caller.kind
+                if (caller.applicationId) payload.app = caller.applicationId
+              }
+            } else if (request.headers.get("cookie")) {
+              // Anonymous traffic carries neither header; it must not pay for
+              // a lookup that can only miss.
+              const session = await auth.api
+                .getSession({ headers: request.headers })
+                .catch(() => null)
+              if (session) {
+                payload.user = session.user.id
+                if (session.user.role === "admin") payload.admin = true
+                if (session.session.impersonatedBy) payload.impersonated = true
+              }
             }
             await trackServerEvent({
               name,

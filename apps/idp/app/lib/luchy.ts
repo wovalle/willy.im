@@ -19,6 +19,8 @@
  * the same API route report under different names.
  */
 
+import { createLuchyClient } from "luchy/api"
+
 /** Public ingest key — it ships in the HTML for the browser script too. */
 export const LUCHY_API_KEY = "f7060145b46b4668a609b2c6b79c04a3"
 export const LUCHY_ENDPOINT = "https://dash.luchy.app/api/ingest"
@@ -111,34 +113,24 @@ export function carriesIntent(contentType: string | null): boolean {
 }
 
 /**
- * Fire-and-forget POST to `POST /api/ingest/event`. Never throws, never blocks.
- *
- * The field is `payload`, NOT `props`: the ingest endpoint validates with a
- * non-passthrough zod object, so a `props` key is silently stripped and the
- * event lands with no properties at all.
+ * The generated client owns the wire format — a renamed API field is a type
+ * error here, not silently-dropped data. Its `trackEvent` never rejects, so
+ * this stays safe to fire from `waitUntil` without a guard.
  */
+const client = createLuchyClient({ apiKey: LUCHY_API_KEY })
+
+/** Fire-and-forget server event. Never throws, never blocks. */
 export async function trackServerEvent(event: {
   name: string
   pathname: string
   userAgent?: string
   payload?: Record<string, string | number | boolean>
 }): Promise<void> {
-  try {
-    await fetch(`${LUCHY_ENDPOINT}/event`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${LUCHY_API_KEY}`,
-      },
-      body: JSON.stringify({
-        name: event.name,
-        type: "server",
-        pathname: event.pathname,
-        payload: event.payload,
-        userAgent: event.userAgent,
-      }),
-    })
-  } catch {
-    // Analytics must never affect a request.
-  }
+  await client.trackEvent({
+    name: event.name,
+    type: "server",
+    pathname: event.pathname,
+    payload: event.payload,
+    userAgent: event.userAgent,
+  })
 }
