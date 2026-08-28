@@ -2,7 +2,7 @@ import { Link, redirect } from "react-router"
 
 import type { Route } from "./+types/invite.accept"
 import { claimInvitationsForUser, getInvitationByToken } from "~/lib/members.server"
-import { trackServerEvent } from "~/lib/luchy"
+import { trackServerEvent } from "~/lib/luchy.server"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 

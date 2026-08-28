@@ -24,8 +24,7 @@ async function cachedAudiences(ctx: Pick<BaseServiceContext, "db">) {
   }
 }
 import { createBaseContext, type ILogger } from "../app/lib/services"
-import { carriesIntent, isMutatingMethod, serverEventName, trackServerEvent } from "../app/lib/luchy"
-import { resolveCaller } from "../app/lib/caller.server"
+import { createIdpRequestTracker } from "../app/lib/luchy.server"
 
 declare module "react-router" {
   export interface AppLoadContext {
@@ -65,26 +64,22 @@ export default {
       hasSessionCookie: /better-auth\.session_token=/.test(request.headers.get("cookie") ?? ""),
     })
 
+    // Host-aware: a request on a vanity IdP domain (IDP_EXTRA_DOMAINS)
+    // gets that host as issuer/cookies/passkey RP.
+    const auth = createAuthService(baseCtx, request.url, { audiences })
+
     // Analytics (Luchy). Every mutation in the IdP is either a form POST whose
     // `intent` field names it, a method-discriminated API call, or an auth verb
-    // whose path names it — so the event is DERIVED from the request the Worker
-    // already has (see app/lib/luchy.ts) instead of being emitted by hand per
-    // route. The clone is taken before React Router consumes the body and read
-    // after the response is sent.
-    const tracksEvent = env.APP_ENV === "production" && isMutatingMethod(request.method)
-    const trackedBody =
-      tracksEvent && carriesIntent(request.headers.get("content-type")) ? request.clone() : null
+    // whose path names it — so the event is DERIVED from the request instead of
+    // being emitted by hand per route. `luchy/react-router` owns the mechanics;
+    // `begin` must run before React Router consumes the body.
+    const finishTracking = createIdpRequestTracker(baseCtx, auth).begin(request)
 
     try {
-      const auth = createAuthService(baseCtx, request.url, { audiences })
       const response = await requestHandler(request, {
         cloudflare: { env, ctx },
         ...baseCtx,
-        services: {
-          // Host-aware: a request on a vanity IdP domain (IDP_EXTRA_DOMAINS)
-          // gets that host as issuer/cookies/passkey RP.
-          auth,
-        },
+        services: { auth },
       })
       baseCtx.logger.debug("request.end", {
         method: request.method,
@@ -93,53 +88,7 @@ export default {
         location: response.headers.get("location") ?? undefined,
         ms: Date.now() - started,
       })
-      if (tracksEvent) {
-        const status = response.status
-        ctx.waitUntil(
-          (async () => {
-            // Read the clone first, unconditionally: a cloned body left
-            // unread stays buffered for the life of the request.
-            const intent = trackedBody
-              ? new URLSearchParams(await trackedBody.text()).get("intent")
-              : null
-            const name = serverEventName({
-              method: request.method,
-              pathname: url.pathname,
-              status,
-              intent,
-            })
-            if (!name) return
-            const payload: Record<string, string | number | boolean> = { status }
-            if (request.headers.get("authorization")) {
-              // Agentic traffic: name the key so machine usage is segmentable,
-              // not just countable.
-              const caller = await resolveCaller(request, baseCtx, auth).catch(() => null)
-              if (caller) {
-                payload.actor = caller.actor.label
-                payload.kind = caller.kind
-                if (caller.applicationId) payload.app = caller.applicationId
-              }
-            } else if (request.headers.get("cookie")) {
-              // Anonymous traffic carries neither header; it must not pay for
-              // a lookup that can only miss.
-              const session = await auth.api
-                .getSession({ headers: request.headers })
-                .catch(() => null)
-              if (session) {
-                payload.user = session.user.id
-                if (session.user.role === "admin") payload.admin = true
-                if (session.session.impersonatedBy) payload.impersonated = true
-              }
-            }
-            await trackServerEvent({
-              name,
-              pathname: url.pathname,
-              userAgent: request.headers.get("user-agent") ?? undefined,
-              payload,
-            })
-          })().catch(() => {}),
-        )
-      }
+      finishTracking(response, ctx)
       return response
     } catch (err) {
       baseCtx.logger.error("request.error", {
