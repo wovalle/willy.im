@@ -49,7 +49,7 @@ for (const note of notes) {
     continue
   }
 
-  const res = await fetch(`${BENDER_API_URL}/api/artifacts/`, {
+  const res = await fetch(`${BENDER_API_URL}/api/artifacts`, {
     method: "POST",
     headers: { "x-api-key": BENDER_API_KEY, "content-type": "application/json" },
     body: JSON.stringify({

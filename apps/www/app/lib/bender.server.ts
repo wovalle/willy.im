@@ -36,6 +36,8 @@ export interface PublishInput {
 async function request(path: string, init?: RequestInit): Promise<Response> {
   const env = getAppEnv()
   if (!env.BENDER_API_KEY) throw new Error("BENDER_API_KEY is not configured")
+  // No trailing slash on the collection: bender's router is strict about
+  // /api/artifacts vs /api/artifacts/.
   const res = await fetch(`${env.BENDER_API_URL}/api/artifacts${path}`, {
     ...init,
     headers: {
@@ -53,7 +55,7 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
 
 export const benderArtifacts = {
   async list(limit = 100): Promise<BenderArtifact[]> {
-    const res = await request(`/?limit=${limit}`)
+    const res = await request(`?limit=${limit}`)
     const body = (await res.json()) as { artifacts: BenderArtifact[] }
     return body.artifacts
   },
@@ -87,7 +89,7 @@ export const benderArtifacts = {
   },
 
   async publish(input: PublishInput): Promise<BenderArtifact> {
-    const res = await request("/", {
+    const res = await request("", {
       method: "POST",
       body: JSON.stringify({
         filename: input.filename,
