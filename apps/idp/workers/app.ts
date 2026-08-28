@@ -24,6 +24,7 @@ async function cachedAudiences(ctx: Pick<BaseServiceContext, "db">) {
   }
 }
 import { createBaseContext, type ILogger } from "../app/lib/services"
+import { createIdpRequestTracker } from "../app/lib/luchy.server"
 
 declare module "react-router" {
   export interface AppLoadContext {
@@ -63,15 +64,22 @@ export default {
       hasSessionCookie: /better-auth\.session_token=/.test(request.headers.get("cookie") ?? ""),
     })
 
+    // Host-aware: a request on a vanity IdP domain (IDP_EXTRA_DOMAINS)
+    // gets that host as issuer/cookies/passkey RP.
+    const auth = createAuthService(baseCtx, request.url, { audiences })
+
+    // Analytics (Luchy). Every mutation in the IdP is either a form POST whose
+    // `intent` field names it, a method-discriminated API call, or an auth verb
+    // whose path names it — so the event is DERIVED from the request instead of
+    // being emitted by hand per route. `luchy/react-router` owns the mechanics;
+    // `begin` must run before React Router consumes the body.
+    const finishTracking = createIdpRequestTracker(baseCtx, auth).begin(request)
+
     try {
       const response = await requestHandler(request, {
         cloudflare: { env, ctx },
         ...baseCtx,
-        services: {
-          // Host-aware: a request on a vanity IdP domain (IDP_EXTRA_DOMAINS)
-          // gets that host as issuer/cookies/passkey RP.
-          auth: createAuthService(baseCtx, request.url, { audiences }),
-        },
+        services: { auth },
       })
       baseCtx.logger.debug("request.end", {
         method: request.method,
@@ -80,6 +88,7 @@ export default {
         location: response.headers.get("location") ?? undefined,
         ms: Date.now() - started,
       })
+      finishTracking(response, ctx)
       return response
     } catch (err) {
       baseCtx.logger.error("request.error", {

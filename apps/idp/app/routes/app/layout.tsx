@@ -1,4 +1,4 @@
-import { Form, Link, Outlet, useLocation, useNavigate } from "react-router"
+import { Form, Link, Outlet, useLocation } from "react-router"
 import { ShieldCheck, UserCog } from "lucide-react"
 
 import type { Route } from "./+types/layout"
@@ -26,7 +26,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export default function ConsoleLayout({ loaderData }: Route.ComponentProps) {
   const { email, userId, name, image, isAdmin, impersonating } = loaderData
   const { pathname } = useLocation()
-  const navigate = useNavigate()
 
   const links = isAdmin
     ? [
@@ -39,7 +38,10 @@ export default function ConsoleLayout({ loaderData }: Route.ComponentProps) {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col gap-6 p-6">
       {impersonating ? (
-        <div className="bg-amber-500/15 text-amber-700 dark:text-amber-400 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 px-3 py-2 text-sm">
+        <div
+          role="status"
+          className="bg-amber-500/15 text-amber-700 dark:text-amber-400 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 px-3 py-2 text-sm"
+        >
           <span className="flex items-center gap-2">
             <UserCog className="size-4" />
             Impersonating <span className="font-medium">{email}</span> — actions run as this user.
@@ -74,13 +76,12 @@ export default function ConsoleLayout({ loaderData }: Route.ComponentProps) {
             </Link>
           ))}
         </nav>
-        <button
-          type="button"
+        <Link
+          to="/account"
           aria-label="Account settings"
           aria-current={accountActive ? "page" : undefined}
-          onClick={() => navigate("/account")}
           className={cn(
-            "flex items-center gap-2 text-sm transition-colors",
+            "flex items-center gap-2 text-sm no-underline transition-colors",
             accountActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -88,7 +89,7 @@ export default function ConsoleLayout({ loaderData }: Route.ComponentProps) {
           {/* The name is who you are; the email is only the fallback for an
               account that hasn't set one. */}
           <span>{name || email}</span>
-        </button>
+        </Link>
       </header>
 
       <main id="main">

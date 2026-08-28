@@ -56,6 +56,13 @@ import {
   AlertDialogTrigger,
 } from "~/components/ui/alert-dialog"
 import { Badge } from "~/components/ui/badge"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbSeparator,
+} from "~/components/ui/breadcrumb"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { cn } from "~/lib/utils"
@@ -368,13 +375,21 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
     <div className="flex flex-col gap-6">
       {/* Breadcrumb-as-title: the back link is the trail, the leaf is the h1. */}
       <div className="flex items-baseline gap-1.5">
-        <Link
-          to="/"
-          className="text-muted-foreground hover:text-foreground text-xl font-semibold tracking-tight no-underline transition-colors"
-        >
-          Applications
-        </Link>
-        <span className="text-muted-foreground text-xl font-semibold">/</span>
+        <Breadcrumb>
+          <BreadcrumbList className="items-baseline gap-1.5 text-xl">
+            <BreadcrumbItem>
+              <BreadcrumbLink
+                render={<Link to="/" />}
+                className="text-muted-foreground hover:text-foreground text-xl font-semibold tracking-tight no-underline transition-colors"
+              >
+                Applications
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator className="text-muted-foreground text-xl font-semibold">
+              /
+            </BreadcrumbSeparator>
+          </BreadcrumbList>
+        </Breadcrumb>
         <h1 className="text-xl font-semibold tracking-tight">
           {application.name ?? application.clientId}
         </h1>
@@ -384,33 +399,38 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
 
       {section === "overview" ? (
       /* OAuth configuration + app settings — the app's identity and config */
+      <section aria-label="OAuth configuration">
       <Card>
         <CardHeader>
           <CardTitle>OAuth configuration</CardTitle>
           <CardDescription>Credentials and redirect URIs for the OIDC flow.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <dl className="grid gap-4 sm:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-1.5">
-              <Label>Client ID</Label>
-              <div className="flex items-center gap-1">
+              <dt className="flex items-center gap-2 text-sm leading-none font-medium select-none">
+                Client ID
+              </dt>
+              <dd className="flex items-center gap-1">
                 <code className="bg-muted min-w-0 flex-1 truncate rounded-md px-3 py-2 font-mono text-xs">
                   {application.clientId}
                 </code>
                 <CopyButton value={application.clientId} label="Copy client ID" />
-              </div>
+              </dd>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>App key</Label>
-              <div>
+              <dt className="flex items-center gap-2 text-sm leading-none font-medium select-none">
+                App key
+              </dt>
+              <dd>
                 {application.app ? (
                   <Badge variant="secondary">{application.app}</Badge>
                 ) : (
                   <span className="text-muted-foreground text-sm">Not set</span>
                 )}
-              </div>
+              </dd>
             </div>
-          </div>
+          </dl>
 
           {can("app:update") ? (
           <Form method="post" className="flex flex-col gap-2">
@@ -432,7 +452,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               </p>
             ) : null}
             <Button type="submit" variant="outline" disabled={busy} className="self-start">
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
               Save redirect URIs
             </Button>
           </Form>
@@ -454,15 +474,19 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
             <Form method="post">
               <input type="hidden" name="intent" value="rotate" />
               <Button type="submit" variant="outline" disabled={busy} className="self-start">
-                {busy ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+                {busy ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <KeyRound className="size-4" aria-hidden="true" />
+                )}
                 Rotate secret
               </Button>
             </Form>
             {rotatedSecret ? (
-              <div className="bg-muted mt-1 rounded-md p-3 text-sm">
-                <p className="font-medium">New secret — copy it now, it won't be shown again.</p>
-                <p className="mt-1 font-mono text-xs break-all">client_secret: {rotatedSecret}</p>
-              </div>
+              <dl role="status" className="bg-muted mt-1 rounded-md p-3 text-sm">
+                <dt className="font-medium">New secret — copy it now, it won't be shown again.</dt>
+                <dd className="mt-1 font-mono text-xs break-all">client_secret: {rotatedSecret}</dd>
+              </dl>
             ) : null}
           </div>
           ) : null}
@@ -487,7 +511,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               </p>
             ) : null}
             <Button type="submit" variant="outline" disabled={busy} className="self-start">
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
               Save app settings
             </Button>
           </Form>
@@ -501,10 +525,12 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           )}
         </CardContent>
       </Card>
+      </section>
       ) : null}
 
       {section === "workspaces" ? (
       /* Workspaces */
+      <section aria-label="Workspaces">
       <Card>
         <CardHeader>
           <CardTitle>Workspaces</CardTitle>
@@ -524,7 +550,11 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               <Input id="ws-slug" name="slug" placeholder="acme" required disabled={busy} />
             </div>
             <Button type="submit" disabled={busy || !application.app}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              {busy ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Plus className="size-4" aria-hidden="true" />
+              )}
               Add
             </Button>
           </Form>
@@ -561,14 +591,16 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           )}
         </CardContent>
       </Card>
+      </section>
       ) : null}
 
       {section === "members" ? (
       /* App access — admins & members (IdP-level) */
+      <section aria-label="Members">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="text-muted-foreground size-4" />
+            <Users className="text-muted-foreground size-4" aria-hidden="true" />
             Members
           </CardTitle>
           <CardDescription>
@@ -623,7 +655,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           {invitations.length > 0 ? (
             <div className="flex flex-col gap-2">
               <h3 className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
-                <Mail className="size-3.5" />
+                <Mail className="size-3.5" aria-hidden="true" />
                 Pending invitations
               </h3>
               <Table>
@@ -685,14 +717,16 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           ) : null}
         </CardContent>
       </Card>
+      </section>
       ) : null}
 
       {section === "keys" ? (
       /* API keys — scoped management-API credentials */
+      <section aria-label="API keys">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Terminal className="text-muted-foreground size-4" />
+            <Terminal className="text-muted-foreground size-4" aria-hidden="true" />
             API keys
           </CardTitle>
           <CardDescription>
@@ -711,12 +745,12 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           ) : null}
 
           {createdApiKey ? (
-            <div className="bg-muted rounded-md p-3 text-sm">
-              <p className="font-medium">
+            <dl role="status" className="bg-muted rounded-md p-3 text-sm">
+              <dt className="font-medium">
                 Key “{createdApiKey.name}” created — copy it now, it won't be shown again.
-              </p>
-              <p className="mt-1 font-mono text-xs break-all">{createdApiKey.token}</p>
-            </div>
+              </dt>
+              <dd className="mt-1 font-mono text-xs break-all">{createdApiKey.token}</dd>
+            </dl>
           ) : null}
 
           {!can("apikey:read") ? (
@@ -755,14 +789,16 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           )}
         </CardContent>
       </Card>
+      </section>
       ) : null}
 
       {section === "members" ? (
       /* People (derived from workspace membership) */
+      <section aria-label="People">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="text-muted-foreground size-4" />
+            <Users className="text-muted-foreground size-4" aria-hidden="true" />
             People in workspaces
           </CardTitle>
           <CardDescription>Derived from workspace membership.</CardDescription>
@@ -794,14 +830,16 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           )}
         </CardContent>
       </Card>
+      </section>
       ) : null}
 
       {section === "activity" ? (
       /* Recent activity — audit trail */
+      <section aria-label="Activity">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <ScrollText className="text-muted-foreground size-4" />
+            <ScrollText className="text-muted-foreground size-4" aria-hidden="true" />
             Recent activity
           </CardTitle>
           <CardDescription>Member, key and workspace writes, with actor.</CardDescription>
@@ -842,10 +880,12 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           )}
         </CardContent>
       </Card>
+      </section>
       ) : null}
 
       {section === "overview" && can("app:delete") ? (
       /* Danger zone */
+      <section aria-label="Danger zone">
       <Card className="border-destructive/40">
         <CardHeader>
           <CardTitle className="text-destructive">Danger zone</CardTitle>
@@ -878,9 +918,11 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           </AlertDialog>
         </CardContent>
       </Card>
+      </section>
       ) : null}
 
       {section === "access" ? (
+        <section aria-label="Product permissions">
         <PermissionsCatalog
           catalog={catalog}
           members={members}
@@ -890,6 +932,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           canEdit={can("app:update")}
           addError={field === "add-permission" ? (error ?? null) : null}
         />
+        </section>
       ) : null}
     </div>
   )
@@ -979,7 +1022,7 @@ function PermissionsCatalog({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ShieldCheck className="text-muted-foreground size-4" />
+          <ShieldCheck className="text-muted-foreground size-4" aria-hidden="true" />
           Product permissions
         </CardTitle>
         <CardDescription>
@@ -1005,7 +1048,11 @@ function PermissionsCatalog({
             />
           </div>
           <Button type="submit" disabled={busy || !hasApp}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+            {busy ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Plus className="size-4" aria-hidden="true" />
+            )}
             Add
           </Button>
         </Form>
@@ -1022,7 +1069,7 @@ function PermissionsCatalog({
         ) : null}
 
         {catalog.length === 0 ? (
-          <div className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
+          <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
             No permissions declared yet.
             {canEdit ? (
               <>
@@ -1030,7 +1077,7 @@ function PermissionsCatalog({
                 Add one above — e.g. <code className="font-mono text-xs">posts:read</code>.
               </>
             ) : null}
-          </div>
+          </p>
         ) : (
           <ul className="divide-border divide-y rounded-lg border">
             {catalog.map((p) => {
@@ -1053,7 +1100,7 @@ function PermissionsCatalog({
                               disabled={busy}
                               aria-label={`Remove ${p}`}
                             >
-                              <X className="size-3.5" />
+                              <X className="size-3.5" aria-hidden="true" />
                             </Button>
                           }
                         />
@@ -1094,7 +1141,7 @@ function PermissionsCatalog({
                           disabled={busy}
                           aria-label={`Remove ${p}`}
                         >
-                          <X className="size-3.5" />
+                          <X className="size-3.5" aria-hidden="true" />
                         </Button>
                       </Form>
                     )}
@@ -1128,7 +1175,11 @@ function CopyButton({ value, label = "Copy" }: { value: string; label?: string }
         }
       }}
     >
-      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      {copied ? (
+        <Check className="size-3.5" aria-hidden="true" />
+      ) : (
+        <Copy className="size-3.5" aria-hidden="true" />
+      )}
       <span className="sr-only">{label}</span>
     </Button>
   )
@@ -1184,7 +1235,9 @@ function InviteMemberForm({
   return (
     <Form method="post" className="flex flex-col gap-3 rounded-lg border p-4">
       <input type="hidden" name="intent" value="invite-member" />
-      <div className="flex flex-wrap items-end gap-2">
+      <fieldset className="flex min-w-0 flex-col gap-3">
+        <legend className="sr-only">Invite a member</legend>
+        <div className="flex flex-wrap items-end gap-2">
         <div className="flex flex-1 flex-col gap-1.5">
           <Label htmlFor="invite-email">Email</Label>
           <Input
@@ -1212,7 +1265,11 @@ function InviteMemberForm({
           </select>
         </div>
         <Button type="submit" disabled={busy}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+          {busy ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Plus className="size-4" aria-hidden="true" />
+          )}
           Invite
         </Button>
       </div>
@@ -1230,6 +1287,7 @@ function InviteMemberForm({
       ) : (
         <p className="text-muted-foreground text-xs">Admins get all permissions.</p>
       )}
+      </fieldset>
       {error ? (
         <p role="alert" className="text-destructive text-sm">
           {error}
@@ -1277,6 +1335,8 @@ function MemberRow({
           >
             <input type="hidden" name="intent" value="update-member" />
             <input type="hidden" name="userId" value={member.userId} />
+            <fieldset className="flex min-w-0 flex-col gap-3">
+              <legend className="sr-only">Edit {member.email}</legend>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium">{member.email}</span>
               <select
@@ -1315,6 +1375,7 @@ function MemberRow({
             ) : (
               <p className="text-muted-foreground text-xs">Admins get all permissions.</p>
             )}
+            </fieldset>
             <div className="flex gap-2">
               <Button type="submit" size="sm" disabled={busy}>
                 Save
@@ -1370,7 +1431,7 @@ function MemberRow({
               submit({ intent: "impersonate", userId: member.userId }, { method: "post" })
             }
           >
-            <UserCog className="size-3.5" />
+            <UserCog className="size-3.5" aria-hidden="true" />
             Impersonate
             <span className="sr-only"> {member.email} (superadmin only)</span>
           </Button>
@@ -1380,7 +1441,7 @@ function MemberRow({
           <AlertDialogTrigger
             render={
               <Button variant="ghost" size="sm" className="text-destructive" disabled={busy}>
-                <Trash2 className="size-3.5" />
+                <Trash2 className="size-3.5" aria-hidden="true" />
                 Remove
               </Button>
             }
@@ -1450,7 +1511,11 @@ function CreateApiKeyForm({
           </select>
         </div>
         <Button type="submit" disabled={busy || disabled}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+          {busy ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Plus className="size-4" aria-hidden="true" />
+          )}
           Create key
         </Button>
       </div>
@@ -1523,7 +1588,7 @@ function ApiKeyRow({
             <AlertDialogTrigger
               render={
                 <Button variant="ghost" size="sm" className="text-destructive" disabled={busy}>
-                  <Trash2 className="size-3.5" />
+                  <Trash2 className="size-3.5" aria-hidden="true" />
                   Revoke
                 </Button>
               }

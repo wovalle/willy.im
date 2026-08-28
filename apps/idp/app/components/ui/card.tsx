@@ -1,4 +1,6 @@
 import * as React from "react"
+import { mergeProps } from "@base-ui/react/merge-props"
+import { useRender } from "@base-ui/react/use-render"
 
 import { cn } from "~/lib/utils"
 
@@ -33,17 +35,27 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-title"
-      className={cn(
-        "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
-        className
-      )}
-      {...props}
-    />
-  )
+function CardTitle({
+  className,
+  render,
+  ...props
+}: useRender.ComponentProps<"h2">) {
+  return useRender({
+    defaultTagName: "h2",
+    props: mergeProps<"h2">(
+      {
+        className: cn(
+          "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
+          className
+        ),
+      },
+      props
+    ),
+    render,
+    state: {
+      slot: "card-title",
+    },
+  })
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<"div">) {

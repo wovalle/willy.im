@@ -88,13 +88,13 @@ export default function Account({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
+      <header className="flex items-center gap-3">
         {user.id ? <Avatar userId={user.id} src={user.image} size={48} /> : null}
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{user.name || user.email}</h1>
           <p className="text-muted-foreground text-sm">{user.email}</p>
         </div>
-      </div>
+      </header>
 
       <Card>
         <CardHeader>
@@ -154,12 +154,12 @@ export default function Account({ loaderData }: Route.ComponentProps) {
         </CardContent>
       </Card>
 
-      <div>
+      <section aria-label="Session">
         <Button variant="outline" onClick={signOut} disabled={!!pending}>
           {pending === "signout" ? <Loader2 className="size-4 animate-spin" /> : null}
           Sign out
         </Button>
-      </div>
+      </section>
     </div>
   )
 }

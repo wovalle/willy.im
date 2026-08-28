@@ -97,7 +97,7 @@ export default function Login() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6">
+    <main id="main" className="flex min-h-screen flex-col items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Sign in to willy.im</CardTitle>
@@ -134,7 +134,7 @@ export default function Login() {
                 </Button>
               </form>
 
-              <div className="flex items-center gap-3">
+              <div aria-hidden="true" className="flex items-center gap-3">
                 <div className="bg-border h-px flex-1" />
                 <span className="text-muted-foreground text-xs">or</span>
                 <div className="bg-border h-px flex-1" />

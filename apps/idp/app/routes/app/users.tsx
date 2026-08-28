@@ -22,47 +22,50 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 export default function AdminUsers({ loaderData }: Route.ComponentProps) {
   const { users } = loaderData
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Email</TableHead>
-          <TableHead>Name</TableHead>
-          <TableHead>Verified</TableHead>
-          <TableHead>Joined</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {users.length === 0 ? (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-lg font-semibold tracking-tight">Users</h1>
+      <Table>
+        <TableHeader>
           <TableRow>
-            <TableCell colSpan={4} className="text-muted-foreground">
-              No users yet.
-            </TableCell>
+            <TableHead>Email</TableHead>
+            <TableHead>Name</TableHead>
+            <TableHead>Verified</TableHead>
+            <TableHead>Joined</TableHead>
           </TableRow>
-        ) : (
-          users.map((u) => (
-            <TableRow key={u.id}>
-              <TableCell>
-                {/* The email is the row's handle into the user's detail view, where
-                    a superadmin manages their linked identities. */}
-                <Link
-                  to={`/users/${u.id}`}
-                  className="flex items-center gap-2 font-medium underline-offset-4 hover:underline"
-                >
-                  <Avatar userId={u.id} src={u.image} size={24} />
-                  {u.email}
-                </Link>
-              </TableCell>
-              <TableCell>{u.name || "—"}</TableCell>
-              <TableCell>
-                {u.emailVerified ? <Badge variant="secondary">verified</Badge> : "—"}
-              </TableCell>
-              <TableCell className="text-muted-foreground text-xs">
-                {new Date(u.createdAt).toLocaleDateString()}
+        </TableHeader>
+        <TableBody>
+          {users.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={4} className="text-muted-foreground">
+                No users yet.
               </TableCell>
             </TableRow>
-          ))
-        )}
-      </TableBody>
-    </Table>
+          ) : (
+            users.map((u) => (
+              <TableRow key={u.id}>
+                <TableCell>
+                  {/* The email is the row's handle into the user's detail view, where
+                      a superadmin manages their linked identities. */}
+                  <Link
+                    to={`/users/${u.id}`}
+                    className="flex items-center gap-2 font-medium underline-offset-4 hover:underline"
+                  >
+                    <Avatar userId={u.id} src={u.image} size={24} />
+                    {u.email}
+                  </Link>
+                </TableCell>
+                <TableCell>{u.name || "—"}</TableCell>
+                <TableCell>
+                  {u.emailVerified ? <Badge variant="secondary">verified</Badge> : "—"}
+                </TableCell>
+                <TableCell className="text-muted-foreground text-xs">
+                  {new Date(u.createdAt).toLocaleDateString()}
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
   )
 }

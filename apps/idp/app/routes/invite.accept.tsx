@@ -2,6 +2,7 @@ import { Link, redirect } from "react-router"
 
 import type { Route } from "./+types/invite.accept"
 import { claimInvitationsForUser, getInvitationByToken } from "~/lib/members.server"
+import { trackServerEvent } from "~/lib/luchy.server"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 
@@ -21,6 +22,18 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   // Already signed in as the invited email — claim now and land on the console.
   if (session && session.user.email.toLowerCase() === invite.email) {
     await claimInvitationsForUser(context, session.user)
+    // Invitation acceptance is a GET side effect, so the Worker's mutation
+    // sniffer never sees it — the one event emitted by hand.
+    if (context.getAppEnv("APP_ENV") === "production") {
+      context.cloudflare.ctx.waitUntil(
+        trackServerEvent({
+          name: "invite/accept:claim",
+          pathname: "/invite/accept",
+          userAgent: request.headers.get("user-agent") ?? undefined,
+          payload: { user: session.user.id, app: invite.applicationId },
+        }),
+      )
+    }
     throw redirect("/")
   }
 
@@ -35,7 +48,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export default function InviteAccept({ loaderData }: Route.ComponentProps) {
   return (
-    <div className="mx-auto flex min-h-svh max-w-md items-center justify-center p-6">
+    <main id="main" className="mx-auto flex min-h-svh max-w-md items-center justify-center p-6">
       <Card className="w-full">
         {loaderData.state === "ready" ? (
           <>
@@ -80,6 +93,6 @@ export default function InviteAccept({ loaderData }: Route.ComponentProps) {
           </>
         )}
       </Card>
-    </div>
+    </main>
   )
 }

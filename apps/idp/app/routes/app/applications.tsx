@@ -71,10 +71,11 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold tracking-tight">Applications</h2>
+        <h1 className="text-lg font-semibold tracking-tight">Applications</h1>
         <Button
           variant="outline"
           aria-expanded={showForm}
+          aria-controls="register-application"
           onClick={() => setFormOpen(!showForm)}
         >
           <Plus className="size-4" />
@@ -83,7 +84,7 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
       </div>
 
       {showForm ? (
-      <Card>
+      <Card id="register-application">
         <CardHeader>
           <CardTitle>Register an application</CardTitle>
         </CardHeader>
@@ -129,12 +130,20 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
             </p>
           ) : null}
           {created ? (
-            <div className="bg-muted mt-4 rounded-md p-3 text-sm">
+            <div role="status" className="bg-muted mt-4 rounded-md p-3 text-sm">
               <p className="font-medium">
                 Application created — copy the secret now, it won't be shown again.
               </p>
-              <p className="mt-2 font-mono text-xs break-all">client_id: {created.clientId}</p>
-              <p className="font-mono text-xs break-all">client_secret: {created.clientSecret}</p>
+              <dl className="mt-2 font-mono text-xs break-all">
+                <div>
+                  <dt className="inline">client_id:</dt>{" "}
+                  <dd className="inline">{created.clientId}</dd>
+                </div>
+                <div>
+                  <dt className="inline">client_secret:</dt>{" "}
+                  <dd className="inline">{created.clientSecret}</dd>
+                </div>
+              </dl>
             </div>
           ) : null}
         </CardContent>
@@ -142,9 +151,9 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
       ) : null}
 
       {applications.length === 0 ? (
-        <div className="text-muted-foreground rounded-lg border border-dashed p-10 text-center text-sm">
+        <p className="text-muted-foreground rounded-lg border border-dashed p-10 text-center text-sm">
           No applications yet.
-        </div>
+        </p>
       ) : (
         <Table>
           <TableHeader>
