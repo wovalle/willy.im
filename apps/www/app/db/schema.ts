@@ -17,14 +17,3 @@ export const logs = sqliteTable("logs", {
   created_at: integer({ mode: "timestamp" }).notNull(),
 })
 
-// LEGACY — notes now live in bender's artifact store (lib/bender.server.ts).
-// This table is kept only until scripts/migrate-notes-to-bender.mjs has run
-// against prod (it reads these rows and writes `note_redirect:<id>` kv rows);
-// drop it in a follow-up migration after that.
-export const notes = sqliteTable("notes", {
-  id: text().primaryKey().notNull(),
-  title: text().notNull(),
-  content: text().notNull().default(""),
-  created_at: integer({ mode: "timestamp" }).notNull(),
-  updated_at: integer({ mode: "timestamp" }).notNull(),
-})
