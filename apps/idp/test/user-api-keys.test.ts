@@ -13,6 +13,8 @@ import {
   createApplication,
   createUser,
   fakeUserCaller,
+  noResources,
+  stubResources,
 } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
@@ -43,7 +45,7 @@ describe("end-user API keys", () => {
       name: "CLI token",
       scopes: ["invoices:read"],
       ...overrides,
-    })
+    }, { resources: noResources })
 
   it("mints a wak_ token and lists it without the secret", async () => {
     const minted = await mint()
@@ -167,7 +169,9 @@ describe("end-user API keys", () => {
     const reader = fakeUserCaller({ userId: "u1", app: "acme", permissions: ["userkey:read"] })
 
     await expect(
-      createUserApiKey(h.ctx, reader, { app: "acme", userId: user.id, name: "nope" }),
+      createUserApiKey(h.ctx, reader, { app: "acme", userId: user.id, name: "nope" }, {
+        resources: noResources,
+      }),
     ).rejects.toMatchObject({ status: 403 })
     await expect(
       revokeUserApiKey(h.ctx, reader, { app: "acme", id: minted.id }),
@@ -212,6 +216,81 @@ describe("end-user API keys", () => {
       await validateUserApiKey(h.ctx, root, { app: "acme", token: minted.token }),
     ).toMatchObject({
       valid: true,
+    })
+  })
+})
+
+/**
+ * Minting against a RESOURCE type. The app declares `kirby:thread` and where
+ * to enumerate it; the IdP composes `<type>:<id>` grants and confirms each id
+ * against that list at write time — so a key never carries a scope pointing at
+ * a conversation bender doesn't have.
+ */
+describe("end-user API keys scoped to a resource instance", () => {
+  let h: TestHarness
+  let user: { id: string }
+  let root: Caller
+
+  const THREAD = {
+    type: "kirby:thread",
+    label: "WhatsApp conversation",
+    list: "https://bender.test/idp/resources/kirby-thread",
+  }
+  const FAMILIA = { id: "t_14f451b6", label: "Familia", description: null }
+
+  beforeEach(async () => {
+    h = createTestHarness()
+    root = (await bootstrapAdminKey(h.ctx)).caller
+    await createApplication(h.ctx, {
+      app: "bender",
+      permissions: ["kirby:read"],
+      resourceTypes: [THREAD],
+    })
+    user = await createUser(h.ctx, { email: "willy@bender.test" })
+  })
+  afterEach(() => h.close())
+
+  const mint = (scopes: string[], resources = stubResources({ "kirby:thread": [FAMILIA] })) =>
+    createUserApiKey(
+      h.ctx,
+      root,
+      { app: "bender", userId: user.id, name: "Kirby CLI", scopes },
+      { resources },
+    )
+
+  it("mints a key for one conversation and hands that exact scope back on validation", async () => {
+    const minted = await mint(["kirby:thread:t_14f451b6"])
+    if (!("token" in minted)) throw new Error(`mint failed: ${JSON.stringify(minted)}`)
+
+    // The composed string is what lands on the key — nothing downstream has to
+    // learn a new shape, `grants()` already covers it with `kirby:*`.
+    expect(
+      await validateUserApiKey(h.ctx, root, { app: "bender", token: minted.token }),
+    ).toMatchObject({ valid: true, scopes: ["kirby:thread:t_14f451b6"] })
+  })
+
+  it("refuses an id the app does not currently list, naming the whole grant", async () => {
+    expect(await mint(["kirby:thread:t_nope"])).toEqual({
+      error: "unknown_resource",
+      detail: ["kirby:thread:t_nope"],
+    })
+  })
+
+  it("refuses a type the app never declared, before it would call anyone", async () => {
+    // `artifacts:abc` reads like an instance grant, but nothing declares
+    // `artifacts` — so it is a catalog miss, not a missing resource.
+    expect(await mint(["artifacts:abc"])).toEqual({
+      error: "unknown_scopes",
+      detail: ["artifacts:abc"],
+    })
+  })
+
+  it("refuses to guess when the app's list can't be read", async () => {
+    // Minting through a blind spot would hand out a scope nobody verified.
+    const down = stubResources({ "kirby:thread": new Error("bender is down") })
+    expect(await mint(["kirby:thread:t_14f451b6"], down)).toEqual({
+      error: "resource_lookup_failed",
+      detail: ["kirby:thread"],
     })
   })
 })

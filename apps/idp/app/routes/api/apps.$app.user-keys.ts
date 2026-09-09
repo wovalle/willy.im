@@ -31,16 +31,26 @@ export async function action({ request, context, params }: Route.ActionArgs) {
   }
   const caller = await requireApiCaller(request, context, context.services.auth)
   const body = await readJson(request, CreateUserApiKeyInput)
-  const res = await createUserApiKey(context, caller, {
-    app: params.app,
-    userId: body.userId,
-    name: body.name,
-    scopes: body.scopes,
-    workspaceId: body.workspaceId ?? null,
-    expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
-  })
+  const res = await createUserApiKey(
+    context,
+    caller,
+    {
+      app: params.app,
+      userId: body.userId,
+      name: body.name,
+      scopes: body.scopes,
+      workspaceId: body.workspaceId ?? null,
+      expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+    },
+    { resources: context.services.resources },
+  )
   if ("error" in res) {
-    return Response.json({ error: res.error, detail: res.detail }, { status: 422 })
+    // The app's list endpoint being down is not the caller's mistake.
+    const status = res.error === "resource_lookup_failed" ? 502 : 422
+    return Response.json(
+      { error: res.error, ...("detail" in res ? { detail: res.detail } : {}) },
+      { status },
+    )
   }
   return Response.json(res, { status: 201 })
 }

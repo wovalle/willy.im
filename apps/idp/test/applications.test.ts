@@ -220,13 +220,15 @@ describe("application lifecycle", () => {
 
     it("replaces the product-permission catalog", async () => {
       const { clientId } = await register()
-      const next = await updateApplicationPermissions(h.ctx, root, clientId, [
-        "invoices:read",
-        "invoices:write",
-        "invoices:read",
-      ])
+      const next = await updateApplicationPermissions(h.ctx, root, clientId, {
+        permissions: ["invoices:read", "invoices:write", "invoices:read"],
+        resourceTypes: [],
+      })
 
-      expect(next).toEqual(["invoices:read", "invoices:write"])
+      expect(next).toEqual({
+        permissions: ["invoices:read", "invoices:write"],
+        resourceTypes: [],
+      })
       expect((await getApplication(h.ctx, clientId))!.permissions).toEqual([
         "invoices:read",
         "invoices:write",

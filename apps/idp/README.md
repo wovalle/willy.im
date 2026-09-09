@@ -57,10 +57,15 @@ User (global)
   only — workspaces from other apps are never visible. The app picks the active
   workspace from the array at request time (by subdomain, URL param, stored
   preference, etc.) without needing a new token.
-- **`permissions[]` claim**: a static catalog of permission strings declared by the
+- **`permissions[]` claim**: a catalog of permission strings declared by the
   app. The IdP resolves each user's granted permissions and emits them as a
-  `permissions` array in the token. Apps enforce access against this list (see
-  `@willyim/rbac`).
+  `permissions` array in the token. Apps enforce access against this list with
+  `grants()` from `@willyim/idp` (wildcard-aware: `kirby:*`, `*`).
+- **Resource-scoped grants.** A catalog entry can be a *type* over instances the
+  app holds — `kirby:thread` — and a grant is then one instance,
+  `kirby:thread:t_14f451b6`. The IdP stores the grant and asks the app for the
+  instances when a human picks one; it never keeps the list. See
+  [`docs/resource-scopes.md`](docs/resource-scopes.md).
 - **API keys** with scoped permissions — machine-readable keys the IdP issues on
   behalf of a workspace or user. Carry the same `permissions[]` model as tokens,
   so they can fully replace app-managed key systems (e.g. tracker ingestion keys).
@@ -93,12 +98,12 @@ to design around:
 
 Built: email (magic-link + OTP) and passkey sign-in · OIDC provider
 (authorize/token/userinfo/JWKS, RFC 8414 metadata) · per-app workspaces with
-role claims · admin console (apps, users, workspaces, app detail) · read-only
-management API + OpenAPI · client-secret rotation · custom domains.
+role claims · admin console (apps, users, workspaces, app detail) · management
+API + OpenAPI · client-secret rotation · custom domains · app admins/members +
+invitations · scoped management keys and end-user API keys · linked identities ·
+audit · impersonation · resource-scoped grants.
 
-In progress: `rbac`-backed security context · app admins/members + invitations ·
-per-app user metadata · API keys with scoped permissions + write management API ·
-audit · impersonation.
+In progress: per-app user metadata.
 
 Later: centralized profile editing · MFA · Organizations tier · SAML / SCIM.
 

@@ -62,7 +62,10 @@ describe("access-token claims by resource", () => {
 
     it("are the token endpoint's valid audiences", async () => {
       expect(await allResources(h.ctx.db)).toEqual([BENDER_MCP])
-      expect(await appForResource(h.ctx.db, BENDER_MCP)).toEqual({ app: "bender", catalog: CATALOG })
+      expect(await appForResource(h.ctx.db, BENDER_MCP)).toEqual({
+        app: "bender",
+        catalog: { permissions: CATALOG, resourceTypes: [] },
+      })
       expect(await appForResource(h.ctx.db, "https://nobody.example/mcp")).toBeNull()
     })
   })

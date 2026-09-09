@@ -1,5 +1,14 @@
-import { useState } from "react"
-import { Form, Link, redirect, useActionData, useNavigation, useSearchParams, useSubmit } from "react-router"
+import { useEffect, useState } from "react"
+import {
+  Form,
+  Link,
+  redirect,
+  useActionData,
+  useFetcher,
+  useNavigation,
+  useSearchParams,
+  useSubmit,
+} from "react-router"
 import {
   Check,
   Copy,
@@ -18,6 +27,7 @@ import {
 
 import type { Route } from "./+types/app-detail"
 import {
+  catalogOf,
   createWorkspaceForApp,
   deleteApplication,
   getApplication,
@@ -30,7 +40,9 @@ import {
   updateApplicationPermissions,
   updateApplicationRedirectUris,
 } from "~/lib/admin.server"
-import { appConfigSchema } from "~/lib/metadata"
+import { appConfigSchema, type ResourceTypeDecl } from "~/lib/metadata"
+import type { ResourceInstance } from "~/lib/resources.server"
+import { describeScopeError, resolveScopes } from "~/lib/scopes.server"
 import {
   addOrInviteAppMember,
   listAppInvitations,
@@ -224,24 +236,32 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     if (!app) return { error: "This application has no app key yet." }
     const origin = new URL(request.url).origin
 
-    const catalog = application?.permissions ?? []
+    const catalog = catalogOf(application)
     const readRole = (v: FormDataEntryValue | null): AppRole =>
       String(v) === "admin" ? "admin" : "member"
     const readPermissions = () =>
       form.getAll("permissions").map(String).filter(Boolean)
     const readProductPermissions = () =>
       form.getAll("productPermissions").map(String).filter(Boolean)
+    // Grants are validated against BOTH halves of the catalog before the write:
+    // structure against the declaration, per-instance ids against the app's live
+    // list. A grant that silently lost a scope is worse than one that failed.
+    const resolveGrants = () =>
+      resolveScopes(readProductPermissions(), app, catalog, context.services.resources)
 
     if (intent === "invite-member") {
       const email = String(form.get("email") ?? "").trim()
       if (!email || !email.includes("@"))
         return { error: "Enter a valid email address.", field: "invite-email" }
+      const resolved = await resolveGrants()
+      if ("error" in resolved)
+        return { error: describeScopeError(resolved), field: "invite-email" }
       const result = await addOrInviteAppMember(context, caller, {
         app,
         email,
         role: readRole(form.get("role")),
         permissions: readPermissions(),
-        productPermissions: readProductPermissions(),
+        productPermissions: resolved.scopes,
         catalog,
         origin,
       })
@@ -251,12 +271,26 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     }
 
     if (intent === "update-member") {
+      const userId = String(form.get("userId") ?? "")
+      const existing = (await listAppMembers(context, app)).find((m) => m.userId === userId)
+      const current = existing?.productPermissions ?? []
+      const requested = readProductPermissions()
+      // Only NEW grants are checked against the app's live list: a stale grant
+      // the member already holds (rendered "(no longer listed)") must not block
+      // an unrelated edit — unchecking it is how it goes away.
+      const resolved = await resolveScopes(
+        requested.filter((s) => !current.includes(s)),
+        app,
+        catalog,
+        context.services.resources,
+      )
+      if ("error" in resolved) return { error: describeScopeError(resolved) }
       const res = await updateAppMember(context, caller, {
         app,
-        userId: String(form.get("userId") ?? ""),
+        userId,
         role: readRole(form.get("role")),
         permissions: readPermissions(),
-        productPermissions: readProductPermissions(),
+        productPermissions: requested,
         catalog,
       })
       if ("error" in res) return { error: res.error }
@@ -299,6 +333,7 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     const parsed = appConfigSchema.safeParse({
       allow_signup: form.get("allow_signup") === "on",
       permissions: application.permissions,
+      resource_types: application.resourceTypes,
     })
     if (!parsed.success) return { error: "Invalid app settings.", field: "app-metadata" }
     await updateApplicationMetadata(context, caller, clientId, parsed.data)
@@ -309,27 +344,42 @@ export async function action({ request, context, params }: Route.ActionArgs) {
     const application = await getApplication(context, clientId)
     const app = application?.app
     if (!app) return { error: "This application has no app key yet." }
-    const catalog = application?.permissions ?? []
+    const permissions = application.permissions
+    // The console edits only the FLAT half of the catalog; resource types are
+    // declared by the app itself over the management API, so they ride through
+    // every write here untouched.
+    const resourceTypes = application.resourceTypes
 
     if (intent === "add-permission") {
       const value = String(form.get("permission") ?? "").trim()
       if (!value) return { error: "Enter a permission.", field: "add-permission" }
       if (/\s/.test(value))
         return { error: "Permissions can't contain spaces.", field: "add-permission" }
-      if (catalog.includes(value))
+      if (permissions.includes(value))
         return { error: `"${value}" is already declared.`, field: "add-permission" }
-      await updateApplicationPermissions(context, caller, clientId, [...catalog, value])
+      const res = await updateApplicationPermissions(context, caller, clientId, {
+        permissions: [...permissions, value],
+        resourceTypes,
+      })
+      if ("error" in res)
+        return {
+          error: `The app declares a resource type with an unusable list URL: ${res.detail}`,
+          field: "add-permission",
+        }
       return { ok: "permission-added" }
     }
 
     // remove-permission
     const value = String(form.get("permission") ?? "")
-    await updateApplicationPermissions(
-      context,
-      caller,
-      clientId,
-      catalog.filter((p) => p !== value),
-    )
+    const res = await updateApplicationPermissions(context, caller, clientId, {
+      permissions: permissions.filter((p) => p !== value),
+      resourceTypes,
+    })
+    if ("error" in res)
+      return {
+        error: `The app declares a resource type with an unusable list URL: ${res.detail}`,
+        field: "add-permission",
+      }
     return { ok: "permission-removed" }
   }
 
@@ -614,6 +664,8 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
               busy={busy}
               error={field === "invite-email" ? (error ?? null) : null}
               catalog={catalog}
+              clientId={application.clientId}
+              resourceTypes={application.resourceTypes}
             />
           ) : null}
 
@@ -644,6 +696,8 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
                     member={m}
                     busy={busy}
                     catalog={catalog}
+                    clientId={application.clientId}
+                    resourceTypes={application.resourceTypes}
                     canManage={canManageMembers}
                     canImpersonate={canImpersonate}
                   />
@@ -925,6 +979,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
         <section aria-label="Product permissions">
         <PermissionsCatalog
           catalog={catalog}
+          resourceTypes={application.resourceTypes}
           members={members}
           adminCount={adminCount}
           busy={busy}
@@ -996,6 +1051,7 @@ function SectionTabs({ active, pendingInvites }: { active: string; pendingInvite
  */
 function PermissionsCatalog({
   catalog,
+  resourceTypes,
   members,
   adminCount,
   busy,
@@ -1004,6 +1060,7 @@ function PermissionsCatalog({
   addError,
 }: {
   catalog: string[]
+  resourceTypes: ResourceTypeDecl[]
   members: Array<{ role: "admin" | "member"; productPermissions: string[] | null }>
   adminCount: number
   busy: boolean
@@ -1017,6 +1074,15 @@ function PermissionsCatalog({
   const holdersFor = (p: string) =>
     adminCount +
     members.filter((m) => m.role === "member" && (m.productPermissions ?? []).includes(p)).length
+  // A type's holders are anyone with a grant UNDER it. Admins resolve to
+  // `<type>:*` downstream, so they hold every type by construction.
+  const typeHoldersFor = (type: string) =>
+    adminCount +
+    members.filter(
+      (m) =>
+        m.role === "member" &&
+        (m.productPermissions ?? []).some((p) => p.startsWith(`${type}:`)),
+    ).length
 
   return (
     <Card>
@@ -1151,6 +1217,38 @@ function PermissionsCatalog({
             })}
           </ul>
         )}
+
+        {resourceTypes.length > 0 ? (
+          <div className="flex flex-col gap-2 border-t pt-4">
+            <h3 className="text-sm leading-none font-medium">Resource types</h3>
+            <p className="text-muted-foreground text-sm">
+              Permission families over instances the app holds — a grant is{" "}
+              <code className="font-mono text-xs">&lt;type&gt;:&lt;id&gt;</code>. Declared by the
+              app over{" "}
+              <code className="font-mono text-xs">PUT /api/v1/apps/{"{app}"}/permissions</code>;
+              instances are read from the app when granting.
+            </p>
+            <ul className="divide-border divide-y rounded-lg border">
+              {resourceTypes.map((t) => {
+                const holders = typeHoldersFor(t.type)
+                return (
+                  <li key={t.type} className="flex min-w-0 flex-col gap-1 px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">{t.label}</span>
+                      <code className="text-muted-foreground font-mono text-xs">{t.type}</code>
+                      <Badge variant="secondary" className="ml-auto">
+                        {holders} {holders === 1 ? "holder" : "holders"}
+                      </Badge>
+                    </div>
+                    <span className="text-muted-foreground truncate font-mono text-xs">
+                      {t.list}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )
@@ -1221,15 +1319,163 @@ function PermissionPicker({
   )
 }
 
+/**
+ * Per-instance grants for ONE declared resource type. The IdP holds no
+ * instances, so the list is fetched live from the app through
+ * `/apps/:clientId/resources` and every checkbox posts the composed
+ * `<type>:<id>` under the same `productPermissions` field the flat picker uses —
+ * the form mechanics don't change, only what can appear in them.
+ */
+function ResourcePicker({
+  name,
+  clientId,
+  type,
+  selected,
+  disabled,
+}: {
+  name: string
+  clientId: string
+  type: ResourceTypeDecl
+  /** The member's FULL productPermissions — flat entries and composed grants. */
+  selected: string[]
+  disabled?: boolean
+}) {
+  const fetcher = useFetcher<{
+    resources?: ResourceInstance[]
+    error?: string
+    detail?: string
+  }>()
+  const [filter, setFilter] = useState("")
+
+  const url = `/apps/${clientId}/resources?type=${encodeURIComponent(type.type)}`
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data === undefined) fetcher.load(url)
+  }, [fetcher, url])
+
+  // `composeScope` lives in scopes.server.ts, which reaches server-only code
+  // (resources.server → auth) — importing it here would drag that into the
+  // client bundle, so the one-line template is inlined instead. Keep the two in
+  // step: `<type>:<id>`.
+  const compose = (id: string) => `${type.type}:${id}`
+
+  const resources = fetcher.data?.resources
+  const listed = new Set((resources ?? []).map((r) => compose(r.id)))
+  const held = selected.filter((s) => s.startsWith(`${type.type}:`))
+  // Grants the member holds that the app no longer lists still have to render,
+  // checked — unchecking one is the only way to take it away, and a grant that
+  // isn't in the form at all would be dropped by the next save. While the list
+  // is loading (or failed) EVERY held grant is in this bucket, but only a
+  // successful listing proves one is gone, so the badge waits for that.
+  const orphans = resources ? held.filter((s) => !listed.has(s)) : held
+  const orphansAreGone = resources !== undefined
+
+  const needle = filter.trim().toLowerCase()
+  const visible = (resources ?? []).filter(
+    (r) =>
+      !needle ||
+      r.label.toLowerCase().includes(needle) ||
+      (r.description ?? "").toLowerCase().includes(needle) ||
+      r.id.toLowerCase().includes(needle),
+  )
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-muted-foreground flex flex-wrap items-baseline gap-1.5 text-xs">
+        {type.label}
+        <span className="font-mono">· {type.type}</span>
+      </Label>
+
+      {fetcher.data === undefined ? (
+        <p className="text-muted-foreground text-xs">Loading…</p>
+      ) : fetcher.data.error ? (
+        <p role="alert" className="text-destructive text-xs">
+          Couldn't load {type.label} from the app: {fetcher.data.detail ?? fetcher.data.error}
+        </p>
+      ) : (
+        <>
+          {(resources ?? []).length > 8 ? (
+            <Input
+              type="text"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder={`Filter ${type.label}…`}
+              aria-label={`Filter ${type.label}`}
+              disabled={disabled}
+              className="h-8"
+            />
+          ) : null}
+          {(resources ?? []).length === 0 ? (
+            <p className="text-muted-foreground text-xs">
+              The app lists no {type.label}s right now.
+            </p>
+          ) : (
+            <fieldset className="flex max-h-56 flex-col gap-1.5 overflow-y-auto">
+              {visible.map((r) => {
+                const value = compose(r.id)
+                return (
+                  <label key={value} className="flex items-start gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      name={name}
+                      value={value}
+                      defaultChecked={selected.includes(value)}
+                      disabled={disabled}
+                      className="mt-0.5 size-3.5"
+                    />
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span>{r.label}</span>
+                      {r.description ? (
+                        <span className="text-muted-foreground">{r.description}</span>
+                      ) : null}
+                      <span className="text-muted-foreground font-mono">{r.id}</span>
+                    </span>
+                  </label>
+                )
+              })}
+            </fieldset>
+          )}
+        </>
+      )}
+
+      {orphans.length > 0 ? (
+        <fieldset className="flex flex-col gap-1.5">
+          {orphans.map((value) => (
+            <label key={value} className="flex items-start gap-2 text-xs">
+              <input
+                type="checkbox"
+                name={name}
+                value={value}
+                defaultChecked
+                disabled={disabled}
+                className="mt-0.5 size-3.5"
+              />
+              <span className="flex min-w-0 flex-wrap items-baseline gap-1.5">
+                <span className="font-mono">{value}</span>
+                {orphansAreGone ? (
+                  <span className="text-muted-foreground">(no longer listed)</span>
+                ) : null}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
+    </div>
+  )
+}
+
 /** Invite by email: existing user → added now; new email → invitation sent. */
 function InviteMemberForm({
   busy,
   error,
   catalog,
+  clientId,
+  resourceTypes,
 }: {
   busy: boolean
   error: string | null
   catalog: string[]
+  clientId: string
+  resourceTypes: ResourceTypeDecl[]
 }) {
   const [role, setRole] = useState<AppRole>("member")
   return (
@@ -1283,6 +1529,16 @@ function InviteMemberForm({
             <Label className="text-muted-foreground text-xs">Product permissions</Label>
             <PermissionPicker name="productPermissions" options={catalog} selected={[]} disabled={busy} />
           </div>
+          {resourceTypes.map((t) => (
+            <ResourcePicker
+              key={t.type}
+              name="productPermissions"
+              clientId={clientId}
+              type={t}
+              selected={[]}
+              disabled={busy}
+            />
+          ))}
         </div>
       ) : (
         <p className="text-muted-foreground text-xs">Admins get all permissions.</p>
@@ -1311,12 +1567,16 @@ function MemberRow({
   member,
   busy,
   catalog,
+  clientId,
+  resourceTypes,
   canManage,
   canImpersonate,
 }: {
   member: MemberRowData
   busy: boolean
   catalog: string[]
+  clientId: string
+  resourceTypes: ResourceTypeDecl[]
   canManage: boolean
   canImpersonate: boolean
 }) {
@@ -1371,6 +1631,16 @@ function MemberRow({
                     disabled={busy}
                   />
                 </div>
+                {resourceTypes.map((t) => (
+                  <ResourcePicker
+                    key={t.type}
+                    name="productPermissions"
+                    clientId={clientId}
+                    type={t}
+                    selected={member.productPermissions ?? []}
+                    disabled={busy}
+                  />
+                ))}
               </div>
             ) : (
               <p className="text-muted-foreground text-xs">Admins get all permissions.</p>

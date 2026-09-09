@@ -21,6 +21,9 @@ export default [
   route("", "routes/app/layout.tsx", [
     index("routes/app/applications.tsx"),
     route("apps/:clientId", "routes/app/app-detail.tsx"),
+    // JSON: the instances of one declared resource type, read live from the app.
+    // Backs the console's per-instance grant picker.
+    route("apps/:clientId/resources", "routes/app/app-resources.ts"),
     route("users", "routes/app/users.tsx"),
     route("users/:userId", "routes/app/user-detail.tsx"),
     route("account", "routes/app/account.tsx"),

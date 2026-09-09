@@ -53,7 +53,7 @@ describe("invitations", () => {
         role: "member",
         permissions: ["member:read"],
         productPermissions: ["invoices:read"],
-        catalog: CATALOG,
+        catalog: { permissions: CATALOG, resourceTypes: [] },
         origin: "https://idp.willy.im",
         ...overrides,
       },
@@ -248,6 +248,20 @@ describe("invitations", () => {
     const member = await memberRow("acme", existing.id)
     expect(member!.productPermissions).toEqual(["invoices:read"])
   })
+
+  it("keeps an instance grant under a declared resource type and drops one under none", async () => {
+    const existing = await createUser(h.ctx, { email: "threads@acme.test" })
+    await invite({
+      email: "threads@acme.test",
+      productPermissions: ["kirby:thread:t_1", "artifacts:abc"],
+      catalog: {
+        permissions: CATALOG,
+        resourceTypes: [{ type: "kirby:thread", label: "Thread", list: "https://acme.test/t" }],
+      },
+    })
+    const member = await memberRow("acme", existing.id)
+    expect(member!.productPermissions).toEqual(["kirby:thread:t_1"])
+  })
 })
 
 describe("member management", () => {
@@ -260,6 +274,19 @@ describe("member management", () => {
     await createApplication(h.ctx, { app: "acme", permissions: ["invoices:read"] })
   })
   afterEach(() => h.close())
+
+  const memberRow = async (app: string, userId: string) => {
+    const [row] = await h.ctx.db
+      .select()
+      .from(schema.applicationMember)
+      .where(
+        and(
+          eq(schema.applicationMember.applicationId, app),
+          eq(schema.applicationMember.userId, userId),
+        ),
+      )
+    return row ?? null
+  }
 
   it("refuses to demote the last admin", async () => {
     const boss = await createUser(h.ctx, { email: "boss@acme.test" })
@@ -300,9 +327,45 @@ describe("member management", () => {
         role: "member",
         permissions: ["member:read"],
         productPermissions: ["invoices:read"],
-        catalog: ["invoices:read"],
+        catalog: { permissions: ["invoices:read"], resourceTypes: [] },
       }),
     ).toEqual({ ok: true })
+  })
+
+  it("keeps an instance grant while its type is declared, and drops it when it isn't", async () => {
+    // The grant is stored as the composed string; what makes it valid is the
+    // TYPE still being in the catalog. Nothing here asks bender whether the
+    // conversation exists — that is checked when a key is minted, not on every
+    // membership edit.
+    const boss = await createUser(h.ctx, { email: "boss@acme.test" })
+    const deputy = await createUser(h.ctx, { email: "deputy@acme.test" })
+    await createMember(h.ctx, { app: "acme", userId: boss.id, role: "admin" })
+    await createMember(h.ctx, { app: "acme", userId: deputy.id, role: "member" })
+
+    const thread = {
+      type: "kirby:thread",
+      label: "WhatsApp conversation",
+      list: "https://bender.test/idp/resources/kirby-thread",
+    }
+    const edit = (resourceTypes: typeof thread[]) =>
+      updateAppMember(h.ctx, root, {
+        app: "acme",
+        userId: deputy.id,
+        role: "member",
+        permissions: ["member:read"],
+        productPermissions: ["invoices:read", "kirby:thread:t_1"],
+        catalog: { permissions: ["invoices:read"], resourceTypes },
+      })
+
+    expect(await edit([thread])).toEqual({ ok: true })
+    const kept = await memberRow("acme", deputy.id)
+    expect(kept!.productPermissions).toEqual(["invoices:read", "kirby:thread:t_1"])
+
+    // The app removed the type from its catalog; the grant no longer names
+    // anything the app admits to having.
+    expect(await edit([])).toEqual({ ok: true })
+    const dropped = await memberRow("acme", deputy.id)
+    expect(dropped!.productPermissions).toEqual(["invoices:read"])
   })
 
   it("refuses to update or remove a member without member:manage", async () => {

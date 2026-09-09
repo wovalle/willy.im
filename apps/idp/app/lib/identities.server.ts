@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm"
 
 import * as schema from "../db/schema"
-import { getApplicationByApp } from "./admin.server"
+import { catalogOf, getApplicationByApp } from "./admin.server"
 import { IDP_AUDIT_SCOPE, recordAudit } from "./audit.server"
 import { assertCan, type Caller } from "./caller.server"
 import { productPermissionsFor } from "./claims.server"
@@ -220,7 +220,7 @@ export async function resolveIdentity(
     ctx.db,
     row.userId,
     input.app,
-    application?.permissions ?? [],
+    catalogOf(application),
   )
 
   return {

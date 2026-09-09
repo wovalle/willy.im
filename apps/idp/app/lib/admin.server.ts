@@ -10,7 +10,14 @@ import {
   generateClientSecret,
   hashClientSecret,
 } from "./client-secret.server"
-import { type AppConfig, parseAppMetadata, unwrapJson as unwrap } from "./metadata"
+import {
+  type AppConfig,
+  parseAppMetadata,
+  type ResourceTypeDecl,
+  serializeAppMetadata,
+  unwrapJson as unwrap,
+} from "./metadata"
+import type { AppCatalog } from "./scopes.server"
 import type { BaseServiceContext } from "./services"
 import { firstInvalidRedirectUri } from "./validate"
 
@@ -25,6 +32,8 @@ export type ApplicationSummary = {
   app: string | null
   allowSignup: boolean
   permissions: string[]
+  /** Declared resource types — permission families over instances the app holds. */
+  resourceTypes: ResourceTypeDecl[]
   /** Protected resource URIs (e.g. the app's MCP server) — valid `resource` audiences. */
   resources: string[]
   redirectUris: string[]
@@ -53,6 +62,7 @@ export async function listApplications(ctx: BaseServiceContext): Promise<Applica
       app: meta.app,
       allowSignup: meta.allow_signup,
       permissions: meta.permissions,
+      resourceTypes: meta.resource_types,
       resources: meta.resources,
       redirectUris: coerceUriList(r.redirectUris),
       disabled: !!r.disabled,
@@ -76,6 +86,14 @@ export async function getApplicationByApp(
 ): Promise<ApplicationSummary | null> {
   const all = await listApplications(ctx)
   return all.find((a) => a.app === app) ?? null
+}
+
+/** The two halves of an app's product catalog, as the scope checks read them. */
+export function catalogOf(application: ApplicationSummary | null | undefined): AppCatalog {
+  return {
+    permissions: application?.permissions ?? [],
+    resourceTypes: application?.resourceTypes ?? [],
+  }
 }
 
 /**
@@ -109,7 +127,7 @@ export async function updateApplicationMetadata(
   await assertCan(caller, app, "app:update")
   await ctx.db
     .update(schema.oauthClient)
-    .set({ metadata: { app: app || null, allow_signup: config.allow_signup, permissions: config.permissions, resources: config.resources } })
+    .set({ metadata: serializeAppMetadata({ app: app || null, ...config }) })
     .where(eq(schema.oauthClient.clientId, clientId))
   await recordAudit(ctx, {
     actor: caller.actor,
@@ -122,16 +140,35 @@ export async function updateApplicationMetadata(
 }
 
 /**
- * Replace an app's product-permission catalog, preserving the rest of its
- * metadata (immutable `app` key + allow_signup). Catalog entries are the
- * vocabulary members can be granted and what's emitted in the permissions claim.
+ * Is this somewhere the IdP may call out to? Production apps are https; the
+ * loopback exception exists so a local bender can be granted against a local
+ * IdP without a TLS setup neither will ever have.
+ */
+function isCallableListUrl(raw: string): boolean {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return false
+  }
+  if (url.hash) return false
+  if (url.protocol === "https:") return true
+  return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+}
+
+/**
+ * Replace an app's product-permission catalog — both halves — preserving the
+ * rest of its metadata (immutable `app` key, allow_signup, resources). Flat
+ * entries are the vocabulary members can be granted and what's emitted in the
+ * permissions claim; resource types are the families per-instance grants
+ * compose under.
  */
 export async function updateApplicationPermissions(
   ctx: BaseServiceContext,
   caller: Caller,
   clientId: string,
-  permissions: string[],
-) {
+  catalog: { permissions: string[]; resourceTypes: ResourceTypeDecl[] },
+): Promise<AppCatalog | { error: "invalid_resource_type"; detail: string }> {
   const [row] = await ctx.db
     .select({ metadata: schema.oauthClient.metadata })
     .from(schema.oauthClient)
@@ -139,10 +176,20 @@ export async function updateApplicationPermissions(
     .limit(1)
   const meta = parseAppMetadata(unwrap(row?.metadata))
   await assertCan(caller, meta.app ?? "", "app:update")
-  const next = [...new Set(permissions.map((p) => p.trim()).filter(Boolean))]
+  const permissions = [...new Set(catalog.permissions.map((p) => p.trim()).filter(Boolean))]
+  const seen = new Set<string>()
+  const resourceTypes: ResourceTypeDecl[] = []
+  for (const t of catalog.resourceTypes) {
+    if (seen.has(t.type)) continue
+    seen.add(t.type)
+    if (!isCallableListUrl(t.list)) return { error: "invalid_resource_type", detail: t.list }
+    resourceTypes.push({ type: t.type, label: t.label.trim() || t.type, list: t.list.trim() })
+  }
   await ctx.db
     .update(schema.oauthClient)
-    .set({ metadata: { app: meta.app, allow_signup: meta.allow_signup, permissions: next, resources: meta.resources } })
+    .set({
+      metadata: serializeAppMetadata({ ...meta, permissions, resource_types: resourceTypes }),
+    })
     .where(eq(schema.oauthClient.clientId, clientId))
   await recordAudit(ctx, {
     actor: caller.actor,
@@ -150,9 +197,9 @@ export async function updateApplicationPermissions(
     operation: "update",
     applicationId: meta.app ?? "",
     rowId: clientId,
-    after: { permissions: next },
+    after: { permissions, resourceTypes },
   })
-  return next
+  return { permissions, resourceTypes }
 }
 
 export type CreateApplicationInput = {
@@ -414,12 +461,13 @@ export async function updateApplication(
       ...(patch.redirectUris !== undefined ? { redirectUris: patch.redirectUris } : {}),
       ...(metadataChanged
         ? {
-            metadata: {
+            metadata: serializeAppMetadata({
               app: current.app,
               allow_signup: patch.allowSignup ?? current.allowSignup,
               permissions: current.permissions,
               resources: resources ?? current.resources,
-            },
+              resource_types: current.resourceTypes,
+            }),
           }
         : {}),
       updatedAt: new Date(),

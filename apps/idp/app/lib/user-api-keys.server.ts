@@ -1,10 +1,12 @@
 import { and, desc, eq } from "drizzle-orm"
 
 import * as schema from "../db/schema"
-import { getApplicationByApp } from "./admin.server"
+import { catalogOf, getApplicationByApp } from "./admin.server"
 import { generateToken, hashToken } from "./api-keys.server"
 import { recordAudit } from "./audit.server"
 import { assertCan, type Caller } from "./caller.server"
+import type { ResourceLister } from "./resources.server"
+import { resolveScopes, type ScopeResolution } from "./scopes.server"
 import type { BaseServiceContext } from "./services"
 
 /**
@@ -74,10 +76,17 @@ export async function listUserApiKeys(
   }))
 }
 
+export type CreateUserApiKeyResult =
+  | { id: string; token: string; prefix: string }
+  | { error: "unknown_user" }
+  | Exclude<ScopeResolution, { ok: true }>
+
 /**
  * Mints a key for one of the app's users. Returns the plaintext exactly once.
- * Scopes are validated against the app's declared catalog; unknown scopes are
- * rejected (not silently dropped) so the caller learns about the mismatch.
+ * Scopes are validated against the app's declared catalog — a flat permission,
+ * or `<type>:<id>` where the type is declared AND the app currently lists the
+ * instance (asked over the type's `list` URL). Anything else is rejected, not
+ * silently dropped, so the caller learns about the mismatch.
  *
  * Requires `userkey:create`.
  */
@@ -92,10 +101,8 @@ export async function createUserApiKey(
     workspaceId?: string | null
     expiresAt?: Date | null
   },
-): Promise<
-  | { id: string; token: string; prefix: string }
-  | { error: "unknown_user" | "unknown_scopes"; detail?: string[] }
-> {
+  deps: { resources: ResourceLister },
+): Promise<CreateUserApiKeyResult> {
   await assertCan(caller, input.app, "userkey:create")
   const [u] = await ctx.db
     .select({ id: schema.user.id })
@@ -104,13 +111,15 @@ export async function createUserApiKey(
     .limit(1)
   if (!u) return { error: "unknown_user" }
 
-  const scopes = [...new Set((input.scopes ?? []).map((s) => s.trim()).filter(Boolean))]
-  if (scopes.length) {
-    const application = await getApplicationByApp(ctx, input.app)
-    const catalog = new Set(application?.permissions ?? [])
-    const unknown = scopes.filter((s) => !catalog.has(s))
-    if (unknown.length) return { error: "unknown_scopes", detail: unknown }
-  }
+  const application = await getApplicationByApp(ctx, input.app)
+  const resolved = await resolveScopes(
+    input.scopes ?? [],
+    input.app,
+    catalogOf(application),
+    deps.resources,
+  )
+  if ("error" in resolved) return resolved
+  const scopes = resolved.scopes
 
   const token = generateToken(USER_TOKEN_PREFIX)
   const keyHash = await hashToken(token)
