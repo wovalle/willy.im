@@ -215,7 +215,9 @@ type Session = {
 }
 ```
 
-`can()` matches exactly, and honours `resource:*` and `*` grants.
+`can()` matches exactly, and honours `resource:*` and `*` grants — so a grant of
+`kirby:*` covers `kirby:read` and a per-instance `kirby:thread:t_7f3a` alike
+(see [Resource-scoped grants](#resource-scoped-grants)).
 
 `image` is effectively always set against the willy.im IdP: it renders a
 deterministic [blobatar](https://blobatar.dev) for anyone who never uploaded a
@@ -321,7 +323,9 @@ const keys = createUserKeys({
 const minted = await keys.create({
   userId: session.userId,
   name: "cli",
-  scopes: ["analytics:read"], // must be in the app's product permission catalog
+  // A declared permission, or `<type>:<id>` for an instance the app lists —
+  // anything else is a 422 (`unknown_scopes` / `unknown_resource`).
+  scopes: ["analytics:read", "kirby:thread:t_7f3a"],
   workspaceId: session.workspaceId,
 })
 
@@ -346,6 +350,61 @@ Only for **secret** credentials. A key embedded in a web page — an analytics
 ingest token, say — identifies a site rather than a user, cannot be kept secret,
 and must not pay a round trip per hit. Keep those in the app's own table and
 gate them on `Origin` plus rate limiting.
+
+## Resource-scoped grants
+
+A permission names a surface (`kirby:read`). When the honest grant is one thing
+inside it — one conversation, one document, one workspace — the app declares a
+resource **type** in its catalog and the grant becomes `<type>:<id>`:
+
+```ts
+await api.request("put", "/api/v1/apps/{app}/permissions", {
+  params: { app: "bender" },
+  body: {
+    permissions: ["kirby:read", "kirby:write"],
+    resourceTypes: [
+      {
+        type: "kirby:thread", // grants compose as kirby:thread:<id>
+        label: "WhatsApp conversation", // what the console calls one
+        list: "https://bender.romo.fyi/idp/resources/kirby-thread",
+      },
+    ],
+  },
+})
+```
+
+The IdP never stores the instances. When someone picks one in the console, or a
+key is minted for one, it GETs the type's `list` URL and reads
+`{ resources: [{ id, label, description? }] }` (`ResourceListSchema` in
+`@willyim/idp/schemas`). The call carries a one-minute JWT the IdP signs with
+its OIDC key — `aud` is the list URL, the permissions claim is
+`idp:resources:list` — which the app verifies exactly as it verifies an MCP
+access token:
+
+```ts
+import { createResourceServer, RESOURCE_LIST_PERMISSION } from "@willyim/idp"
+
+const listing = createResourceServer({
+  issuer: "https://idp.willy.im/auth",
+  resource: "https://bender.romo.fyi/idp/resources/kirby-thread",
+})
+
+const auth = await listing.authenticate(request, { permissions: [RESOURCE_LIST_PERMISSION] })
+if (!auth.ok) return new Response(auth.error, { status: auth.status })
+return Response.json({ resources: threads.map((t) => ({ id: t.handle, label: t.title })) })
+```
+
+`id` is the stable, opaque handle the grant will name — never an alias — and
+is one segment (no colon, no `*`, no whitespace). On the consuming side nothing
+changes: the composed string arrives in `permissions` / `scopes`, and
+`grants(permissions, "kirby:thread:t_7f3a")` is true for that grant, for
+`kirby:*`, and for `*`. App admins hold `<type>:*` for every declared type. A
+grant whose instance later disappears stays on the key and simply matches
+nothing; removing it is a console act, not the app's.
+
+The full contract — token claims, every error shape, what happens when the
+list is unreachable — is in
+[`apps/idp/docs/resource-scopes.md`](../../apps/idp/docs/resource-scopes.md).
 
 ## Linked identities
 
