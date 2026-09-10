@@ -11,7 +11,8 @@ import * as appKey from "../app/routes/api/apps.$app.keys.$id"
 import * as appMembers from "../app/routes/api/apps.$app.members"
 import * as appPermissions from "../app/routes/api/apps.$app.permissions"
 import * as appUserKeys from "../app/routes/api/apps.$app.user-keys"
-import { bootstrapAdminKey, createMember, createUser } from "./helpers/fixtures"
+import type { ResourceLister } from "../app/lib/resources.server"
+import { bootstrapAdminKey, createMember, createUser, stubResources } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
@@ -33,6 +34,9 @@ describe("management API routes", () => {
   /** An IdP-level admin key — the only bearer a cross-app endpoint accepts. */
   let root: Caller
   let adminToken: string
+  /** Swapped per test; the context hands the routes a thunk so this stays live. */
+  let lister: ResourceLister
+  const resources: ResourceLister = (input) => lister(input)
 
   /** Handlers signal failure by throwing a Response; normalise both paths. */
   const call = async (
@@ -57,7 +61,8 @@ describe("management API routes", () => {
 
   beforeEach(async () => {
     h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
-    context = { ...h.ctx, services: { auth: authStub(null) }, cloudflare: {} }
+    lister = stubResources({})
+    context = { ...h.ctx, services: { auth: authStub(null), resources }, cloudflare: {} }
     const bootstrap = await bootstrapAdminKey(h.ctx)
     adminToken = bootstrap.token
     root = bootstrap.caller
@@ -75,7 +80,7 @@ describe("management API routes", () => {
   const asMember = async (permissions: string[]) => {
     const user = await createUser(h.ctx, { email: `m${permissions.length}@acme.test` })
     await createMember(h.ctx, { app: "acme", userId: user.id, role: "member", permissions })
-    context = { ...h.ctx, services: { auth: authStub(user) }, cloudflare: {} }
+    context = { ...h.ctx, services: { auth: authStub(user), resources }, cloudflare: {} }
     return user
   }
 
@@ -251,7 +256,107 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({
         status: 200,
-        body: { permissions: ["invoices:read", "invoices:write"] },
+        body: { permissions: ["invoices:read", "invoices:write"], resourceTypes: [] },
+      })
+    })
+
+    it("200s declared resource types, labelling one by its own name when none is given", async () => {
+      const res = await call(appPermissions.action, {
+        request: request("/api/v1/apps/acme/permissions", {
+          method: "PUT",
+          token: adminToken,
+          body: {
+            permissions: ["kirby:read"],
+            resourceTypes: [
+              { type: "kirby:thread", list: "https://bender.test/idp/resources/kirby-thread" },
+            ],
+          },
+        }),
+        params: { app: "acme" },
+      })
+      // `label` is what the console shows next to an instance; an app that
+      // didn't bother gets the type name rather than an empty cell.
+      expect(res).toEqual({
+        status: 200,
+        body: {
+          permissions: ["kirby:read"],
+          resourceTypes: [
+            {
+              type: "kirby:thread",
+              label: "kirby:thread",
+              list: "https://bender.test/idp/resources/kirby-thread",
+            },
+          ],
+        },
+      })
+    })
+
+    it("422s a list URL the IdP would not call out to, naming it", async () => {
+      // Plain http on a non-loopback host: the listing token would cross the
+      // network in the clear, so it is refused at declaration time.
+      const res = await call(appPermissions.action, {
+        request: request("/api/v1/apps/acme/permissions", {
+          method: "PUT",
+          token: adminToken,
+          body: {
+            permissions: [],
+            resourceTypes: [{ type: "kirby:thread", list: "http://bender.internal/x" }],
+          },
+        }),
+        params: { app: "acme" },
+      })
+      expect(res).toEqual({
+        status: 422,
+        body: { error: "invalid_resource_type", detail: "http://bender.internal/x" },
+      })
+    })
+
+    it("accepts plain http on loopback, so a local app can be wired to a local IdP", async () => {
+      const res = await call(appPermissions.action, {
+        request: request("/api/v1/apps/acme/permissions", {
+          method: "PUT",
+          token: adminToken,
+          body: {
+            permissions: [],
+            resourceTypes: [{ type: "kirby:thread", list: "http://localhost:8484/x" }],
+          },
+        }),
+        params: { app: "acme" },
+      })
+      expect(res.status).toBe(200)
+      expect((res.body as { resourceTypes: { list: string }[] }).resourceTypes).toEqual([
+        { type: "kirby:thread", label: "kirby:thread", list: "http://localhost:8484/x" },
+      ])
+    })
+
+    it("clears the resource types when a later PUT omits them — it is a replace, not a merge", async () => {
+      const declare = () =>
+        call(appPermissions.action, {
+          request: request("/api/v1/apps/acme/permissions", {
+            method: "PUT",
+            token: adminToken,
+            body: {
+              permissions: ["kirby:read"],
+              resourceTypes: [
+                { type: "kirby:thread", list: "https://bender.test/idp/resources/kirby-thread" },
+              ],
+            },
+          }),
+          params: { app: "acme" },
+        })
+      expect((await declare()).status).toBe(200)
+
+      const cleared = await call(appPermissions.action, {
+        request: request("/api/v1/apps/acme/permissions", {
+          method: "PUT",
+          token: adminToken,
+          body: { permissions: ["kirby:read"] },
+        }),
+        params: { app: "acme" },
+      })
+      expect(cleared).toEqual({
+        status: 200,
+        body: { permissions: ["kirby:read"], resourceTypes: [] },
       })
     })
 
@@ -389,6 +494,37 @@ describe("management API routes", () => {
         params: { app: "acme" },
       })
       expect(res).toEqual({ status: 200, body: { keys: [] } })
+    })
+
+    it("502s when the app's own resource list can't be read — that is not the caller's mistake", async () => {
+      await call(appPermissions.action, {
+        request: request("/api/v1/apps/acme/permissions", {
+          method: "PUT",
+          token: adminToken,
+          body: {
+            permissions: ["kirby:read"],
+            resourceTypes: [
+              { type: "kirby:thread", list: "https://bender.test/idp/resources/kirby-thread" },
+            ],
+          },
+        }),
+        params: { app: "acme" },
+      })
+      const user = await createUser(h.ctx, { email: "picker@acme.test" })
+      lister = stubResources({ "kirby:thread": new Error("bender is down") })
+
+      const res = await call(appUserKeys.action, {
+        request: request("/api/v1/apps/acme/user-keys", {
+          method: "POST",
+          token: adminToken,
+          body: { userId: user.id, name: "CLI", scopes: ["kirby:thread:t_1"] },
+        }),
+        params: { app: "acme" },
+      })
+      expect(res).toEqual({
+        status: 502,
+        body: { error: "resource_lookup_failed", detail: ["kirby:thread"] },
+      })
     })
   })
 

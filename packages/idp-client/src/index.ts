@@ -62,6 +62,19 @@ export {
   type ManagementApiOptions,
 } from "./api.js"
 
+// Resource-scoped grants: the permission the IdP's listing token carries, and
+// the shapes of a type and an instance. The full set lives in ./schemas.
+export {
+  RESOURCE_ID_RE,
+  RESOURCE_LIST_PERMISSION,
+  RESOURCE_LIST_TOKEN_TTL_S,
+  RESOURCE_TYPE_RE,
+  ResourceInstanceSchema,
+  ResourceListSchema,
+  ResourceTypeInput,
+  ResourceTypeSchema,
+} from "./schemas/index.js"
+
 export {
   createUserKeys,
   readApiKey,

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import { APP_PERMISSIONS, resolvePermissions } from "../app/lib/permissions"
 import { productPermissionsFor } from "../app/lib/claims.server"
+import type { AppCatalog } from "../app/lib/scopes.server"
 import { createApplication, createMember, createUser } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
@@ -38,13 +39,15 @@ describe("productPermissionsFor", () => {
   afterEach(() => h.close())
 
   const CATALOG = ["invoices:read", "invoices:write", "reports:read"]
+  /** An app that declares flat permissions and no resource types. */
+  const flat = (permissions: string[]): AppCatalog => ({ permissions, resourceTypes: [] })
 
   it("resolves an admin to the app's full declared catalog", async () => {
     const user = await createUser(h.ctx, { email: "admin@acme.test" })
     await createApplication(h.ctx, { app: "acme", permissions: CATALOG })
     await createMember(h.ctx, { app: "acme", userId: user.id, role: "admin" })
 
-    expect(await productPermissionsFor(h.ctx.db, user.id, "acme", CATALOG)).toEqual(CATALOG)
+    expect(await productPermissionsFor(h.ctx.db, user.id, "acme", flat(CATALOG))).toEqual(CATALOG)
   })
 
   it("resolves a member to their grants intersected with the catalog", async () => {
@@ -57,7 +60,7 @@ describe("productPermissionsFor", () => {
       productPermissions: ["invoices:read", "reports:read"],
     })
 
-    expect(await productPermissionsFor(h.ctx.db, user.id, "acme", CATALOG)).toEqual([
+    expect(await productPermissionsFor(h.ctx.db, user.id, "acme", flat(CATALOG))).toEqual([
       "invoices:read",
       "reports:read",
     ])
@@ -75,7 +78,7 @@ describe("productPermissionsFor", () => {
 
     // The app removed reports:read from its catalog after the grant was made.
     const shrunk = ["invoices:read", "invoices:write"]
-    expect(await productPermissionsFor(h.ctx.db, user.id, "acme", shrunk)).toEqual([
+    expect(await productPermissionsFor(h.ctx.db, user.id, "acme", flat(shrunk))).toEqual([
       "invoices:read",
     ])
   })
@@ -84,14 +87,14 @@ describe("productPermissionsFor", () => {
     const user = await createUser(h.ctx, { email: "stranger@acme.test" })
     await createApplication(h.ctx, { app: "acme", permissions: CATALOG })
 
-    expect(await productPermissionsFor(h.ctx.db, user.id, "acme", CATALOG)).toEqual([])
+    expect(await productPermissionsFor(h.ctx.db, user.id, "acme", flat(CATALOG))).toEqual([])
   })
 
   it("returns nothing when the request has no app context", async () => {
     const user = await createUser(h.ctx, { email: "noapp@acme.test" })
     await createMember(h.ctx, { app: "acme", userId: user.id, role: "admin" })
 
-    expect(await productPermissionsFor(h.ctx.db, user.id, undefined, CATALOG)).toEqual([])
+    expect(await productPermissionsFor(h.ctx.db, user.id, undefined, flat(CATALOG))).toEqual([])
   })
 
   it("does not leak membership from another app", async () => {
@@ -100,6 +103,6 @@ describe("productPermissionsFor", () => {
     await createApplication(h.ctx, { app: "other", permissions: CATALOG })
     await createMember(h.ctx, { app: "other", userId: user.id, role: "admin" })
 
-    expect(await productPermissionsFor(h.ctx.db, user.id, "acme", CATALOG)).toEqual([])
+    expect(await productPermissionsFor(h.ctx.db, user.id, "acme", flat(CATALOG))).toEqual([])
   })
 })

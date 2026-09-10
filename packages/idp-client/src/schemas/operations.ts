@@ -121,6 +121,8 @@ export const operations = {
   },
   "put /api/v1/apps/{app}/permissions": {
     summary: "Replace the app's product-permission catalog",
+    description:
+      "Wholesale replace of both halves of the catalog: the flat permissions, and the resource types (`{ type, label, list }`) that per-instance grants such as `kirby:thread:<id>` compose under. The IdP GETs each type's `list` URL — with a 60s IdP-signed JWT whose `aud` is that URL — whenever it needs the instances; it never stores them. Omitting `resourceTypes` clears them. 422 `invalid_resource_type` names a `list` URL that is not absolute https (http is allowed for loopback hosts only).",
     permission: "app:update",
     params: APP_PARAM,
     notFound: "No application with that app key",
@@ -248,6 +250,8 @@ export const operations = {
   },
   "post /api/v1/apps/{app}/user-keys": {
     summary: "Mint an end-user API key (plaintext returned once)",
+    description:
+      "Every scope must be a declared permission or `<declared type>:<id>` for an instance the app currently lists. 422 `unknown_scopes` names scopes the catalog does not declare; 422 `unknown_resource` names `<type>:<id>` grants whose instance the app did not list; 502 `resource_lookup_failed` names the types whose `list` URL could not be read.",
     permission: "userkey:create",
     params: APP_PARAM,
     input: CreateUserApiKeyInput,

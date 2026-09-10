@@ -7,7 +7,13 @@ import {
 } from "../../app/lib/api-keys.server"
 import type { AuthService } from "../../app/lib/auth.server"
 import { resolveCaller, type Caller } from "../../app/lib/caller.server"
+import type { ResourceTypeDecl } from "../../app/lib/metadata"
 import type { AppPermission } from "../../app/lib/permissions"
+import {
+  ResourceListError,
+  type ResourceInstance,
+  type ResourceLister,
+} from "../../app/lib/resources.server"
 import type { BaseServiceContext } from "../../app/lib/services"
 
 /**
@@ -46,6 +52,8 @@ export async function createApplication(
     allowSignup?: boolean
     /** The app's declared product-permission catalog. */
     permissions?: string[]
+    /** Resource types the app declares — the families `<type>:<id>` grants compose under. */
+    resourceTypes?: ResourceTypeDecl[]
     redirectUris?: string[]
   },
 ) {
@@ -59,6 +67,7 @@ export async function createApplication(
       app: input.app,
       allow_signup: input.allowSignup ?? false,
       permissions: input.permissions ?? [],
+      resource_types: input.resourceTypes ?? [],
     },
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -219,3 +228,28 @@ export async function mintAdminKey(
     expiresAt: input.expiresAt ?? null,
   })
 }
+
+/**
+ * A `ResourceLister` that answers from a literal map instead of an app's HTTP
+ * endpoint, keyed by type name. An unknown key or an `Error` value fails the
+ * way the real lister does — a `ResourceListError`, never a bare throw — so the
+ * callers under test take the same `resource_lookup_failed` branch they would
+ * take against a bender that is down.
+ */
+export function stubResources(
+  lists: Record<string, ResourceInstance[] | Error>,
+): ResourceLister {
+  return async ({ type }) => {
+    const listed = lists[type.type]
+    if (!listed || listed instanceof Error) {
+      throw new ResourceListError(type.type, "unreachable", "stub")
+    }
+    return listed
+  }
+}
+
+/**
+ * The lister for a test that only ever grants flat permissions: any call to it
+ * is itself the bug, and this one fails loudly rather than returning `[]`.
+ */
+export const noResources: ResourceLister = stubResources({})

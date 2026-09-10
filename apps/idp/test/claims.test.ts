@@ -34,6 +34,14 @@ describe("customClaimsFor", () => {
     permissions,
   })
 
+  const THREAD = {
+    type: "kirby:thread",
+    label: "WhatsApp conversation",
+    list: "https://bender.test/idp/resources/kirby-thread",
+  }
+  /** The same app, as stored once it declares a resource type. */
+  const metaWithThread = (app = "acme") => ({ ...metaFor(app), resource_types: [THREAD] })
+
   type WorkspaceClaim = { id: string; slug: string; role: string }
 
   it("emits only the workspaces belonging to the requesting app", async () => {
@@ -127,6 +135,49 @@ describe("customClaimsFor", () => {
 
     const claims = await customClaimsFor(h.ctx.db, user.id, metaFor("acme"))
     expect(claims).not.toHaveProperty("act")
+  })
+
+  it("resolves an admin to the flat catalog plus a wildcard per resource type", async () => {
+    // Instances belong to the app, so an admin's claim can't enumerate them —
+    // `kirby:thread:*` is what `grants()` expands, and it never goes stale.
+    const user = await createUser(h.ctx, { email: "boss@acme.test" })
+    await createApplication(h.ctx, { app: "acme", permissions: CATALOG, resourceTypes: [THREAD] })
+    await createMember(h.ctx, { app: "acme", userId: user.id, role: "admin" })
+
+    const claims = await customClaimsFor(h.ctx.db, user.id, metaWithThread())
+    expect(claims[PERMISSIONS_CLAIM]).toEqual([...CATALOG, "kirby:thread:*"])
+  })
+
+  it("carries a member's per-instance grant through untouched", async () => {
+    // No lister is involved: a token mint must never depend on the app being
+    // up, so existence was checked when the grant was written.
+    const user = await createUser(h.ctx, { email: "picker@acme.test" })
+    await createApplication(h.ctx, { app: "acme", permissions: CATALOG, resourceTypes: [THREAD] })
+    await createMember(h.ctx, {
+      app: "acme",
+      userId: user.id,
+      role: "member",
+      productPermissions: ["invoices:read", "kirby:thread:t_1"],
+    })
+
+    const claims = await customClaimsFor(h.ctx.db, user.id, metaWithThread())
+    expect(claims[PERMISSIONS_CLAIM]).toEqual(["invoices:read", "kirby:thread:t_1"])
+  })
+
+  it("drops a per-instance grant once the app stops declaring its type", async () => {
+    const user = await createUser(h.ctx, { email: "stale@acme.test" })
+    await createApplication(h.ctx, { app: "acme", permissions: CATALOG, resourceTypes: [THREAD] })
+    await createMember(h.ctx, {
+      app: "acme",
+      userId: user.id,
+      role: "member",
+      productPermissions: ["invoices:read", "kirby:thread:t_1"],
+    })
+
+    // Same stored grants, catalog without the type — the same shrinking rule
+    // flat permissions have always been under.
+    const claims = await customClaimsFor(h.ctx.db, user.id, metaFor("acme"))
+    expect(claims[PERMISSIONS_CLAIM]).toEqual(["invoices:read"])
   })
 
   it("emits nothing at all for a client with no app tag", async () => {

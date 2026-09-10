@@ -12,12 +12,68 @@
 
 import { z } from "zod"
 
+// --- Resource-scoped permissions ---
+//
+// A permission names a surface (`kirby:read`). A resource TYPE names a family
+// of permissions over instances the app holds (`kirby:thread` over every
+// conversation), and a grant is the composed string `<type>:<id>` —
+// `kirby:thread:t_7f3a`. The IdP never stores the instances: it asks the app
+// for them, over the `list` URL the type declares, whenever a human picks one
+// or a key is minted. `grants()` is untouched — `kirby:*` and `*` cover every
+// instance the same way they cover `kirby:read`.
+
+/** A resource type name: colon-separated lowercase segments, no wildcard. */
+export const RESOURCE_TYPE_RE = /^[a-z0-9_-]+(:[a-z0-9_-]+)*$/
+/** An instance id: the final segment of a grant, so no colon, no `*`, no whitespace. */
+export const RESOURCE_ID_RE = /^[^\s:*]+$/
+
+/**
+ * The permission the IdP's listing token carries, so an app can gate its `list`
+ * endpoint with `resourceServer.authenticate(request, { permissions: [...] })`.
+ * Namespaced under `idp:` so it can never collide with an app's own catalog.
+ */
+export const RESOURCE_LIST_PERMISSION = "idp:resources:list"
+
+/** Lifetime of the IdP-signed token that authenticates a listing call. */
+export const RESOURCE_LIST_TOKEN_TTL_S = 60
+
+export const ResourceTypeInput = z.object({
+  type: z
+    .string()
+    .regex(RESOURCE_TYPE_RE, "lowercase segments separated by colons, e.g. kirby:thread")
+    .describe("Permission prefix a grant composes under: `kirby:thread` → `kirby:thread:<id>`"),
+  label: z.string().min(1).optional().describe("Human name for one instance, shown in the console — “WhatsApp conversation”"),
+  list: z
+    .string()
+    .url()
+    .describe(
+      "Absolute URL the IdP GETs to enumerate instances. Called with an IdP-signed bearer JWT (aud = this URL); must answer `ResourceListSchema`",
+    ),
+})
+export const ResourceTypeSchema = z.object({
+  type: z.string(),
+  label: z.string(),
+  list: z.string(),
+})
+
+/** One instance of a resource type, as the app's `list` endpoint reports it. */
+export const ResourceInstanceSchema = z.object({
+  id: z.string().regex(RESOURCE_ID_RE).describe("The stable, opaque id the grant will name — a handle, never an alias"),
+  label: z.string().min(1).describe("What a human sees when picking it"),
+  description: z.string().nullable().optional().describe("Secondary line in the picker — kind, size, last activity"),
+})
+/** The body an app's resource `list` endpoint must answer with. */
+export const ResourceListSchema = z.object({ resources: z.array(ResourceInstanceSchema) })
+
 export const ApplicationSchema = z.object({
   clientId: z.string(),
   name: z.string().nullable(),
   app: z.string().nullable().describe("Application key; consumer workspace claims are filtered by this"),
   allowSignup: z.boolean().describe("Whether unknown users may sign themselves up"),
   permissions: z.array(z.string()).describe("The app's declared product-permission catalog"),
+  resourceTypes: z
+    .array(ResourceTypeSchema)
+    .describe("Declared resource types — permission families over instances the app holds"),
   resources: z
     .array(z.string())
     .describe("Protected resource URIs (e.g. the app's MCP server) — valid `resource` audiences for access tokens"),
@@ -88,11 +144,19 @@ export const ClientSecretSchema = z.object({
   clientSecret: z.string().describe("Plaintext client secret — shown exactly once, never stored"),
 })
 
-/** Replaces the app's product-permission catalog wholesale. */
+/**
+ * Replaces the app's product-permission catalog wholesale — both the flat
+ * permissions and the resource types. Omitting `resourceTypes` clears them,
+ * the same way omitting a permission removes it.
+ */
 export const SetAppPermissionsInput = z.object({
   permissions: z.array(z.string().min(1)),
+  resourceTypes: z.array(ResourceTypeInput).default([]),
 })
-export const AppPermissionsSchema = z.object({ permissions: z.array(z.string()) })
+export const AppPermissionsSchema = z.object({
+  permissions: z.array(z.string()),
+  resourceTypes: z.array(ResourceTypeSchema),
+})
 export const UserListSchema = z.object({ users: z.array(UserSchema) })
 export const WorkspaceListSchema = z.object({ workspaces: z.array(WorkspaceSchema) })
 
@@ -159,7 +223,12 @@ export const UserApiKeyListSchema = z.object({ keys: z.array(UserApiKeySchema) }
 export const CreateUserApiKeyInput = z.object({
   userId: z.string().min(1),
   name: z.string().min(1),
-  scopes: z.array(z.string()).default([]).describe("Subset of the app's product permission catalog"),
+  scopes: z
+    .array(z.string())
+    .default([])
+    .describe(
+      "Declared permissions, or `<type>:<id>` grants over a declared resource type whose instance the app currently lists",
+    ),
   workspaceId: z.string().optional(),
   expiresAt: z.iso.datetime().optional().describe("ISO 8601; omit for non-expiring"),
 })

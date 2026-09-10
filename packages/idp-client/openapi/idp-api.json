@@ -78,6 +78,30 @@
                             },
                             "description": "The app's declared product-permission catalog"
                           },
+                          "resourceTypes": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "list": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "label",
+                                "list"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "description": "Declared resource types — permission families over instances the app holds"
+                          },
                           "resources": {
                             "type": "array",
                             "items": {
@@ -105,6 +129,7 @@
                           "app",
                           "allowSignup",
                           "permissions",
+                          "resourceTypes",
                           "resources",
                           "redirectUris",
                           "disabled",
@@ -291,6 +316,30 @@
                       },
                       "description": "The app's declared product-permission catalog"
                     },
+                    "resourceTypes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "list": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "label",
+                          "list"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "Declared resource types — permission families over instances the app holds"
+                    },
                     "resources": {
                       "type": "array",
                       "items": {
@@ -318,6 +367,7 @@
                     "app",
                     "allowSignup",
                     "permissions",
+                    "resourceTypes",
                     "resources",
                     "redirectUris",
                     "disabled",
@@ -438,6 +488,30 @@
                       },
                       "description": "The app's declared product-permission catalog"
                     },
+                    "resourceTypes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "list": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "label",
+                          "list"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "Declared resource types — permission families over instances the app holds"
+                    },
                     "resources": {
                       "type": "array",
                       "items": {
@@ -465,6 +539,7 @@
                     "app",
                     "allowSignup",
                     "permissions",
+                    "resourceTypes",
                     "resources",
                     "redirectUris",
                     "disabled",
@@ -617,7 +692,7 @@
     "/api/v1/apps/{app}/permissions": {
       "put": {
         "summary": "Replace the app's product-permission catalog",
-        "description": "Requires `app:update` on the path app (or an admin key).",
+        "description": "Wholesale replace of both halves of the catalog: the flat permissions, and the resource types (`{ type, label, list }`) that per-instance grants such as `kirby:thread:<id>` compose under. The IdP GETs each type's `list` URL — with a 60s IdP-signed JWT whose `aud` is that URL — whenever it needs the instances; it never stores them. Omitting `resourceTypes` clears them. 422 `invalid_resource_type` names a `list` URL that is not absolute https (http is allowed for loopback hosts only).",
         "security": [
           {
             "bearerAuth": []
@@ -648,6 +723,34 @@
                       "type": "string",
                       "minLength": 1
                     }
+                  },
+                  "resourceTypes": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_-]+(:[a-z0-9_-]+)*$",
+                          "description": "Permission prefix a grant composes under: `kirby:thread` → `kirby:thread:<id>`"
+                        },
+                        "label": {
+                          "description": "Human name for one instance, shown in the console — “WhatsApp conversation”",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "list": {
+                          "type": "string",
+                          "format": "uri",
+                          "description": "Absolute URL the IdP GETs to enumerate instances. Called with an IdP-signed bearer JWT (aud = this URL); must answer `ResourceListSchema`"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "list"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -671,10 +774,34 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "resourceTypes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "list": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "label",
+                          "list"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
-                    "permissions"
+                    "permissions",
+                    "resourceTypes"
                   ],
                   "additionalProperties": false
                 }
@@ -2055,7 +2182,7 @@
       },
       "post": {
         "summary": "Mint an end-user API key (plaintext returned once)",
-        "description": "Requires `userkey:create` on the path app (or an admin key).",
+        "description": "Every scope must be a declared permission or `<declared type>:<id>` for an instance the app currently lists. 422 `unknown_scopes` names scopes the catalog does not declare; 422 `unknown_resource` names `<type>:<id>` grants whose instance the app did not list; 502 `resource_lookup_failed` names the types whose `list` URL could not be read.",
         "security": [
           {
             "bearerAuth": []
@@ -2090,7 +2217,7 @@
                   },
                   "scopes": {
                     "default": [],
-                    "description": "Subset of the app's product permission catalog",
+                    "description": "Declared permissions, or `<type>:<id>` grants over a declared resource type whose instance the app currently lists",
                     "type": "array",
                     "items": {
                       "type": "string"

@@ -2,7 +2,8 @@ import { and, eq, gt, isNotNull } from "drizzle-orm"
 
 import * as schema from "../db/schema"
 import { avatarUrl } from "./avatar"
-import { parseAppMetadata } from "./metadata"
+import { parseAppMetadata, type AppMetadata } from "./metadata"
+import { adminScopesFor, isDeclared, type AppCatalog } from "./scopes.server"
 import type { BaseServiceContext } from "./services"
 
 /**
@@ -15,17 +16,28 @@ import type { BaseServiceContext } from "./services"
 export const WORKSPACES_CLAIM = "https://willy.im/workspaces"
 export const PERMISSIONS_CLAIM = "https://willy.im/permissions"
 
+/** The catalog as stored, in the shape the scope checks read. */
+export function catalogFromMetadata(meta: AppMetadata): AppCatalog {
+  return { permissions: meta.permissions, resourceTypes: meta.resource_types }
+}
+
 /**
  * The caller's resolved *product* permissions for one app, read at token-mint
- * (never from the client). Admins resolve to the app's full declared catalog;
- * members to their granted product permissions (intersected with the catalog,
- * in case the catalog shrank since the grant). App-scoped via metadata.app.
+ * (never from the client). Admins resolve to the app's full declared catalog —
+ * every flat permission plus `<type>:*` per resource type, since instances are
+ * the app's to enumerate, not ours. Members get their granted product
+ * permissions filtered to what the catalog still DECLARES: a flat entry that
+ * is still listed, or `<type>:<id>` under a type that is still declared. The
+ * instance itself is not re-checked here — that would make every token mint
+ * depend on the app being up; existence is verified when the grant is written,
+ * and a grant to an instance that has since gone simply matches nothing on
+ * the app's side. App-scoped via metadata.app.
  */
 export async function productPermissionsFor(
   db: BaseServiceContext["db"],
   userId: string,
   app: string | undefined,
-  catalog: string[],
+  catalog: AppCatalog,
 ): Promise<string[]> {
   if (!app) return []
   const [member] = await db
@@ -42,9 +54,8 @@ export async function productPermissionsFor(
     )
     .limit(1)
   if (!member) return []
-  if (member.role === "admin") return catalog
-  const allowed = new Set(catalog)
-  return (member.productPermissions ?? []).filter((p) => allowed.has(p))
+  if (member.role === "admin") return adminScopesFor(catalog)
+  return (member.productPermissions ?? []).filter((p) => isDeclared(p, catalog))
 }
 
 /**
@@ -133,12 +144,12 @@ export const APP_CLAIM = "https://willy.im/app"
 export async function appForResource(
   db: BaseServiceContext["db"],
   resource: string,
-): Promise<{ app: string; catalog: string[] } | null> {
+): Promise<{ app: string; catalog: AppCatalog } | null> {
   const rows = await db.select({ metadata: schema.oauthClient.metadata }).from(schema.oauthClient)
   for (const row of rows) {
     const meta = parseAppMetadata(row.metadata)
     if (meta.app && meta.resources.includes(resource)) {
-      return { app: meta.app, catalog: meta.permissions }
+      return { app: meta.app, catalog: catalogFromMetadata(meta) }
     }
   }
   return null
@@ -170,7 +181,7 @@ export async function accessTokenClaimsFor(
   const owner = requested ? await appForResource(db, requested) : null
   const meta = parseAppMetadata(metadata)
   const app = owner?.app ?? meta.app ?? undefined
-  const catalog = owner?.catalog ?? meta.permissions
+  const catalog = owner?.catalog ?? catalogFromMetadata(meta)
   const [permissions, act] = await Promise.all([
     productPermissionsFor(db, userId, app, catalog),
     actClaimFor(db, userId),
@@ -196,7 +207,7 @@ export async function customClaimsFor(
   const app = meta.app ?? undefined
   const [workspaces, permissions, act] = await Promise.all([
     workspaceClaimsFor(db, userId, app),
-    productPermissionsFor(db, userId, app, meta.permissions),
+    productPermissionsFor(db, userId, app, catalogFromMetadata(meta)),
     actClaimFor(db, userId),
   ])
   return {

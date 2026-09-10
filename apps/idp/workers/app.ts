@@ -25,6 +25,7 @@ async function cachedAudiences(ctx: Pick<BaseServiceContext, "db">) {
 }
 import { createBaseContext, type ILogger } from "../app/lib/services"
 import { createIdpRequestTracker } from "../app/lib/luchy.server"
+import { createResourceLister, type ResourceLister } from "../app/lib/resources.server"
 
 declare module "react-router" {
   export interface AppLoadContext {
@@ -37,6 +38,8 @@ declare module "react-router" {
     getAppEnv: typeof getAppEnv
     services: {
       auth: AuthService
+      /** Asks an app which instances of a declared resource type it holds. */
+      resources: ResourceLister
     }
   }
 }
@@ -67,6 +70,13 @@ export default {
     // Host-aware: a request on a vanity IdP domain (IDP_EXTRA_DOMAINS)
     // gets that host as issuer/cookies/passkey RP.
     const auth = createAuthService(baseCtx, request.url, { audiences })
+    // Listing tokens are signed for the canonical issuer regardless of which
+    // vanity host served the request: an app verifies `iss` against one value.
+    const resources = createResourceLister({
+      auth,
+      issuer: `${new URL(getAppEnv("BETTER_AUTH_URL")).origin}/auth`,
+      logger: baseCtx.logger,
+    })
 
     // Analytics (Luchy). Every mutation in the IdP is either a form POST whose
     // `intent` field names it, a method-discriminated API call, or an auth verb
@@ -79,7 +89,7 @@ export default {
       const response = await requestHandler(request, {
         cloudflare: { env, ctx },
         ...baseCtx,
-        services: { auth },
+        services: { auth, resources },
       })
       baseCtx.logger.debug("request.end", {
         method: request.method,

@@ -15,11 +15,12 @@ export async function action({ request, context, params }: Route.ActionArgs) {
   const application = await getApplicationByApp(context, params.app)
   if (!application) return Response.json({ error: "not_found" }, { status: 404 })
   const body = await readJson(request, SetAppPermissionsInput)
-  const permissions = await updateApplicationPermissions(
-    context,
-    caller,
-    application.clientId,
-    body.permissions,
-  )
-  return Response.json({ permissions })
+  const catalog = await updateApplicationPermissions(context, caller, application.clientId, {
+    permissions: body.permissions,
+    resourceTypes: body.resourceTypes.map((t) => ({ ...t, label: t.label ?? t.type })),
+  })
+  if ("error" in catalog) {
+    return Response.json({ error: catalog.error, detail: catalog.detail }, { status: 422 })
+  }
+  return Response.json(catalog)
 }

@@ -5,6 +5,7 @@ import * as schema from "../db/schema"
 import { recordAudit } from "./audit.server"
 import { assertCan, type Caller } from "./caller.server"
 import { isAppPermission, type AppPermission, type AppRole } from "./permissions"
+import { EMPTY_CATALOG, isDeclared, type AppCatalog } from "./scopes.server"
 import type { BaseServiceContext } from "./services"
 
 /** Invites stay valid for 7 days. */
@@ -22,18 +23,20 @@ function sanitizePermissions(role: AppRole, permissions: string[]): AppPermissio
 }
 
 /**
- * Keep only product permissions the app actually declares (its `catalog`).
- * Admins resolve to the full catalog downstream, so we don't store grants for
- * them — the empty list keeps the column clean and unambiguous.
+ * Keep only product permissions the app actually declares (its `catalog`): a
+ * flat entry, or `<type>:<id>` under a declared resource type. Whether the
+ * instance EXISTS is the caller's question (scopes.server `resolveScopes`),
+ * asked before the write; this only guards the shape. Admins resolve to the
+ * full catalog downstream, so we don't store grants for them — the empty list
+ * keeps the column clean and unambiguous.
  */
 function sanitizeProductPermissions(
   role: AppRole,
   productPermissions: string[],
-  catalog: string[],
+  catalog: AppCatalog,
 ): string[] {
   if (role === "admin") return []
-  const allowed = new Set(catalog)
-  return [...new Set(productPermissions)].filter((p) => allowed.has(p))
+  return [...new Set(productPermissions)].filter((p) => isDeclared(p, catalog))
 }
 
 /** Look up a user by (normalized) email, or null. */
@@ -84,7 +87,7 @@ export async function addOrInviteAppMember(
     permissions: string[]
     // Product-permission grants + the app's declared catalog to validate against.
     productPermissions?: string[]
-    catalog?: string[]
+    catalog?: AppCatalog
     origin: string
   },
 ): Promise<InviteResult> {
@@ -94,7 +97,7 @@ export async function addOrInviteAppMember(
   const productPermissions = sanitizeProductPermissions(
     args.role,
     args.productPermissions ?? [],
-    args.catalog ?? [],
+    args.catalog ?? EMPTY_CATALOG,
   )
 
   const existing = await resolveUserByEmail(ctx, email)
@@ -176,7 +179,7 @@ export async function updateAppMember(
     role: AppRole
     permissions: string[]
     productPermissions?: string[]
-    catalog?: string[]
+    catalog?: AppCatalog
   },
 ): Promise<{ ok: true } | { error: string }> {
   await assertCan(caller, args.app, "member:manage")
@@ -201,7 +204,7 @@ export async function updateAppMember(
   const productPermissions = sanitizeProductPermissions(
     args.role,
     args.productPermissions ?? [],
-    args.catalog ?? [],
+    args.catalog ?? EMPTY_CATALOG,
   )
   await ctx.db
     .update(schema.applicationMember)
