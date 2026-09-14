@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { createApplication } from "../app/lib/admin.server"
+import { createApplication, listAppMembers } from "../app/lib/admin.server"
 import type { AuthService } from "../app/lib/auth.server"
 import type { Caller } from "../app/lib/caller.server"
 import * as applications from "../app/routes/api/applications"
@@ -9,6 +9,7 @@ import * as rotateSecret from "../app/routes/api/applications.$clientId.rotate-s
 import * as appKeys from "../app/routes/api/apps.$app.keys"
 import * as appKey from "../app/routes/api/apps.$app.keys.$id"
 import * as appMembers from "../app/routes/api/apps.$app.members"
+import * as appMember from "../app/routes/api/apps.$app.members.$userId"
 import * as appPermissions from "../app/routes/api/apps.$app.permissions"
 import * as appUserKeys from "../app/routes/api/apps.$app.user-keys"
 import type { ResourceLister } from "../app/lib/resources.server"
@@ -466,6 +467,94 @@ describe("management API routes", () => {
         params: { app: "acme" },
       })
       expect(res).toEqual({ status: 201, body: { result: "invited" } })
+    })
+
+    // Product permissions over the API (#62). Without these an API-provisioned
+    // member is inert until a human opens the console — a management key that
+    // can create a member and grant it nothing is not a management API.
+    it("grants product permissions to an EXISTING user on invite", async () => {
+      await call(appPermissions.action, {
+        request: request("/api/v1/apps/acme/permissions", {
+          method: "PUT",
+          token: adminToken,
+          body: { permissions: ["chat:respond", "kirby_runs"], resourceTypes: [] },
+        }),
+        params: { app: "acme" },
+      })
+      const user = await createUser(h.ctx, { email: "sister@acme.test" })
+
+      const res = await call(appMembers.action, {
+        request: request("/api/v1/apps/acme/members", {
+          method: "POST",
+          token: adminToken,
+          body: { email: "sister@acme.test", role: "member", permissions: [], productPermissions: ["chat:respond"] },
+        }),
+        params: { app: "acme" },
+      })
+      expect(res).toEqual({ status: 201, body: { result: "added" } })
+
+      const members = await listAppMembers(h.ctx, "acme")
+      expect(members.find((m) => m.userId === user.id)?.productPermissions).toEqual(["chat:respond"])
+    })
+
+    it("422s a product permission the app never declared, instead of dropping it", async () => {
+      await call(appPermissions.action, {
+        request: request("/api/v1/apps/acme/permissions", {
+          method: "PUT",
+          token: adminToken,
+          body: { permissions: ["chat:respond"], resourceTypes: [] },
+        }),
+        params: { app: "acme" },
+      })
+      const res = await call(appMembers.action, {
+        request: request("/api/v1/apps/acme/members", {
+          method: "POST",
+          token: adminToken,
+          body: { email: "nobody@acme.test", role: "member", permissions: [], productPermissions: ["not:declared"] },
+        }),
+        params: { app: "acme" },
+      })
+      expect(res.status).toBe(422)
+      expect(res.body).toMatchObject({ error: "invalid_scope" })
+    })
+
+    it("PATCH replaces a member's product permissions, and omitting them leaves them alone", async () => {
+      await call(appPermissions.action, {
+        request: request("/api/v1/apps/acme/permissions", {
+          method: "PUT",
+          token: adminToken,
+          body: { permissions: ["chat:respond", "kirby_runs"], resourceTypes: [] },
+        }),
+        params: { app: "acme" },
+      })
+      const user = await createUser(h.ctx, { email: "meli@acme.test" })
+      await createMember(h.ctx, { app: "acme", userId: user.id, role: "member", permissions: [] })
+
+      const granted = await call(appMember.action, {
+        request: request(`/api/v1/apps/acme/members/${user.id}`, {
+          method: "PATCH",
+          token: adminToken,
+          body: { role: "member", permissions: [], productPermissions: ["chat:respond"] },
+        }),
+        params: { app: "acme", userId: user.id },
+      })
+      expect(granted).toEqual({ status: 200, body: { ok: true } })
+      expect(
+        (await listAppMembers(h.ctx, "acme")).find((m) => m.userId === user.id)?.productPermissions,
+      ).toEqual(["chat:respond"])
+
+      // No productPermissions in the body: an unrelated edit must not wipe them.
+      await call(appMember.action, {
+        request: request(`/api/v1/apps/acme/members/${user.id}`, {
+          method: "PATCH",
+          token: adminToken,
+          body: { role: "member", permissions: [] },
+        }),
+        params: { app: "acme", userId: user.id },
+      })
+      expect(
+        (await listAppMembers(h.ctx, "acme")).find((m) => m.userId === user.id)?.productPermissions,
+      ).toEqual(["chat:respond"])
     })
   })
 

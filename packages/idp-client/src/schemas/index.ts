@@ -178,6 +178,14 @@ export const InviteMemberInput = z.object({
   email: z.string().email(),
   role: RoleSchema.default("member"),
   permissions: z.array(z.string()).default([]),
+  /**
+   * Grants from the APP's catalog — `chat:respond`, `kirby_runs`,
+   * `kirby:thread:t_14f451b6`. Distinct from `permissions` above, which are the
+   * IdP's own management verbs. Without this an API-provisioned member is inert
+   * until a human opens the console, which is the opposite of what a management
+   * API is for.
+   */
+  productPermissions: z.array(z.string()).default([]),
 })
 export const InviteMemberResult = z.object({
   // "added" = existing user joined now; "invited" = pending invite emailed.
@@ -187,6 +195,12 @@ export const InviteMemberResult = z.object({
 export const UpdateMemberInput = z.object({
   role: RoleSchema,
   permissions: z.array(z.string()).default([]),
+  /**
+   * The member's product grants, REPLACED wholesale — same verb the console
+   * uses, because a merge would make "take this away" impossible to express.
+   * Omit the field to leave the existing grants untouched.
+   */
+  productPermissions: z.array(z.string()).optional(),
 })
 
 export const CreateWorkspaceInput = z.object({
