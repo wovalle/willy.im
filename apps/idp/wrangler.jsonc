@@ -19,6 +19,13 @@
     // Each needs DNS/TLS: a custom-domain route below (zone on this account),
     // Cloudflare for SaaS, or a Host-preserving reverse proxy.
     "IDP_EXTRA_DOMAINS": "idp.kasso.do",
+    // Discord OAuth, for self-service identity linking (/link/discord). The
+    // client id is public (it is in every authorize URL); the secret is a
+    // Worker secret — `wrangler secret put DISCORD_CLIENT_SECRET`. This is the
+    // same Discord application as the bender bot: one app, a bot half and an
+    // OAuth2 half. Redirect URI registered with Discord:
+    // https://idp.willy.im/auth/callback/discord
+    "DISCORD_CLIENT_ID": "1545640954562871467",
   },
   "d1_databases": [
     {

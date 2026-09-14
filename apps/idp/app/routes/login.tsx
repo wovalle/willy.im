@@ -4,6 +4,7 @@ import { Fingerprint, Loader2, Mail } from "lucide-react"
 
 import { authClient } from "~/lib/auth-client"
 import { clientLog } from "~/lib/log"
+import { safeNext } from "~/lib/next-url"
 import { Button } from "~/components/ui/button"
 import {
   Card,
@@ -49,8 +50,11 @@ export default function Login() {
   // bounces back to /login.
   function continueAfterSignIn(data: unknown) {
     const url = (data as { url?: string } | null)?.url
-    clientLog.info("signin.continue", { hasUrl: !!url, url, search: window.location.search || undefined })
-    window.location.assign(url ?? "/")
+    // An OIDC resume URL outranks `next`: that flow is mid-handshake and has a
+    // signed query to hand back, while `next` is only ever a convenience.
+    const next = safeNext(window.location.search)
+    clientLog.info("signin.continue", { hasUrl: !!url, url, next, search: window.location.search || undefined })
+    window.location.assign(url ?? next ?? "/")
   }
 
   async function verifyCode(e: React.FormEvent) {

@@ -4,6 +4,10 @@ export default [
   route("login", "routes/login.tsx"),
   route("login/verify", "routes/login.verify.tsx"),
   route("invite/accept", "routes/invite.accept.tsx"),
+  // Self-service identity linking. Public entry point (it bounces to /login),
+  // because the whole point is that bender can hand the URL to someone it does
+  // not know yet.
+  route("link/discord", "routes/link.discord.tsx"),
   route("impersonation/stop", "routes/impersonation.stop.ts"),
   route("consent", "routes/consent.tsx"),
   route("auth/*", "routes/auth/auth.$.ts"),
