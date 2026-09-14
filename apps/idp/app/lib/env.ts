@@ -17,6 +17,14 @@ const appEnvSchema = z.object({
 
   // Admin console + management API. Comma-separated allowlist of admin emails.
   ADMIN_EMAILS: z.string().default("hey@willy.im"),
+
+  // Discord, for self-service identity linking (/link/discord). The id is not a
+  // secret and lives in wrangler.jsonc `vars`; the secret is a Worker secret.
+  // BOTH optional: without them the provider is simply not registered and the
+  // link page says so, rather than the Worker failing to boot over a feature
+  // nobody in this deployment uses.
+  DISCORD_CLIENT_ID: z.string().optional(),
+  DISCORD_CLIENT_SECRET: z.string().optional(),
 })
 
 export type AppEnv = z.infer<typeof appEnvSchema>

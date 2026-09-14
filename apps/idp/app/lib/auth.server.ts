@@ -13,6 +13,7 @@ import { Resend } from "resend"
 import * as schema from "../db/schema"
 import { accessTokenClaimsFor, customClaimsFor, pictureClaimFor } from "./claims.server"
 import { hashClientSecret } from "./client-secret.server"
+import { linkVerifiedIdentity } from "./identities.server"
 import { claimInvitationsForUser } from "./members.server"
 import type { BaseServiceContext } from "./services"
 import {
@@ -93,6 +94,10 @@ export function createAuthService(
   // In dev, trust common localhost ports so a default `npm run dev` (5173) works
   // even if BETTER_AUTH_URL points elsewhere. Prod trusts the resolved origin
   // plus every configured IdP domain (a vanity-domain login posts to itself).
+  // Both halves or nothing — half-configured OAuth fails at the callback, which
+  // is the worst place to find out.
+  const discordConfigured = !!env.DISCORD_CLIENT_ID && !!env.DISCORD_CLIENT_SECRET
+
   const prodOrigins = [...new Set([url.origin, ...extraHosts.map((h) => `https://${h}`)])]
   const trustedOrigins = isProd
     ? prodOrigins
@@ -134,6 +139,52 @@ export function createAuthService(
       // signed-in user's (verified) email — INVITED → MEMBER. Runs regardless of
       // entry path (console or OAuth), so membership exists before id_token claims
       // resolve. Best-effort: a failure here must not block sign-in.
+      // A social account was just attached to a user. For Discord that is the
+      // ONLY moment we learn their snowflake, and it is the moment it is proven
+      // — so it is where the linked_identity row is written. Everything that
+      // asks "who is discord:<id>?" (resolveIdentity, and therefore bender)
+      // reads linked_identity and knows nothing about Better Auth's `account`
+      // table; keeping one source of truth for resolution is why this mirrors
+      // rather than teaching the resolver a second place to look.
+      //
+      // Best-effort, like the invitation claim below: a failure here must not
+      // break the OAuth callback and strand the user on an error page. The link
+      // page re-reads the real state on load, so a miss shows up as "not linked"
+      // and a retry fixes it.
+      account: {
+        create: {
+          after: async (account) => {
+            if (account.providerId !== "discord") return
+            try {
+              const result = await linkVerifiedIdentity(context, {
+                userId: account.userId,
+                provider: "discord",
+                externalId: account.accountId,
+                label: "discord (self-linked)",
+              })
+              if ("error" in result) {
+                context.logger.warn("identity.link_failed", {
+                  userId: account.userId,
+                  provider: "discord",
+                  reason: result.error,
+                })
+                return
+              }
+              context.logger.info("identity.linked", {
+                userId: account.userId,
+                provider: "discord",
+                created: result.created,
+              })
+            } catch (err) {
+              context.logger.warn("identity.link_errored", {
+                userId: account.userId,
+                provider: "discord",
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
+          },
+        },
+      },
       session: {
         create: {
           after: async (session) => {
@@ -171,6 +222,29 @@ export function createAuthService(
         },
       },
     },
+    // Discord, and only for LINKING. `disableImplicitSignUp` is the load-bearing
+    // option: without it, "Login with Discord" would mint a willy.im account for
+    // any Discord user who found the endpoint, straight past the `allow_signup`
+    // gate in the user.create hook above — that gate reads a clientId off a
+    // sign-in request and an OAuth callback carries none. With it, Discord can
+    // only ever attach to an account that already exists.
+    //
+    // `identify` is the whole scope. We want the snowflake and nothing else: no
+    // email (the willy.im account already has one, and Discord's may differ),
+    // no guilds, no presence.
+    //
+    // Absent config ⇒ no provider. /link/discord renders the reason instead of
+    // Better Auth 500ing on a missing secret.
+    socialProviders: discordConfigured
+      ? {
+          discord: {
+            clientId: env.DISCORD_CLIENT_ID!,
+            clientSecret: env.DISCORD_CLIENT_SECRET!,
+            scope: ["identify"],
+            disableImplicitSignUp: true,
+          },
+        }
+      : undefined,
     plugins: [
       emailOTP({
         otpLength: 6,

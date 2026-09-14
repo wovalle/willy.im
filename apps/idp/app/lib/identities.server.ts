@@ -2,7 +2,7 @@ import { and, asc, eq } from "drizzle-orm"
 
 import * as schema from "../db/schema"
 import { catalogOf, getApplicationByApp } from "./admin.server"
-import { IDP_AUDIT_SCOPE, recordAudit } from "./audit.server"
+import { IDP_AUDIT_SCOPE, recordAudit, type Actor } from "./audit.server"
 import { assertCan, type Caller } from "./caller.server"
 import { productPermissionsFor } from "./claims.server"
 import type { BaseServiceContext } from "./services"
@@ -85,12 +85,45 @@ export async function linkIdentity(
   ctx: BaseServiceContext,
   caller: Caller,
   input: { userId: string; provider: string; externalId: string; label?: string | null },
-): Promise<
+): Promise<LinkOutcome> {
+  requireSuperadmin(caller)
+  return performLink(ctx, caller.actor, input)
+}
+
+/**
+ * A link the USER proved, rather than one a superadmin asserted.
+ *
+ * The superadmin gate on {@link linkIdentity} exists because a link asserts
+ * identity with nothing to prove it. An OAuth round trip through the provider
+ * IS that proof: Discord told us, on a channel the user authenticated on, which
+ * snowflake belongs to the account that just consented. So this path skips the
+ * gate — and ONLY this path may, which is why it lives here as a named function
+ * rather than as a flag on the one above. Its caller is the `account.create`
+ * hook in auth.server.ts and nothing else.
+ *
+ * Every other rule is unchanged, deliberately: an external id already pinned to
+ * SOMEONE ELSE is still refused rather than moved. Proving you control a Discord
+ * account does not entitle you to take it off the person it is already pinned
+ * to — that is an admin's call, with the audit entry to match.
+ */
+export async function linkVerifiedIdentity(
+  ctx: BaseServiceContext,
+  input: { userId: string; provider: string; externalId: string; label?: string | null },
+): Promise<LinkOutcome> {
+  return performLink(ctx, { userId: input.userId, label: `user:${input.userId}` }, input)
+}
+
+export type LinkOutcome =
   | { id: string; created: boolean }
   | { error: "unknown_user" }
   | { error: "already_linked"; toUserId: string }
-> {
-  requireSuperadmin(caller)
+
+/** The shared body: the uniqueness rules and the audit entry, in one place. */
+async function performLink(
+  ctx: BaseServiceContext,
+  actor: Actor,
+  input: { userId: string; provider: string; externalId: string; label?: string | null },
+): Promise<LinkOutcome> {
   const provider = normaliseProvider(input.provider)
   const externalId = input.externalId.trim()
 
@@ -126,7 +159,7 @@ export async function linkIdentity(
   })
 
   await recordAudit(ctx, {
-    actor: caller.actor,
+    actor,
     table: "linked_identity",
     operation: "create",
     // Global to the user, not to any app — same scope the admin keys use.

@@ -43,6 +43,46 @@ User (global)
 └── app metadata    per-app free-form JSON
 ```
 
+## Linked identities, and how someone links their own
+
+A **linked identity** pins a user's id on another system — a Slack member id, a
+Discord snowflake — to their IdP user, so an app that hears from that system can
+ask one question (`GET /api/v1/apps/{app}/identities/{provider}/{externalId}`)
+and get back the person *and their permissions for that app*. Bender is the
+caller that matters: a Discord message arrives carrying nothing but a snowflake.
+
+Linking through the management API is **superadmin-only**, and stays that way: a
+link asserts "this external account IS this person" with nothing to prove it.
+
+**`/link/discord` is the exception, and it earns it.** Instead of trusting an
+assertion, it makes Discord prove the claim — the user signs in to willy.im,
+consents on Discord's own page, and the callback tells us which snowflake owns
+the account that consented. Because the proof is the OAuth round trip and not a
+secret in the URL, the link is safe to post in a channel other people can read:
+whoever completes it links *their* account and nobody else's.
+
+That path calls `linkVerifiedIdentity` (identities.server.ts) rather than
+`linkIdentity`, which is the only code allowed to skip the superadmin gate. It
+skips *only* that gate — an external id already pinned to someone else is still
+refused rather than moved, because proving you control a Discord account does
+not entitle you to take it off whoever holds it.
+
+Linking grants nothing. It answers "who is this"; what they may do stays an
+admin's decision in the console. A freshly linked person is known and has no
+permissions, exactly where a new member starts.
+
+Config: `DISCORD_CLIENT_ID` (a `var` — it is public) and `DISCORD_CLIENT_SECRET`
+(a Worker secret). Both absent ⇒ the provider is not registered and the page
+says so, rather than the Worker failing to boot over a feature this deployment
+does not use. The redirect URI to register with Discord is
+`https://idp.willy.im/auth/callback/discord` — note `basePath` is `/auth`, not
+Better Auth's default `/api/auth`.
+
+`disableImplicitSignUp` is load-bearing on that provider: without it, "Login with
+Discord" would mint a willy.im account for anyone who found the endpoint,
+straight past the `allow_signup` gate (which reads a clientId off a sign-in
+request, and an OAuth callback carries none).
+
 ## What an app gets
 
 - **SSO** via OIDC (`/.well-known/openid-configuration`).

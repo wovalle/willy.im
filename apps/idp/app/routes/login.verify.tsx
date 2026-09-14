@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router"
 import { Loader2 } from "lucide-react"
 
 import { authClient } from "~/lib/auth-client"
+import { safeNext } from "~/lib/next-url"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 
 export function meta() {
@@ -34,7 +35,7 @@ export default function LoginVerify() {
     authClient.signIn.emailOtp({ email, otp: code }).then(({ error }) => {
       if (error) setError(error.message ?? "This sign-in link is invalid or expired.")
       // Full-document load so the session cookie is sent on the next request.
-      else window.location.assign("/")
+      else window.location.assign(safeNext(params) ?? "/")
     })
   }, [email, code])
 

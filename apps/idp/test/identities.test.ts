@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import {
   linkIdentity,
+  linkVerifiedIdentity,
   listLinkedIdentities,
   resolveIdentity,
   unlinkIdentity,
@@ -109,6 +110,51 @@ describe("linked identities", () => {
       await expect(
         linkIdentity(h.ctx, key, { userId: willy.id, provider: "slack", externalId: "U1" }),
       ).rejects.toMatchObject({ status: 403 })
+    })
+
+    it("takes a user-proved link with no caller at all — the OAuth path", async () => {
+      // linkVerifiedIdentity is what the account.create hook calls after a
+      // Discord round trip. There is no superadmin in that request, and there
+      // must not need to be: the provider already proved the claim.
+      const res = await linkVerifiedIdentity(h.ctx, {
+        userId: willy.id,
+        provider: "discord",
+        externalId: "582285987049373702",
+        label: "discord (self-linked)",
+      })
+      expect(res).toMatchObject({ created: true })
+
+      const [linked] = await listLinkedIdentities(h.ctx, root, { userId: willy.id })
+      expect(linked.provider).toBe("discord")
+      expect(linked.externalId).toBe("582285987049373702")
+    })
+
+    it("a proved link still cannot steal an id that is already someone else's", async () => {
+      // The whole point of the exception is "the provider vouched for you", not
+      // "you may take this from whoever holds it". Proving control of a Discord
+      // account that an admin already pinned to another user is exactly the
+      // case where moving it silently would hand over their grants.
+      await linkIdentity(h.ctx, root, { userId: willy.id, provider: "discord", externalId: "D1" })
+      const res = await linkVerifiedIdentity(h.ctx, {
+        userId: gf.id,
+        provider: "discord",
+        externalId: "D1",
+      })
+      expect(res).toEqual({ error: "already_linked", toUserId: willy.id })
+    })
+
+    it("a proved link is idempotent — re-running the OAuth flow changes nothing", async () => {
+      const a = await linkVerifiedIdentity(h.ctx, { userId: willy.id, provider: "discord", externalId: "D1" })
+      const b = await linkVerifiedIdentity(h.ctx, { userId: willy.id, provider: "discord", externalId: "D1" })
+      expect(a).toMatchObject({ created: true })
+      expect(b).toMatchObject({ created: false, id: (a as { id: string }).id })
+      expect(await listLinkedIdentities(h.ctx, root, { userId: willy.id })).toHaveLength(1)
+    })
+
+    it("a proved link for an unknown user is refused, not an orphan row", async () => {
+      expect(
+        await linkVerifiedIdentity(h.ctx, { userId: "nobody", provider: "discord", externalId: "D1" }),
+      ).toEqual({ error: "unknown_user" })
     })
 
     it("unlinks idempotently, scoped to the user", async () => {
