@@ -25,6 +25,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 
 const PROVIDER = "discord"
 
+/** Better Auth's callback error codes, in words the person can act on. */
+function errorMessage(code: string): string {
+  switch (code) {
+    case "unable_to_link_account":
+      return "Discord says the email on that account isn't verified. Verify it in Discord (User Settings → My Account), then try again."
+    case "account_already_linked_to_different_user":
+      return "That Discord account is already linked to a different willy.im account. Ask Willy to move it."
+    case "access_denied":
+      return "Discord sign-in was cancelled. Nothing changed — try again."
+    default:
+      return `Discord didn't complete the connection (${code}). Nothing changed — try again.`
+  }
+}
+
 export function meta() {
   return [{ title: "Link Discord · willy.im" }]
 }
@@ -66,7 +80,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     body: {
       provider: PROVIDER,
       callbackURL: "/link/discord",
-      errorCallbackURL: "/link/discord?error=1",
+      // Better Auth appends `?error=<code>`, which the loader reads.
+      errorCallbackURL: "/link/discord",
     },
     headers: request.headers,
   })
@@ -97,7 +112,7 @@ export default function LinkDiscord({ loaderData }: Route.ComponentProps) {
         <CardContent className="flex flex-col gap-3">
           {error ? (
             <p className="text-destructive text-sm">
-              Discord didn't complete the connection. Nothing changed — try again.
+              {errorMessage(error)}
             </p>
           ) : null}
 

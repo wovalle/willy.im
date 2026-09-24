@@ -114,6 +114,17 @@ export function createAuthService(
       expiresIn: 60 * 60 * 24 * 30, // 30 days
       updateAge: 60 * 60 * 24, // refresh daily
     },
+    // Linking a social account is proven by the signed-in session plus the
+    // provider's OAuth round trip; the provider's email is irrelevant to that
+    // proof. Without this, Better Auth refuses the link with `email_doesn't_match`
+    // whenever someone's Discord email differs from their willy.im one — which
+    // is most people. This only affects linking: sign-in with a provider still
+    // matches accounts by verified email and Discord stays untrusted.
+    account: {
+      accountLinking: {
+        allowDifferentEmails: true,
+      },
+    },
     databaseHooks: {
       // The `allow_signup` gate. This is the only place a willy.im account comes
       // into existence, so it is the only place the per-app open-signup flag can
@@ -229,9 +240,11 @@ export function createAuthService(
     // sign-in request and an OAuth callback carries none. With it, Discord can
     // only ever attach to an account that already exists.
     //
-    // `identify` is the whole scope. We want the snowflake and nothing else: no
-    // email (the willy.im account already has one, and Discord's may differ),
-    // no guilds, no presence.
+    // Better Auth always requests `identify email` for Discord; `identify` here
+    // just restates it. We use the snowflake and nothing else. The email is
+    // fetched only because Better Auth refuses to link an untrusted provider
+    // whose email is unverified; it is never compared to the willy.im one
+    // (`allowDifferentEmails` above). No guilds, no presence.
     //
     // Absent config ⇒ no provider. /link/discord renders the reason instead of
     // Better Auth 500ing on a missing secret.
