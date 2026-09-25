@@ -76,6 +76,11 @@ export async function action({ request, context }: Route.ActionArgs) {
   // /auth/callback/discord, writes the `account` row, and the account.create
   // hook (auth.server.ts) mirrors it into linked_identity — then Discord sends
   // the browser to callbackURL, which is this page, now showing the link.
+  //
+  // The call also sets a signed `state` cookie that the callback compares with
+  // the `state` query param. It has to reach the browser, so its Set-Cookie
+  // headers ride on our redirect; dropping them fails every attempt with
+  // `state_mismatch`.
   const res = await context.services.auth.api.linkSocialAccount({
     body: {
       provider: PROVIDER,
@@ -84,8 +89,11 @@ export async function action({ request, context }: Route.ActionArgs) {
       errorCallbackURL: "/link/discord",
     },
     headers: request.headers,
+    returnHeaders: true,
   })
-  throw redirect(res.url)
+  const headers = new Headers()
+  for (const cookie of res.headers.getSetCookie()) headers.append("set-cookie", cookie)
+  throw redirect(res.response.url, { headers })
 }
 
 export default function LinkDiscord({ loaderData }: Route.ComponentProps) {
