@@ -20,6 +20,7 @@ export const auth = betterAuth({
   secret: "schema-gen-only",
   database: drizzleAdapter({} as never, { provider: "sqlite" }),
   emailAndPassword: { enabled: false },
+  rateLimit: { storage: "database" },
   plugins: [
     emailOTP({ sendVerificationOTP: async () => {} }),
     passkey(),

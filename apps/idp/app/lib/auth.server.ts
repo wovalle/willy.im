@@ -125,6 +125,19 @@ export function createAuthService(
         allowDifferentEmails: true,
       },
     },
+    // Rate limiting is keyed by client IP. Behind Cloudflare that is
+    // `cf-connecting-ip`; Better Auth only looks at `x-forwarded-for` by default,
+    // found nothing, and skipped limiting on every request. The counters live in
+    // D1 because this service is built per request — the default in-memory store
+    // would start empty every time and never limit anything.
+    advanced: {
+      ipAddress: {
+        ipAddressHeaders: ["cf-connecting-ip"],
+      },
+    },
+    rateLimit: {
+      storage: "database",
+    },
     databaseHooks: {
       // The `allow_signup` gate. This is the only place a willy.im account comes
       // into existence, so it is the only place the per-app open-signup flag can
