@@ -145,3 +145,43 @@ describe("edge cases", () => {
     assert.deepEqual(checker.granted, ["only"])
   })
 })
+
+describe("checkerFor", () => {
+  it("grants exactly the listed catalog permissions", () => {
+    const checker = auth.checkerFor(["posts:read", "users:manage"])
+    assert.equal(checker.has("posts:read"), true)
+    assert.equal(checker.has("users:manage"), true)
+    assert.equal(checker.has("posts:write"), false)
+    assert.equal(checker.has("users:read"), false)
+    assert.deepEqual(checker.granted, ["posts:read", "users:manage"])
+    assert.equal(checker.isSuperadmin, false)
+  })
+
+  it("expands <resource>:* to every catalog permission with that prefix", () => {
+    const checker = auth.checkerFor(["posts:*"])
+    assert.deepEqual(checker.granted, ["posts:read", "posts:write", "posts:delete"])
+    assert.equal(checker.has("users:read"), false)
+  })
+
+  it("drops unknown grants silently", () => {
+    const checker = auth.checkerFor(["posts:read", "billing:manage", "comments:*", "*"])
+    assert.deepEqual(checker.granted, ["posts:read"])
+  })
+
+  it("require() throws a 403 Response for permissions outside the grants", () => {
+    const checker = auth.checkerFor(["posts:read"])
+    assert.doesNotThrow(() => checker.require("posts:read"))
+    try {
+      checker.require("posts:delete")
+      assert.fail("should have thrown")
+    } catch (err) {
+      assert.ok(err instanceof Response)
+      assert.equal((err as Response).status, 403)
+    }
+  })
+
+  it("granted is deduped and in catalog order", () => {
+    const checker = auth.checkerFor(["users:read", "posts:write", "posts:*", "users:read"])
+    assert.deepEqual(checker.granted, ["posts:read", "posts:write", "posts:delete", "users:read"])
+  })
+})

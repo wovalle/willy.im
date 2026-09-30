@@ -87,6 +87,18 @@ export const auth = definePermissions({
 if (!permissions.has("jobs:manage")) throw new Response("Not Found", { status: 404 })
 ```
 
+### Checkers for API keys / scopes
+
+Callers that carry a list of scopes rather than a role (API keys, OAuth tokens) get a checker from `checkerFor(grants)`. It keeps only grants that are in your catalog, expands `<resource>:*` to every catalog permission with that prefix, and silently drops anything it doesn't recognize. The result is a regular `PermissionChecker` (`isSuperadmin` is always `false`).
+
+```ts
+const checker = auth.checkerFor(["contacts:*", "reports:read", "billing:manage"])
+
+checker.granted               // ["contacts:read", "contacts:import", "reports:read"] — catalog order, deduped
+checker.has("calendar:read")  // false
+checker.require("settings:manage") // throws Response("Forbidden", { status: 403 })
+```
+
 ### React Router loader example
 
 ```ts
@@ -154,6 +166,7 @@ function Nav() {
 Returns an object with:
 
 - `createChecker(role, opts?)` — returns a `PermissionChecker` for the given role
+- `checkerFor(grants)` — returns a `PermissionChecker` for a list of scopes; unknown grants are dropped, `<resource>:*` is expanded
 - `permissions` — the original permissions array
 - `roles` — the original roles config
 
