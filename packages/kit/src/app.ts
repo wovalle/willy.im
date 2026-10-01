@@ -25,6 +25,18 @@ export type DiscoveryOptions = {
    * the default), or none.
    */
   anonymous?: "all" | "none"
+  /**
+   * With `anonymous: "none"`: how to authenticate, told to a caller with no
+   * credentials by `/llms.txt`, `/openapi.json` and the 401 from `/api/*`.
+   */
+  auth?: {
+    /** Free text: "Send `Authorization: Bearer <key>`; get a key at …". */
+    instructions: string
+    /** Where a person mints a key. */
+    keysUrl?: string
+    /** RFC 9728 protected-resource metadata, for OAuth (MCP) clients. */
+    oauth?: { resourceMetadataUrl: string }
+  }
 }
 
 type AppConfig<A extends unknown[], SA extends unknown[], B, S> = {

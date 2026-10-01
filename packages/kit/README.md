@@ -93,7 +93,7 @@ for (const t of tools(app, ctx)) runtime.register(t.name, t.description, t.input
 
 | Concept | What it is |
 |---|---|
-| **App** | `createApp({ name, description, context, system?, services, onCall?, discovery? })`. Holds every service. |
+| **App** | `createApp({ name, description, context, system?, services, onCall?, discovery?: { anonymous?, auth? } })`. Holds every service. |
 | **Context** | Built once per request, MCP session, agent turn or cron run: `caller` plus whatever you add (`db`, `scope`, `thread`, `signal`, …). Every service is bound to it. |
 | **Register** | The `declare module "@willyim/kit"` block. It gives `ctx`, permissions and `ctx.services` their types everywhere. |
 | **Service** | `declareService((ctx) => ({ ... }))`. Plain functions inside stay private; only `method(...)` entries are public. |
@@ -168,7 +168,15 @@ reference in the data; MCP sends them as image blocks.
 **Everything is filtered by the context.** `tools()`, MCP and discovery list only methods that
 exist in the context (`when`) and that the caller may call. For a caller with
 `kind: "anonymous"`, discovery follows `discovery.anonymous`: `"all"` (the default) lists every
-method as documentation, `"none"` lists nothing.
+method as documentation, `"none"` lists none.
+
+**Discovery when closed.** With `anonymous: "none"`, a caller with no credentials learns why
+it sees nothing and how to fix it, never a method name: `/llms.txt` and `/openapi.json`
+answer 200 with the app's name, a note that methods are listed only for authenticated callers,
+and `discovery.auth` (`instructions`, `keysUrl`, `oauth.resourceMetadataUrl`; OpenAPI also
+gets the security schemes and `paths: {}`). `/api/*` answers 401 with
+`WWW-Authenticate: Bearer` (plus `resource_metadata="…"` with OAuth) and the same
+instructions, before any method is looked up.
 
 **MCP details.** `tools/list` maps `title`, `description`, JSON Schemas and hints
 (`readOnlyHint`, `destructiveHint`, `idempotentHint`). `tools/call` returns
@@ -176,6 +184,7 @@ method as documentation, `"none"` lists nothing.
 output that isn't an object is wrapped as `{ result }`. Failures are `isError` results with
 the message and any invalid fields. A tool outside the caller's list, forbidden or
 nonexistent, is the same `Unknown tool` error. Build one server per request or session.
+Unauthenticated MCP never reaches kit: your transport answers 401 + `WWW-Authenticate` first.
 
 ## Callers and grants
 

@@ -1,5 +1,6 @@
 import type { KitApp } from "./app.js"
 import { llmsTxt, openapi, visibleTo } from "./discovery.js"
+import { locked, lockedLlmsTxt, lockedOpenapi, unauthenticated } from "./locked.js"
 import { available, toSchema, unknownMethod } from "./method.js"
 import type { PermissionChecker } from "./permissions.js"
 import { registry } from "./registry.js"
@@ -41,6 +42,12 @@ export async function handle(
   if (pathname === "/openapi.json" || pathname === "/llms.txt") {
     if (request.method !== "GET" && request.method !== "HEAD")
       return error(405, "use GET", { allow: "GET, HEAD" })
+    if (locked(app, ctx.caller))
+      return pathname === "/openapi.json"
+        ? Response.json(lockedOpenapi(app, url.origin))
+        : new Response(lockedLlmsTxt(app), {
+            headers: { "content-type": "text/markdown; charset=utf-8" },
+          })
     const methods = visibleTo(app, registry(app), ctx)
     return pathname === "/openapi.json"
       ? Response.json(openapi(app, methods, url.origin))
@@ -50,6 +57,8 @@ export async function handle(
   }
 
   if (!pathname.startsWith("/api/")) return null
+  // No credentials and no anonymous discovery: a 401 before any lookup, so nothing leaks.
+  if (locked(app, ctx.caller)) return unauthenticated(app)
   const name = pathname.slice("/api/".length)
   const entry = registry(app).find((e) => e.name === name)
   // A method hidden by `when` answers exactly like one that doesn't exist, whatever the verb.
