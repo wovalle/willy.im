@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, test } from "vitest"
+import { beforeEach, describe, expect, test, vi } from "vitest"
+import { z } from "zod"
 import { createApp, declareService, definePolicies, method, registry, safe } from "../src/index.js"
 import { anonymous, app, context, events, reset, status, user } from "./fixture.js"
 
@@ -16,10 +17,72 @@ const post = (path: string, body?: unknown) =>
 describe("a call", () => {
   test("a method whose `when` is false doesn't exist: the unknown-method 404, before the permission, and no onCall", async () => {
     const ctx = await app.context({ caller: user([]) }) // no thread, no grants
-    const err = await ctx.services.notes.reply({ text: 1 as never }).catch((e) => e)
+    const err = await ctx.services.notes.reply({ text: 1 as never }).catch((e: any) => e)
     expect(err.status).toBe(404)
     expect(await err.json()).toEqual({ error: "no method notes.reply; see /openapi.json" })
     expect(events).toEqual([])
+  })
+
+  test("a `when` that throws hides the method", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const shaky = createApp({
+      context,
+      services: {
+        x: declareService(() => ({
+          y: method(
+            {
+              summary: "y",
+              permission: "notes:read",
+              when: () => {
+                throw new Error("boom")
+              },
+            },
+            async () => {},
+          ),
+        })),
+      },
+    })
+    const ctx = await shaky.context({ caller: user(["notes:read"]) })
+    expect(await status((ctx.services as any).x.y())).toBe(404)
+    spy.mockRestore()
+  })
+
+  test("errors on the input as a whole are reported under `_`", async () => {
+    const strict = createApp({
+      context,
+      services: {
+        x: declareService(() => ({
+          y: method(
+            {
+              summary: "y",
+              permission: "notes:read",
+              input: z
+                .object({ a: z.number(), b: z.number() })
+                .refine((v) => v.a < v.b, "a must be below b"),
+            },
+            async () => {},
+          ),
+        })),
+      },
+    })
+    const ctx = await strict.context({ caller: user(["notes:read"]) })
+    const err = await (ctx.services as any).x.y({ a: 2, b: 1 }).catch((e: any) => e)
+    expect((await err.json()).fields).toEqual({ _: ["a must be below b"] })
+  })
+
+  test("onCall is awaited before the call returns", async () => {
+    const seen: string[] = []
+    const slow = createApp({
+      context,
+      services: app.config.services,
+      onCall: async (e) => {
+        await new Promise((r) => setTimeout(r, 5))
+        seen.push(e.method)
+      },
+    })
+    const ctx = await slow.context({ caller: user(["notes:read"]) })
+    await ctx.services.notes.get({ id: "1" })
+    expect(seen).toEqual(["get"])
   })
 
   test("the permission is checked before the input", async () => {
@@ -29,7 +92,7 @@ describe("a call", () => {
 
   test("invalid input is a 400 with field errors; input takes a plain shape or any zod schema", async () => {
     const ctx = await app.context({ caller: user(["notes:*"]) })
-    const err = await ctx.services.notes.get({ id: 1 as never }).catch((e) => e)
+    const err = await ctx.services.notes.get({ id: 1 as never }).catch((e: any) => e)
     expect(err.status).toBe(400)
     expect(await err.json()).toEqual({
       error: "invalid input",
@@ -131,12 +194,20 @@ describe("the registry", () => {
       declareService(() => ({
         x: method({ summary: "x", permission: "notes:read", name }, async () => {}),
       }))
-    expect(() => registry(createApp({ context, services: { a: named("has space") } }))).toThrow(
+    expect(() => createApp({ context, services: { a: named("has space") } })).toThrow(
       'tool name "has space"',
     )
-    expect(() =>
-      registry(createApp({ context, services: { a: named("same"), b: named("same") } })),
-    ).toThrow('a.x and b.x share the tool name "same"')
+    expect(() => createApp({ context, services: { a: named("same"), b: named("same") } })).toThrow(
+      'a.x and b.x share the tool name "same"',
+    )
+  })
+
+  test("createApp fails fast on a factory that uses the context while it builds", () => {
+    const eager = declareService((ctx) => {
+      const db = (ctx as unknown as { db: { notes: unknown } }).db.notes
+      return { db }
+    })
+    expect(() => createApp({ context, services: { eager } })).toThrow()
   })
 })
 
@@ -146,6 +217,40 @@ describe("HTTP", () => {
     expect(await app.handle(new Request("https://x.test/notes/1"), ctx)).toBeNull()
     const res = await app.handle(post("/api/notes.get", { id: "1" }), ctx)
     expect(await res?.json()).toEqual({ id: "1", title: "First" }) // no secret, no workspaceId
+  })
+
+  test("a denied caller gets 403 whatever the body", async () => {
+    const ctx = await app.context({ caller: user([]) })
+    const res = await app.handle(
+      new Request("https://x.test/api/notes.get", { method: "POST", body: "{bad" }),
+      ctx,
+    )
+    expect(res?.status).toBe(403)
+    expect(events.map((e) => [e.method, e.ok])).toEqual([["get", false]])
+  })
+
+  test("a plain z.date() input isn't advertised as a string; z.coerce.date() is", async () => {
+    const dated = createApp({
+      context,
+      services: {
+        x: declareService(() => ({
+          y: method(
+            {
+              summary: "y",
+              permission: "notes:read",
+              input: { plain: z.date(), coerced: z.coerce.date() },
+            },
+            async () => {},
+          ),
+        })),
+      },
+    })
+    const ctx = await dated.context({ caller: user(["notes:read"]) })
+    const doc = await (await dated.handle(new Request("https://x.test/openapi.json"), ctx))!.json()
+    const props =
+      doc.paths["/api/x.y"].post.requestBody.content["application/json"].schema.properties
+    expect(props.plain).not.toHaveProperty("type", "string")
+    expect(props.coerced).toEqual({ type: "string", format: "date-time" })
   })
 
   test("a method hidden by `when` answers like a missing one, whatever the verb", async () => {
@@ -252,6 +357,45 @@ describe("discovery.anonymous none", () => {
         resourceMetadataUrl: "https://x.test/.well-known/oauth-protected-resource",
       })
     }
+  })
+
+  test("openapi declares OAuth as an oauth2 scheme pointing at the resource metadata", async () => {
+    const doc = await (await closed.handle(
+      new Request("https://x.test/openapi.json"),
+      await anon(),
+    ))!.json()
+    expect(doc.components.securitySchemes.oauth).toMatchObject({
+      type: "oauth2",
+      "x-resource-metadata": "https://x.test/.well-known/oauth-protected-resource",
+    })
+  })
+
+  test("createApp rejects a resource metadata URL it couldn't put in a header", () => {
+    for (const url of ["not a url", 'https://x.test/m"d', "https://x.test/m\\"])
+      expect(() =>
+        createApp({
+          ...app.config,
+          discovery: {
+            anonymous: "none",
+            auth: { instructions: "i", oauth: { resourceMetadataUrl: url } },
+          },
+        }),
+      ).toThrow("resourceMetadataUrl")
+  })
+
+  test("discovery.docs replaces the wording for credentials and errors", async () => {
+    const worded = createApp({
+      ...app.config,
+      discovery: {
+        docs: { key: "tok_…", bearer: "A token.", errors: { conflict: "Already done." } },
+      },
+    })
+    const ctx = await worded.context({ caller: user(["notes:read"]) })
+    const doc = await (await worded.handle(new Request("https://x.test/openapi.json"), ctx))!.json()
+    expect(doc.components.securitySchemes.bearer.description).toBe("A token.")
+    expect(doc.components.responses.Conflict.description).toBe("Already done.")
+    const llms = await (await worded.handle(new Request("https://x.test/llms.txt"), ctx))!.text()
+    expect(llms).toContain("Authorization: Bearer tok_…")
   })
 
   test("an authenticated caller is unaffected", async () => {

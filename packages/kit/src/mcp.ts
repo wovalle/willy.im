@@ -14,7 +14,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import type { KitApp } from "./app.js"
 import type { JsonSchema } from "./discovery.js"
-import { tools, type KitTool, type ToolContext } from "./tools.js"
+import { tools, type KitResult, type KitTool, type ToolContext } from "./tools.js"
 
 export type McpOptions = {
   /** The server's `instructions`: a string, or computed from the tools this caller sees. */
@@ -23,25 +23,33 @@ export type McpOptions = {
 
 /**
  * MCP wants `structuredContent` (and `outputSchema`) to be an object. An output
- * that isn't one (an array, a nullable object, a string) goes in `{ result }`.
+ * that isn't always one (an array, a string, an optional or nullable object)
+ * goes in `{ result }`.
  */
-function mcpOutput(schema: JsonSchema | undefined) {
-  if (!schema) return undefined
-  if (schema.type === "object") return { schema, wrap: false }
+function mcpOutput(t: KitTool) {
+  const schema = t.outputSchema
+  if (!schema || !t.outputZod) return undefined
+  const alwaysObject =
+    schema.type === "object" &&
+    !t.outputZod.safeParse(undefined).success &&
+    !t.outputZod.safeParse(null).success
+  if (alwaysObject) return { schema, wrap: false }
   const { $defs, ...inner } = schema
   return {
     schema: {
       type: "object",
       properties: { result: inner },
-      required: ["result"],
+      // An optional output may be absent: then structuredContent is `{}`.
+      required: t.outputZod.safeParse(undefined).success ? [] : ["result"],
       ...($defs !== undefined && { $defs }),
     } as JsonSchema,
     wrap: true,
   }
 }
 
-const describe = (t: KitTool): Tool => {
-  const out = mcpOutput(t.outputSchema)
+/** A kit tool as an MCP `Tool`, for apps that register tools on their own server. */
+export const toMcpTool = (t: KitTool): Tool => {
+  const out = mcpOutput(t)
   const annotations = t.hints && {
     ...(t.hints.readOnly !== undefined && { readOnlyHint: t.hints.readOnly }),
     ...(t.hints.destructive !== undefined && { destructiveHint: t.hints.destructive }),
@@ -63,21 +71,23 @@ const errorText = (message: string, fields?: Partial<Record<string, string[]>>) 
     ...Object.entries(fields ?? {}).map(([field, errors]) => `- ${field}: ${errors?.join("; ")}`),
   ].join("\n")
 
-async function call(t: KitTool, args: unknown): Promise<CallToolResult> {
-  const r = await t.call(args)
+/** A tool's result as an MCP `CallToolResult`. */
+export function toCallToolResult(t: KitTool, r: KitResult): CallToolResult {
   if (!r.ok)
     return { isError: true, content: [{ type: "text", text: errorText(r.message, r.fields) }] }
-  const out = mcpOutput(t.outputSchema)
+  const out = mcpOutput(t)
   const images = r.images.map((i) => ({
     type: "image" as const,
     data: i.data,
     mimeType: i.mediaType,
   }))
   if (!out) return { content: [{ type: "text", text: "Done." }, ...images] }
-  const structured = (out.wrap ? { result: r.data } : r.data) as Record<string, unknown>
+  const structured = (
+    out.wrap ? (r.data === undefined ? {} : { result: r.data }) : r.data
+  ) as Record<string, unknown>
   return {
     structuredContent: structured,
-    content: [{ type: "text", text: JSON.stringify(structured) }, ...images],
+    content: [{ type: "text", text: JSON.stringify(structured) ?? "null" }, ...images],
   }
 }
 
@@ -103,11 +113,11 @@ export function toMcpServer(app: KitApp, ctx: ToolContext, options: McpOptions =
     { name: app.config.name ?? "kit", version: "1.0.0" },
     { capabilities: { tools: {} }, ...(instructions && { instructions }) },
   )
-  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: list.map(describe) }))
+  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: list.map(toMcpTool) }))
   server.setRequestHandler(CallToolRequestSchema, (request) => {
     const t = byName.get(request.params.name)
     if (!t) throw new McpError(ErrorCode.InvalidParams, `Unknown tool: ${request.params.name}`)
-    return call(t, request.params.arguments ?? {})
+    return t.call(request.params.arguments ?? {}).then((r) => toCallToolResult(t, r))
   })
   return server
 }

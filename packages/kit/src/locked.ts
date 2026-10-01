@@ -50,10 +50,11 @@ export function lockedOpenapi(app: KitApp, origin: string) {
           description: a?.instructions ?? "An API key sent as `Authorization: Bearer <key>`.",
         },
         ...(a?.oauth && {
+          // The flows live at the authorization server the metadata names (RFC 9728).
           oauth: {
-            type: "http",
-            scheme: "bearer",
-            description: `An OAuth access token. Protected resource metadata (RFC 9728): ${a.oauth.resourceMetadataUrl}`,
+            type: "oauth2",
+            flows: {},
+            description: `OAuth 2. Protected resource metadata (RFC 9728): ${a.oauth.resourceMetadataUrl}`,
             "x-resource-metadata": a.oauth.resourceMetadataUrl,
           },
         }),
@@ -65,7 +66,7 @@ export function lockedOpenapi(app: KitApp, origin: string) {
 /** The 401 for `/api/*`, before any method is looked up. */
 export function unauthenticated(app: KitApp): Response {
   const a = auth(app)
-  const metadata = a?.oauth?.resourceMetadataUrl.replace(/"/g, "")
+  const metadata = a?.oauth?.resourceMetadataUrl // validated by createApp
   return Response.json(
     {
       error: "authentication required",

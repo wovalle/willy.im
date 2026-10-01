@@ -1,4 +1,4 @@
-/** @deprecated `@willyim/rbac` is now part of `@willyim/kit`. Import from "@willyim/kit". */
+/** @deprecated `@willyim/rbac` is part of `@willyim/kit` now: import from "@willyim/kit". */
 export {
   definePermissions,
   type CheckerOptions,

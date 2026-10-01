@@ -225,7 +225,7 @@ export type LinkedIdentity = typeof linkedIdentity.$inferSelect
  * Audit trail for privileged actions (member/key/workspace/app writes,
  * impersonation). Mirrors the D1 `audit_logs` shape from @willyim/drizzle-audit
  * (so it can be swapped to that package once it's a workspace dependency — same
- * way permissions.ts mirrors @willyim/rbac), with two added columns we always
+ * way permissions.ts mirrors @willyim/kit permissions), with two added columns we always
  * want: application_id (scope — lets an app read only its own trail) and actor
  * (a human-readable principal descriptor, since machine callers have no user_id).
  */

@@ -105,6 +105,23 @@ describe("grants", () => {
   })
 })
 
+describe("resources", () => {
+  test("a resource may not prefix a catalog permission", () => {
+    expect(() =>
+      definePermissions({ permissions: ["thread:read"], resources: ["thread"], roles: {} }),
+    ).toThrow('resource "thread" overlaps the permission "thread:read"')
+  })
+
+  test("hasAny is true for an instance, a covering wildcard or a superadmin", () => {
+    expect(auth.checkerFor(["thread:abc"]).hasAny?.("thread")).toBe(true)
+    expect(auth.checkerFor(["inbox:*"]).hasAny?.("inbox:thread")).toBe(true)
+    expect(auth.checkerFor(["*"]).hasAny?.("thread")).toBe(true)
+    expect(auth.checkerFor(["inbox:thread:h1"]).hasAny?.("thread")).toBe(false)
+    expect(auth.checkerFor(["posts:*"]).hasAny?.("thread")).toBe(false)
+    expect(auth.createChecker("editor").hasAny?.("thread")).toBe(false)
+  })
+})
+
 describe("usePermissions", () => {
   test("matches the way the server checker does: exact, wildcards, instances, superadmin", () => {
     const { granted, isSuperadmin } = auth.checkerFor(["posts:read", "thread:*", "inbox:thread:h1"])

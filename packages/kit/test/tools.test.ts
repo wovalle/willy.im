@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, test } from "vitest"
-import { tools } from "../src/index.js"
-import { app, events, reset, user } from "./fixture.js"
+import { beforeEach, describe, expect, test, vi } from "vitest"
+import { z } from "zod"
+import { createApp, declareService, method, tools } from "../src/index.js"
+import { app, context, events, reset, user } from "./fixture.js"
 
 beforeEach(() => {
   reset()
@@ -65,10 +66,81 @@ describe("tools", () => {
       message: "invalid input",
       fields: { id: [expect.any(String)] },
     })
-    const broken = await all.get("notes_broken")!.call({})
-    expect(broken).toMatchObject({
-      ok: false,
-      message: expect.stringContaining("output schema rejects"),
+  })
+
+  test("any other error reaches the caller as an internal error with an id, never its message", async () => {
+    const leaky = createApp({
+      context,
+      services: {
+        db: declareService(() => ({
+          query: method({ summary: "q", permission: "notes:read" }, async () => {
+            throw new Error("SQLITE_ERROR at postgres://admin:pw@db")
+          }),
+        })),
+      },
     })
+    const t = tools(leaky, await leaky.context({ caller: user(["notes:read"]) }))[0]
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const r = await t.call({})
+    expect(r).toEqual({
+      ok: false,
+      message: expect.stringMatching(/^internal error \([0-9a-f]{8}\)$/),
+    })
+    expect(JSON.stringify(r)).not.toContain("postgres")
+    const broken = await (await byName(["notes:read"])).get("notes_broken")!.call({})
+    expect(broken).toMatchObject({ ok: false, message: expect.stringMatching(/^internal error/) })
+    spy.mockRestore()
+  })
+
+  test("an input that isn't an object is wrapped as { input }", async () => {
+    const search = createApp({
+      context,
+      services: {
+        find: declareService(() => ({
+          text: method(
+            {
+              summary: "s",
+              permission: "notes:read",
+              input: z.string(),
+              output: { q: z.string() },
+            },
+            async (q) => ({ q }),
+          ),
+        })),
+      },
+    })
+    const t = tools(search, await search.context({ caller: user(["notes:read"]) }))[0]
+    expect(t.inputSchema).toEqual({
+      type: "object",
+      properties: { input: { type: "string" } },
+      required: ["input"],
+    })
+    expect(Object.keys(t.inputZod.shape)).toEqual(["input"])
+    expect(await t.call({ input: "hi" })).toEqual({ ok: true, data: { q: "hi" }, images: [] })
+  })
+
+  test("`permission: { resource }` shows the tool to anyone holding an instance or a wildcard", async () => {
+    const threads = createApp({
+      context,
+      services: {
+        thread: declareService((ctx) => ({
+          read: method(
+            { summary: "r", permission: { resource: "thread" }, input: { id: z.string() } },
+            async ({ id }) => {
+              ctx.caller.require(`thread:${id}`)
+            },
+          ),
+        })),
+      },
+    })
+    const names = async (grants: string[]) =>
+      tools(threads, await threads.context({ caller: user(grants) })).map((t) => t.name)
+    expect(await names(["thread:abc"])).toEqual(["thread_read"])
+    expect(await names(["thread:*"])).toEqual(["thread_read"])
+    expect(await names(["*"])).toEqual(["thread_read"])
+    expect(await names(["notes:read"])).toEqual([])
+    const [read] = tools(threads, await threads.context({ caller: user(["thread:abc"]) }))
+    expect(await read.call({ id: "abc" })).toEqual({ ok: true, data: undefined, images: [] })
+    expect(await read.call({ id: "xyz" })).toEqual({ ok: false, message: "Forbidden" })
   })
 })

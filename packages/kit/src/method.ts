@@ -1,6 +1,7 @@
 import { z } from "zod"
 import {
   META,
+  type Access,
   type CallEvent,
   type Contract,
   type FnArgs,
@@ -42,23 +43,62 @@ export const isMethod = (value: unknown): value is Unbound =>
 /** A contract's `input` / `output` as a schema: a plain shape is wrapped in `z.object`. */
 export const toSchema = (s: SchemaLike): z.ZodType => ("_zod" in s ? (s as z.ZodType) : z.object(s))
 
-/** Does the method exist in this context? */
-export const available = (contract: Contract, ctx: unknown) =>
-  !contract.when || contract.when(ctx as never)
+/** Does the method exist in this context? A `when` that throws counts as false, and is logged. */
+export const available = (contract: Contract, ctx: unknown) => {
+  if (!contract.when) return true
+  try {
+    return contract.when(ctx as never)
+  } catch (e) {
+    console.error("kit: a `when` threw; the method is hidden", e)
+    return false
+  }
+}
+
+type Caller = {
+  has(permission: string): boolean
+  require(permission: string): void
+  hasAny?(resource: string): boolean
+}
+
+const forbidden = () => new Response("Forbidden", { status: 403 })
+
+/** May this caller call a method with this access rule? */
+export const permitted = (caller: Caller, access: Access) =>
+  typeof access === "string"
+    ? caller.has(access)
+    : (caller.hasAny?.(access.resource as string) ?? false)
+
+/** Throws the caller's own denial (a 403, or whatever its `require` throws). */
+export const requireAccess = (caller: Caller, access: Access) => {
+  if (typeof access === "string") caller.require(access)
+  else if (!permitted(caller, access)) throw forbidden()
+}
+
+/** How an access rule reads in discovery. */
+export const describeAccess = (access: Access) =>
+  typeof access === "string" ? access : `${access.resource as string}:<id>`
+
+// What `bind` parsed from an object result, so the edges don't parse it again.
+const parsedOutputs = new WeakMap<object, unknown>()
+
+/** The output stripped to the contract: the value `bind` already parsed, or a fresh parse. */
+export const stripOutput = (result: unknown, output: SchemaLike) =>
+  result !== null && typeof result === "object" && parsedOutputs.has(result)
+    ? parsedOutputs.get(result)
+    : toSchema(output).parse(result)
 
 /** The error for a method that doesn't exist, or doesn't exist in this context. */
 export const unknownMethod = (name: string) =>
   Response.json({ error: `no method ${name}; see /openapi.json` }, { status: 404 })
 
-const report = (onCall: OnCall | undefined, event: CallEvent<any>) => {
+// Awaited, so an audit write finishes before the response (Workers drop late work);
+// a failing onCall is logged and never fails the call.
+const report = async (onCall: OnCall | undefined, event: CallEvent<any>) => {
   if (!onCall) return
-  const fail = (e: unknown) =>
-    console.error(`kit: onCall threw for ${event.service}.${event.method}`, e)
   try {
-    const r = onCall(event)
-    if (r && typeof r.then === "function") r.then(undefined, fail)
+    await onCall(event)
   } catch (e) {
-    fail(e)
+    console.error(`kit: onCall threw for ${event.service}.${event.method}`, e)
   }
 }
 
@@ -92,13 +132,16 @@ export function bind(
         ms: performance.now() - started,
       })
     try {
-      ctx.caller.require(contract.permission)
+      requireAccess(ctx.caller, contract.permission)
       if (input) {
         const parsed = input.safeParse(raw)
         if (!parsed.success) {
-          const fields = z.flattenError(parsed.error).fieldErrors as Partial<
-            Record<string, string[]>
-          >
+          const { formErrors, fieldErrors } = z.flattenError(parsed.error)
+          // Errors on the input as a whole (a root `.refine`, a wrong type) go under "_".
+          const fields = {
+            ...(formErrors.length > 0 && { _: formErrors }),
+            ...fieldErrors,
+          } as Partial<Record<string, string[]>>
           throw Object.assign(Response.json({ error: "invalid input", fields }, { status: 400 }), {
             [INVALID]: fields,
           })
@@ -112,11 +155,12 @@ export function bind(
           throw new Error(
             `kit: ${service}.${name} returned a value its output schema rejects: ${checked.error.message}`,
           )
+        if (result !== null && typeof result === "object") parsedOutputs.set(result, checked.data)
       }
-      done(true)
+      await done(true)
       return result
     } catch (error) {
-      done(false, error)
+      await done(false, error)
       throw error
     }
   }

@@ -28,7 +28,21 @@ export type Services = {
 export type Context = BaseContext & { services: Services }
 
 /** Permission names, taken from the registered caller's checker. */
-export type Permission = BaseContext extends { caller: PermissionChecker<infer P> } ? P : string
+export type Permission = BaseContext extends { caller: PermissionChecker<infer P, any> }
+  ? P
+  : string
+
+/** Resource types whose instances can be granted (`definePermissions({ resources })`). */
+export type Resource = BaseContext extends { caller: { hasAny?(resource: infer R): boolean } }
+  ? R
+  : string
+
+/**
+ * Who may call a method: a permission, or `{ resource }` for anyone holding at
+ * least one instance of that resource (`"thread:abc"`) or a wildcard over it.
+ * With `{ resource }` the body checks the specific id with `ctx.caller.has`.
+ */
+export type Access = [Resource] extends [never] ? Permission : Permission | { resource: Resource }
 
 /** A zod schema, or a plain shape (`{ id: z.string() }`) that kit wraps in `z.object`. */
 export type SchemaLike = z.ZodType | z.core.$ZodShape
@@ -56,8 +70,8 @@ export type Contract<
   summary: string
   /** The long text: rules, examples, edge cases. Tool descriptions use it instead of `summary`. */
   description?: string
-  /** Who may call it. */
-  permission: Permission
+  /** Who may call it: a permission, or `{ resource }` (see `Access`). */
+  permission: Access
   /** Omitted: the method takes no arguments. */
   input?: I
   /** Omitted: the method returns nothing. */

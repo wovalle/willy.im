@@ -4,30 +4,29 @@
   "description": "Deprecated: use @willyim/kit, which includes these permissions",
   "deprecated": "@willyim/rbac is part of @willyim/kit now. Install @willyim/kit and import definePermissions from \"@willyim/kit\" (the hook from \"@willyim/kit/react\").",
   "type": "module",
-  "main": "./dist/src/define-permissions.js",
-  "types": "./dist/src/define-permissions.d.ts",
+  "main": "./index.js",
+  "types": "./index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/define-permissions.d.ts",
-      "default": "./dist/src/define-permissions.js"
+      "types": "./index.d.ts",
+      "default": "./index.js"
     },
     "./react": {
-      "types": "./dist/src/create-permissions-hook.d.ts",
-      "default": "./dist/src/create-permissions-hook.js"
+      "types": "./react.d.ts",
+      "default": "./react.js"
     }
   },
   "files": [
-    "dist",
+    "index.js",
+    "index.d.ts",
+    "react.js",
+    "react.d.ts",
     "README.md",
     "LICENSE"
   ],
   "sideEffects": false,
   "engines": {
     "node": ">=20"
-  },
-  "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "rbac",
@@ -55,10 +54,6 @@
     "react": {
       "optional": true
     }
-  },
-  "devDependencies": {
-    "@types/node": "^22.19.7",
-    "typescript": "^5.9.3"
   },
   "publishConfig": {
     "access": "public"

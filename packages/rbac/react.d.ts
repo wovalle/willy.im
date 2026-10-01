@@ -1,4 +1,4 @@
-/** @deprecated `@willyim/rbac/react` is now `@willyim/kit/react`. */
+/** @deprecated `@willyim/rbac/react` is `@willyim/kit/react` now. */
 export {
   createPermissionsHook,
   type PermissionsData,

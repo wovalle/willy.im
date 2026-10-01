@@ -91,16 +91,16 @@ for (const t of tools(app, ctx)) runtime.register(t.name, t.description, t.input
 
 ## Concepts
 
-| Concept | What it is |
-|---|---|
-| **App** | `createApp({ name, description, context, system?, services, onCall?, discovery?: { anonymous?, auth? } })`. Holds every service. |
-| **Context** | Built once per request, MCP session, agent turn or cron run: `caller` plus whatever you add (`db`, `scope`, `thread`, `signal`, …). Every service is bound to it. |
-| **Register** | The `declare module "@willyim/kit"` block. It gives `ctx`, permissions and `ctx.services` their types everywhere. |
-| **Service** | `declareService((ctx) => ({ ... }))`. Plain functions inside stay private; only `method(...)` entries are public. |
-| **Method** | `method(contract, fn)`. Each call runs, in order: `when`, the permission, input validation, your function, the output check, then `onCall`. |
-| **Caller** | `{ has, require, granted, isSuperadmin, kind? }`, from `auth.createChecker(role)` or `auth.checkerFor(grants)`. `kind: "anonymous"` marks a caller with no credentials. |
-| **Policies** | `definePolicies({ note: (caller) => ({ workspaceId: caller.workspaceId }) })`. Row scoping as plain data: `ctx.scope.note({ id })`. |
-| **System context** | `app.systemContext(...)`, from the `system` builder, for cron and queues. Give it a superadmin caller. |
+| Concept            | What it is                                                                                                                                                              |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **App**            | `createApp({ name, description, context, system?, services, onCall?, discovery?: { anonymous?, auth? } })`. Holds every service.                                        |
+| **Context**        | Built once per request, MCP session, agent turn or cron run: `caller` plus whatever you add (`db`, `scope`, `thread`, `signal`, …). Every service is bound to it.       |
+| **Register**       | The `declare module "@willyim/kit"` block. It gives `ctx`, permissions and `ctx.services` their types everywhere.                                                       |
+| **Service**        | `declareService((ctx) => ({ ... }))`. Plain functions inside stay private; only `method(...)` entries are public.                                                       |
+| **Method**         | `method(contract, fn)`. Each call runs, in order: `when`, the permission, input validation, your function, the output check, then `onCall`.                             |
+| **Caller**         | `{ has, require, granted, isSuperadmin, kind? }`, from `auth.createChecker(role)` or `auth.checkerFor(grants)`. `kind: "anonymous"` marks a caller with no credentials. |
+| **Policies**       | `definePolicies({ note: (caller) => ({ workspaceId: caller.workspaceId }) })`. Row scoping as plain data: `ctx.scope.note({ id })`.                                     |
+| **System context** | `app.systemContext(...)`, from the `system` builder, for cron and queues. Give it a superadmin caller.                                                                  |
 
 ### The contract
 
@@ -108,7 +108,7 @@ for (const t of tools(app, ctx)) runtime.register(t.name, t.description, t.input
 method({
   summary: "One line. An agent reads it to choose the method.",
   description: "Optional. Paragraphs: rules, examples, edge cases.",
-  permission: "notes:write",           // who may call it
+  permission: "notes:write",           // who may call it, or { resource: "thread" }
   input: { title: z.string() },        // a zod schema or a plain shape; omit for no input
   output: { id: z.string() },          // required if it returns a value; omit for none
   when: (ctx) => ctx.thread !== null,  // optional: where it exists; omit for everywhere
@@ -121,18 +121,27 @@ method({
   doesn't exist in that context: it's missing from discovery, `tools()` and MCP, and a direct
   call gets the same 404 "no method" error as a typo. It's checked before the permission, so a
   hidden method never reveals that it exists.
+- **`permission: { resource: "thread" }`** lets in anyone holding at least one `thread:<id>`
+  grant (or `thread:*`, or `*`), so such callers see the method. The body then checks the id:
+  ``ctx.caller.require(`thread:${id}`)``.
 - **The output is checked twice.** At compile time, `createApp` fails to type-check if a method
   returns something its `output` rejects. At run time, every call validates the return. In
   process you get the full value; `/api`, `tools()` and MCP strip it to the contract, so an
   internal column never leaves.
-- **Tool names** are 1-64 letters, digits, `_` or `-`, and unique. A bad or duplicate name
-  throws when the registry is first built.
+- **`createApp` fails fast:** it builds the registry right away, so a bad or duplicate tool name
+  (1-64 letters, digits, `_` or `-`) or a factory that touches `ctx` while building throws at
+  startup.
+- **Dates:** outputs send `z.date()` as an ISO string. Inputs arrive as JSON, so take dates as
+  `z.coerce.date()` or `z.iso.datetime()`; a plain `z.date()` input accepts no JSON value.
 
 ### Errors
 
 - `fail(400 | 401 | 403 | 404 | 409, message)` throws a JSON `Response`. React Router renders
   it, `/api` returns it as is, `tools()` and MCP turn it into a failure with that message.
-- A missing permission throws a 403 `Response`; invalid input a 400 `{ error, fields }`.
+- A missing permission throws a 403 `Response`; invalid input a 400 `{ error, fields }`, with
+  errors on the input as a whole under `fields._`.
+- Any other thrown error is a bug, not a message: `/api` rethrows it, and `tools()` and MCP
+  answer `internal error (<id>)` and log the error with that id. Only `Response`s reach callers.
 - `safe(method, formData)` returns `{ ok: true, value } | { ok: false, errors }` for forms.
 
 ### `onCall`
@@ -142,8 +151,9 @@ createApp({ ..., onCall: ({ service, method, ctx, input, ok, error, ms }) => aud
 ```
 
 Fires once per call, from every surface, with the outcome: denied, invalid, failed or done.
-A method hidden by `when` doesn't fire it. If `onCall` throws, the call still succeeds and the
-error is logged.
+It's awaited before the call returns, so an audit write isn't lost when a Worker's response
+ends. A method hidden by `when` doesn't fire it. If `onCall` throws, the call still succeeds
+and the error is logged.
 
 ### Images
 
@@ -157,13 +167,13 @@ reference in the data; MCP sends them as image blocks.
 
 ## Surfaces
 
-| Surface | How | Notes |
-|---|---|---|
-| UI | `ctx.services.notes.get(...)` | In process, fully typed. |
-| HTTP | `app.handle(request, ctx)` | `POST /api/<service>.<method>`, `GET /openapi.json`, `GET /llms.txt`. JSON in and out, 204 for no output. |
-| Agents | `tools(app, ctx)` | `{ name, title, description, inputSchema, inputZod, outputSchema, hints, call }`. `call` never throws: `{ ok: true, data, images }` or `{ ok: false, message, fields? }`. Write a small adapter per runtime. |
-| MCP | `toMcpServer(app, ctx, { instructions? })` from `@willyim/kit/mcp` | A `Server` from `@modelcontextprotocol/sdk` (optional peer). You bring the transport and auth. |
-| React | `createPermissionsHook(useData)` from `@willyim/kit/react` | Show or hide UI by the caller's grants. |
+| Surface | How                                                                | Notes                                                                                                                                                                                                                                                                                                     |
+| ------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UI      | `ctx.services.notes.get(...)`                                      | In process, fully typed.                                                                                                                                                                                                                                                                                  |
+| HTTP    | `app.handle(request, ctx)`                                         | `POST /api/<service>.<method>`, `GET /openapi.json`, `GET /llms.txt`. JSON in and out, 204 for no output.                                                                                                                                                                                                 |
+| Agents  | `tools(app, ctx)`                                                  | `{ name, title, description, inputSchema, inputZod, outputSchema, outputZod, hints, call }`. `inputZod` is always a `z.object` (a non-object input is wrapped as `{ input }`). `call` never throws: `{ ok: true, data, images }` or `{ ok: false, message, fields? }`. Write a small adapter per runtime. |
+| MCP     | `toMcpServer(app, ctx, { instructions? })` from `@willyim/kit/mcp` | A `Server` from `@modelcontextprotocol/sdk` (optional peer). You bring the transport and auth. To mix kit tools with your own, use `toMcpTool(t)` and `toCallToolResult(t, result)`.                                                                                                                      |
+| React   | `createPermissionsHook(useData)` from `@willyim/kit/react`         | Show or hide UI by the caller's grants.                                                                                                                                                                                                                                                                   |
 
 **Everything is filtered by the context.** `tools()`, MCP and discovery list only methods that
 exist in the context (`when`) and that the caller may call. For a caller with
@@ -176,12 +186,17 @@ answer 200 with the app's name, a note that methods are listed only for authenti
 and `discovery.auth` (`instructions`, `keysUrl`, `oauth.resourceMetadataUrl`; OpenAPI also
 gets the security schemes and `paths: {}`). `/api/*` answers 401 with
 `WWW-Authenticate: Bearer` (plus `resource_metadata="…"` with OAuth) and the same
-instructions, before any method is looked up.
+instructions, before any method is looked up: anonymous callers can't call anything.
+
+**Wording.** `discovery.docs` sets the token placeholder (`key`), the bearer scheme's
+description and the error descriptions in `/openapi.json` and `/llms.txt`. The defaults are
+neutral.
 
 **MCP details.** `tools/list` maps `title`, `description`, JSON Schemas and hints
 (`readOnlyHint`, `destructiveHint`, `idempotentHint`). `tools/call` returns
 `structuredContent`, the same JSON as a text block, and an image block per `kitImage`. An
-output that isn't an object is wrapped as `{ result }`. Failures are `isError` results with
+output that isn't always an object (an array, a string, an optional or nullable object) is
+wrapped as `{ result }`. Failures are `isError` results with
 the message and any invalid fields. A tool outside the caller's list, forbidden or
 nonexistent, is the same `Unknown tool` error. Build one server per request or session.
 Unauthenticated MCP never reaches kit: your transport answers 401 + `WWW-Authenticate` first.
@@ -191,25 +206,30 @@ Unauthenticated MCP never reaches kit: your transport answers 401 + `WWW-Authent
 ```ts
 const auth = definePermissions({
   permissions: ["notes:read", "notes:write"],
-  resources: ["thread"],          // instance grants: "thread:abc"
+  resources: ["thread"], // instance grants: "thread:abc"
   roles: { owner: ["notes:read", "notes:write"] },
 })
 
-auth.createChecker("owner")                  // a member, by role
+auth.createChecker("owner") // a member, by role
 auth.createChecker("owner", { superadmin: true })
-auth.checkerFor(key.scopes)                  // an API key or a token, by grants
+auth.checkerFor(key.scopes) // an API key or a token, by grants
 ```
 
 What `checkerFor` understands:
 
 - `"notes:read"`: that permission.
 - `"notes:*"`: every permission and instance under `notes:`. Not `notesx:`.
-- `"*"`: a superadmin. `has` is always true.
+- `"*"`: a superadmin. `has` is always true. Grants must come from a trusted source (the IdP,
+  your own key table): never let a user pick their own scopes without rejecting `"*"`.
 - `"thread:abc"`: one instance of a declared resource; `"thread:*"` for all of them. Check it in
   the method body: ``ctx.caller.has(`thread:${id}`)``. The id is one segment (no `:`, `*` or
   whitespace).
 
-Anything else is dropped. `require` throws a 403 `Response`.
+Anything else is dropped. `require` throws a 403 `Response`. A resource may not prefix a
+catalog permission (`thread` and `thread:read` together throw), so a grant always means one
+thing.
+
+`Register` is global: one kit app per TypeScript program.
 
 ## Identity: `@willyim/kit/idp`
 
@@ -221,7 +241,11 @@ the management API (`createManagementApi`) to sync the permission catalog.
 ```ts
 import { createUserKeys } from "@willyim/kit/idp"
 
-const keys = createUserKeys({ baseUrl: "https://idp.willy.im", token: env.IDP_MANAGEMENT_KEY, app: "notes" })
+const keys = createUserKeys({
+  baseUrl: "https://idp.willy.im",
+  token: env.IDP_MANAGEMENT_KEY,
+  app: "notes",
+})
 const result = await keys.authenticate(request)
 const caller = result.ok ? { kind: "key", ...auth.checkerFor(result.key.scopes) } : anonymousCaller
 ```
@@ -251,12 +275,12 @@ Rules for working in a kit app:
 
 Install only `@willyim/kit`:
 
-| Entry | What |
-|---|---|
-| `@willyim/kit` | methods, services, the registry, discovery, HTTP, `tools()`, permissions, policies |
-| `@willyim/kit/mcp` | `toMcpServer` (peer: `@modelcontextprotocol/sdk`) |
-| `@willyim/kit/react` | `createPermissionsHook` |
-| `@willyim/kit/idp` (`/drizzle`, `/react-router`, `/schemas`) | `@willyim/idp` |
+| Entry                                                        | What                                                                               |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `@willyim/kit`                                               | methods, services, the registry, discovery, HTTP, `tools()`, permissions, policies |
+| `@willyim/kit/mcp`                                           | `toMcpServer` (peer: `@modelcontextprotocol/sdk`)                                  |
+| `@willyim/kit/react`                                         | `createPermissionsHook`                                                            |
+| `@willyim/kit/idp` (`/drizzle`, `/react-router`, `/schemas`) | `@willyim/idp`                                                                     |
 
 kit pins `@willyim/idp` to an exact version, and changesets releases kit whenever idp
 releases. `@willyim/rbac` is deprecated; its last release re-exports kit.

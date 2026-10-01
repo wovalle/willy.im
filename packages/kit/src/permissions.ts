@@ -10,12 +10,20 @@
  *   "*"              everything: a superadmin
  *   "thread:abc"     one instance of a declared resource (`resources: ["thread"]`)
  *
- * Anything else is dropped.
+ * Anything else is dropped. Grants must come from a trusted source (the IdP,
+ * your own key table): `"*"` makes a superadmin, so never let a user choose
+ * their own scopes without rejecting it.
  */
 
-export type PermissionChecker<P extends string> = {
+export type PermissionChecker<P extends string, R extends string = never> = {
   has(permission: P): boolean
   require(permission: P): void
+  /**
+   * Does the caller hold any instance of `resource` (`"thread:abc"`), or a
+   * wildcard covering them? What `permission: { resource }` checks; the method
+   * body then checks the specific id with `has`.
+   */
+  hasAny?(resource: R): boolean
   granted: P[]
   isSuperadmin: boolean
 }
@@ -47,8 +55,8 @@ export type PermissionsResult<
   createChecker(
     role: keyof R & string,
     opts?: CheckerOptions,
-  ): PermissionChecker<P[number] | Instance<Res>>
-  checkerFor(grants: readonly string[]): PermissionChecker<P[number] | Instance<Res>>
+  ): PermissionChecker<P[number] | Instance<Res>, Res[number]>
+  checkerFor(grants: readonly string[]): PermissionChecker<P[number] | Instance<Res>, Res[number]>
   permissions: P
   roles: R
   resources: Res
@@ -56,16 +64,18 @@ export type PermissionsResult<
 
 const forbidden = () => new Response("Forbidden", { status: 403 })
 
-function checker<P extends string>(
+function checker<P extends string, R extends string>(
   has: (p: string) => boolean,
+  hasAny: (resource: string) => boolean,
   granted: string[],
   isSuperadmin: boolean,
-): PermissionChecker<P> {
+): PermissionChecker<P, R> {
   return {
     has,
     require: (p) => {
       if (!has(p)) throw forbidden()
     },
+    hasAny,
     granted: granted as P[],
     isSuperadmin,
   }
@@ -96,6 +106,13 @@ export function definePermissions<
   type Permission = P[number] | Instance<Res>
   const catalog = new Set<string>(config.permissions)
   const resources: readonly string[] = config.resources ?? []
+  // A resource must not prefix a catalog permission: "thread:read" can't be both
+  // a permission and the thread whose id is "read".
+  for (const r of resources)
+    for (const p of config.permissions)
+      if (p.startsWith(`${r}:`))
+        throw new Error(`kit: resource "${r}" overlaps the permission "${p}"; rename one of them`)
+  type Resource = Res[number]
 
   /** `"thread:abc"` for a declared `thread`: the id is one segment, as the IdP issues them (no `:`, `*` or whitespace). */
   const isInstance = (p: string) =>
@@ -108,15 +125,22 @@ export function definePermissions<
     const superadmin = opts?.superadmin ?? false
     const rolePerms = config.roles[role] as readonly string[]
     const set = new Set(rolePerms)
-    return checker<Permission>(
+    return checker<Permission, Resource>(
       (p) => superadmin || set.has(p),
+      () => superadmin,
       superadmin ? [...config.permissions] : [...rolePerms],
       superadmin,
     )
   }
 
   function checkerFor(grants: readonly string[]) {
-    if (grants.includes("*")) return checker<Permission>(() => true, [...config.permissions], true)
+    if (grants.includes("*"))
+      return checker<Permission, Resource>(
+        () => true,
+        () => true,
+        [...config.permissions],
+        true,
+      )
 
     const prefixes = grants.flatMap((g) => wildcardPrefix(g) ?? [])
     const covered = (p: string) => prefixes.some((prefix) => p.startsWith(prefix))
@@ -133,8 +157,11 @@ export function definePermissions<
     ]
     const exact = new Set<string>([...permissions, ...instances])
 
-    return checker<Permission>(
+    return checker<Permission, Resource>(
       (p) => exact.has(p) || (isInstance(p) && covered(p)),
+      (r) =>
+        resources.includes(r) &&
+        (instances.some((i) => i.startsWith(`${r}:`) && isInstance(i)) || covered(`${r}:`)),
       [...permissions, ...instances, ...instanceWildcards],
       false,
     )

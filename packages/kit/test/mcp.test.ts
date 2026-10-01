@@ -1,8 +1,10 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { beforeEach, describe, expect, test } from "vitest"
+import { z } from "zod"
+import { createApp, declareService, method } from "../src/index.js"
 import { toMcpServer, type McpOptions } from "../src/mcp.js"
-import { app, reset, user } from "./fixture.js"
+import { app, context, reset, user } from "./fixture.js"
 
 beforeEach(reset)
 
@@ -85,6 +87,42 @@ describe("MCP", () => {
       isError: true,
       content: [{ type: "text", text: "note not found" }],
     })
+  })
+
+  test("an optional output is wrapped, and an absent one is an empty structuredContent", async () => {
+    const maybe = createApp({
+      context,
+      services: {
+        x: declareService(() => ({
+          y: method(
+            {
+              summary: "y",
+              permission: "notes:read",
+              input: { found: z.boolean() },
+              output: z.object({ id: z.string() }).optional(),
+            },
+            async ({ found }) => (found ? { id: "1" } : undefined),
+          ),
+        })),
+      },
+    })
+    const server = toMcpServer(maybe, await maybe.context({ caller: user(["notes:read"]) }))
+    const [a, b] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test", version: "1" })
+    await Promise.all([server.connect(a), client.connect(b)])
+    const [tool] = (await client.listTools()).tools
+    expect(tool.outputSchema).toMatchObject({
+      properties: { result: { type: "object" } },
+      required: [],
+    })
+    expect(
+      (await client.callTool({ name: "x_y", arguments: { found: true } })).structuredContent,
+    ).toEqual({
+      result: { id: "1" },
+    })
+    const none = await client.callTool({ name: "x_y", arguments: { found: false } })
+    expect(none.structuredContent).toEqual({})
+    expect(none.content).toEqual([{ type: "text", text: "{}" }])
   })
 
   test("instructions can be computed from the tools the caller sees", async () => {

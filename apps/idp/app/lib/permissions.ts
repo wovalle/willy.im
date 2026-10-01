@@ -1,11 +1,11 @@
-import { definePermissions } from "@willyim/rbac"
+import { definePermissions } from "@willyim/kit"
 
 /**
  * IdP management permissions — what a principal may do *to an application within
  * the IdP* (distinct from an app's own product permissions, which the app
  * declares and enforces itself).
  *
- * Defined with @willyim/rbac: permissions are the primitive, roles are named
+ * Defined with @willyim/kit: permissions are the primitive, roles are named
  * permission bags. `admin` holds the whole catalog; `member` holds nothing by
  * role — a member's permissions are the explicit grants stored on their
  * application_member row (intersected with the catalog below).

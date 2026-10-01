@@ -1,6 +1,6 @@
 import { z } from "zod"
 import type { KitApp } from "./app.js"
-import { available, toSchema } from "./method.js"
+import { available, describeAccess, permitted, toSchema } from "./method.js"
 import type { PermissionChecker } from "./permissions.js"
 import type { RegistryEntry } from "./registry.js"
 import type { SchemaLike } from "./types.js"
@@ -30,24 +30,48 @@ export function visibleTo(
 ) {
   const here = entries.filter((e) => available(e.contract, ctx))
   if (ctx.caller.kind === "anonymous") return app.config.discovery?.anonymous === "none" ? [] : here
-  return here.filter((e) => ctx.caller.has(e.contract.permission))
+  return here.filter((e) => permitted(ctx.caller, e.contract.permission))
+}
+
+const schemaCache = {
+  input: new WeakMap<object, JsonSchema>(),
+  output: new WeakMap<object, JsonSchema>(),
 }
 
 /**
- * A contract schema as JSON Schema (2020-12, what OpenAPI 3.1 embeds). Dates are
- * ISO strings on the wire; a `format` makes zod's matching regex redundant.
+ * A contract schema as JSON Schema (2020-12, what OpenAPI 3.1 embeds), cached per
+ * schema. Dates are ISO strings on the wire: always in outputs, and in inputs
+ * only for `z.coerce.date()` (a plain `z.date()` input accepts no JSON value).
+ * A `format` makes zod's matching regex redundant.
  */
 export function jsonSchema(schema: SchemaLike, io: "input" | "output"): JsonSchema {
+  const hit = schemaCache[io].get(schema)
+  if (hit) return hit
   const { $schema: _, ...rest } = z.toJSONSchema(toSchema(schema), {
     io,
     unrepresentable: "any",
     override: ({ zodSchema, jsonSchema }) => {
-      if (zodSchema._zod.def.type === "date")
+      const def = zodSchema._zod.def as { type: string; coerce?: boolean }
+      if (def.type === "date" && (io === "output" || def.coerce))
         Object.assign(jsonSchema, { type: "string", format: "date-time" })
       if (jsonSchema.format) delete jsonSchema.pattern
     },
   }) as JsonSchema
+  schemaCache[io].set(schema, rest)
   return rest
+}
+
+/** The wording discovery uses for credentials and errors; `discovery.docs` overrides it. */
+const docs = (app: KitApp) => {
+  const d = app.config.discovery?.docs
+  return {
+    key: d?.key ?? "<key>",
+    bearer: d?.bearer ?? "An API key, sent as a bearer token.",
+    unauthorized: d?.errors?.unauthorized ?? "No credentials, or invalid or expired ones.",
+    forbidden: d?.errors?.forbidden ?? "The caller lacks the permission.",
+    notFound: d?.errors?.notFound ?? "No such record.",
+    conflict: d?.errors?.conflict ?? "The record's state doesn't allow this.",
+  }
 }
 
 const services = (app: KitApp, methods: RegistryEntry[]) =>
@@ -63,6 +87,7 @@ const ref = (name: string) => ({ $ref: `#/components/responses/${name}` })
 
 /** OpenAPI 3.1: one POST per method, tagged by service, behind a bearer key. */
 export function openapi(app: KitApp, methods: RegistryEntry[], origin: string) {
+  const text = docs(app)
   const errorSchema = {
     type: "object",
     properties: { error: { type: "string" } },
@@ -70,7 +95,8 @@ export function openapi(app: KitApp, methods: RegistryEntry[], origin: string) {
   }
   const paths = Object.fromEntries(
     methods.map((m) => {
-      const { summary, description, permission, input, output } = m.contract
+      const { summary, description, input, output } = m.contract
+      const permission = describeAccess(m.contract.permission)
       const inputSchema = input && jsonSchema(input, "input")
       const operation = {
         operationId: m.name,
@@ -130,7 +156,7 @@ export function openapi(app: KitApp, methods: RegistryEntry[], origin: string) {
         bearer: {
           type: "http",
           scheme: "bearer",
-          description: "An API key (`wak_…`) bound to this workspace.",
+          description: text.bearer,
         },
       },
       schemas: {
@@ -155,12 +181,10 @@ export function openapi(app: KitApp, methods: RegistryEntry[], origin: string) {
             "application/json": { schema: { $ref: "#/components/schemas/InvalidInput" } },
           },
         },
-        Unauthorized: error("No API key, or an invalid, revoked or expired one."),
-        Forbidden: error("The key lacks the permission, or belongs to another workspace."),
-        NotFound: error("No such record in this workspace."),
-        Conflict: error(
-          "The record's state doesn't allow this (for example, an invoice already sent).",
-        ),
+        Unauthorized: error(text.unauthorized),
+        Forbidden: error(text.forbidden),
+        NotFound: error(text.notFound),
+        Conflict: error(text.conflict),
       },
     },
   }
@@ -171,7 +195,7 @@ export function llmsTxt(app: KitApp, methods: RegistryEntry[], origin: string): 
   const lines = [`# ${app.config.name ?? "API"}`, ""]
   if (app.config.description) lines.push(`> ${app.config.description}`, "")
   lines.push(
-    `Call a method with \`POST ${origin}/api/<service>.<method>\`, a JSON body (none when it takes no input) and \`Authorization: Bearer wak_…\`.`,
+    `Call a method with \`POST ${origin}/api/<service>.<method>\`, a JSON body (none when it takes no input) and \`Authorization: Bearer ${docs(app).key}\`.`,
     "Errors are JSON `{ error }`; invalid input is a 400 `{ error, fields }`. Dates are ISO 8601 strings.",
     `OpenAPI 3.1: ${origin}/openapi.json`,
     "",
@@ -180,7 +204,8 @@ export function llmsTxt(app: KitApp, methods: RegistryEntry[], origin: string): 
     lines.push(`## ${service.name}`, "")
     if (service.description) lines.push(service.description, "")
     for (const m of service.methods) {
-      const { summary, description, permission, input } = m.contract
+      const { summary, description, input } = m.contract
+      const permission = describeAccess(m.contract.permission)
       lines.push(`### ${m.name}`, "", summary, "")
       if (description) lines.push(description, "")
       lines.push(`Permission: \`${permission}\`.`)

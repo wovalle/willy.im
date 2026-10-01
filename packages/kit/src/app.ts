@@ -1,7 +1,7 @@
 import { handle, type HandlerContext } from "./api.js"
 import type { OnCall } from "./method.js"
 import type { PermissionChecker } from "./permissions.js"
-import { buildService, type Factory } from "./registry.js"
+import { buildService, registry, type Factory } from "./registry.js"
 import type { CallEvent, Context, ContractErrors } from "./types.js"
 
 /** A service: a factory from the context to plain methods and `method(...)`s. */
@@ -36,6 +36,14 @@ export type DiscoveryOptions = {
     keysUrl?: string
     /** RFC 9728 protected-resource metadata, for OAuth (MCP) clients. */
     oauth?: { resourceMetadataUrl: string }
+  }
+  /** The wording of `/openapi.json` and `/llms.txt` for credentials and errors. Neutral by default. */
+  docs?: {
+    /** The token placeholder in "Authorization: Bearer <key>". */
+    key?: string
+    /** The bearer security scheme's description. */
+    bearer?: string
+    errors?: { unauthorized?: string; forbidden?: string; notFound?: string; conflict?: string }
   }
 }
 
@@ -80,7 +88,21 @@ export function createApp<
     },
     handle: (request, ctx) => handle(app, request, ctx),
   }
+  validateDiscovery(config.discovery)
+  registry(app) // fail fast: a factory that uses ctx while building, or a bad tool name
   return app
+}
+
+function validateDiscovery(discovery: DiscoveryOptions | undefined) {
+  const url = discovery?.auth?.oauth?.resourceMetadataUrl
+  if (url === undefined) return
+  let ok = false
+  try {
+    ok = ["https:", "http:"].includes(new URL(url).protocol)
+  } catch {}
+  // It goes into a WWW-Authenticate quoted-string, so it must need no escaping.
+  if (!ok || /["\\\s]/.test(url) || /[\x00-\x1f]/.test(url))
+    throw new Error(`kit: discovery.auth.oauth.resourceMetadataUrl is not a valid URL: ${url}`)
 }
 
 // Spelled out so the emitted declarations keep `Context` as an alias, which the
