@@ -1,3 +1,12 @@
+/**
+ * `@willyim/kit/react`: permissions in components. Feed it what the server's
+ * checker granted (from a loader) and it answers `has` the same way the server
+ * does: exact grants, `"x:*"` wildcards and superadmin.
+ *
+ *   export const usePermissions = createPermissionsHook(() => useRouteLoaderData("root").permissions)
+ */
+import { matches } from "./permissions.js"
+
 export type UsePermissionsReturn<P extends string> = {
   has(permission: P): boolean
   granted: P[]
@@ -14,10 +23,8 @@ export function createPermissionsHook<P extends string>(
 ): () => UsePermissionsReturn<P> {
   return function usePermissions() {
     const { granted, isSuperadmin = false } = useData()
-    const set = new Set<P>(granted)
-
     return {
-      has: (permission: P) => set.has(permission),
+      has: (permission: P) => isSuperadmin || matches(granted, permission),
       granted,
       isSuperadmin,
     }

@@ -1,0 +1,8 @@
+{
+  // An app importing the built package by name, as consumers do: checks the
+  // emitted declarations, not the sources. Run after `npm run build`.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "rootDir": "." },
+  "include": ["*.ts"],
+  "exclude": []
+}

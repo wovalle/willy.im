@@ -1,0 +1,97 @@
+{
+  "name": "@willyim/kit",
+  "version": "0.0.0",
+  "description": "Write a capability once as a typed method; serve it to your UI, an HTTP API, MCP and any agent runtime",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "default": "./dist/mcp.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./idp": {
+      "types": "./dist/idp/index.d.ts",
+      "default": "./dist/idp/index.js"
+    },
+    "./idp/drizzle": {
+      "types": "./dist/idp/drizzle.d.ts",
+      "default": "./dist/idp/drizzle.js"
+    },
+    "./idp/react-router": {
+      "types": "./dist/idp/react-router.d.ts",
+      "default": "./dist/idp/react-router.js"
+    },
+    "./idp/schemas": {
+      "types": "./dist/idp/schemas.d.ts",
+      "default": "./dist/idp/schemas.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "AGENTS.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R src/idp dist/idp",
+    "prepare": "npm run build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/consumer",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "rpc",
+    "mcp",
+    "openapi",
+    "agents",
+    "rbac",
+    "permissions",
+    "zod",
+    "react-router",
+    "cloudflare-workers"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wovalle/willy.im.git",
+    "directory": "packages/kit"
+  },
+  "dependencies": {
+    "@willyim/idp": "0.7.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "react": ">=18",
+    "zod": "^4.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/node": "^22.19.7",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "zod": "^4.1.11"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

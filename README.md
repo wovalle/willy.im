@@ -12,8 +12,9 @@ apps/
   www/    the willy.im website (React Router 7 + Cloudflare Workers)
   idp/    the identity provider (React Router 7 + Cloudflare Workers + D1 + Better Auth)
 packages/
+  kit/                  @willyim/kit — methods, services, HTTP/OpenAPI, MCP, agent tools, permissions
   idp-client/           @willyim/idp — OIDC client, sessions, react-router guards
-  rbac/                 permission catalog + checker (define-permissions, superadmin)
+  rbac/                 @willyim/rbac — deprecated, re-exports kit
   drizzle_repositories/ generic Drizzle repository layer
   drizzle_audit/        audit logging via DB triggers
   butler/               Telegram / intent utilities
@@ -36,3 +37,16 @@ npm install
 npm run dev --workspace=www   # the website
 npm run dev --workspace=idp   # the identity provider
 ```
+
+## Packages
+
+```bash
+npm run packages:build       # build every package, in dependency order
+npm run packages:typecheck
+npm run packages:test
+npx changeset                # describe a change to a package; required to release it
+```
+
+CI (`.github/workflows/ci.yml`) builds, typechecks and tests every package on each PR.
+`release.yml` runs on `main`: pending changesets become a "Version Packages" PR, and merging
+it publishes to npm. See [`.changeset/README.md`](.changeset/README.md).
