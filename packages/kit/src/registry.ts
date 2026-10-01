@@ -11,6 +11,17 @@ export function buildService(factory: Factory, ctx: unknown, service: string, on
   return methods
 }
 
+function buildEmpty(factory: Factory, service: string) {
+  try {
+    return buildService(factory, { services: {} }, service)
+  } catch (e) {
+    throw new Error(
+      `kit: service "${service}" failed to build against an empty context; use ctx only inside method bodies (${e instanceof Error ? e.message : String(e)})`,
+      { cause: e },
+    )
+  }
+}
+
 export type RegistryEntry = MethodMeta & {
   /** `"service.method"`: the HTTP name. */
   name: string
@@ -35,7 +46,7 @@ export function registry(app: { config: { services: Record<string, Factory> } })
   const hit = cache.get(app.config.services)
   if (hit) return hit
   const entries = Object.entries(app.config.services).flatMap(([service, factory]) =>
-    Object.values(buildService(factory, { services: {} }, service)).flatMap((m) => {
+    Object.values(buildEmpty(factory, service)).flatMap((m) => {
       if (!isMethod(m)) return []
       const meta = m[META]
       return [

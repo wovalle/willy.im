@@ -2,7 +2,7 @@ import { z } from "zod"
 import type { KitApp } from "./app.js"
 import { jsonSchema, type JsonSchema } from "./discovery.js"
 import { splitImages, type KitImage } from "./image.js"
-import { available, invalidFields, permitted, stripOutput, toSchema } from "./method.js"
+import { available, invalidFields, invoke, isPublicError, permitted, toSchema } from "./method.js"
 import type { PermissionChecker } from "./permissions.js"
 import { registry, type RegistryEntry } from "./registry.js"
 import type { Hints } from "./types.js"
@@ -47,7 +47,9 @@ export type ToolContext = { caller: PermissionChecker<any, any>; services: objec
 const toJson = (v: unknown) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)))
 
 async function failure(err: unknown, tool: string): Promise<KitResult> {
-  if (err instanceof Response) {
+  // Only errors kit made for callers (fail(), 400, 403, 404, the caller's denials)
+  // pass their message on. A Response from anywhere else (an upstream fetch) is internal.
+  if (isPublicError(err)) {
     const fields = invalidFields(err)
     const text = await err
       .clone()
@@ -71,11 +73,24 @@ async function failure(err: unknown, tool: string): Promise<KitResult> {
 
 const isZodObject = (s: z.ZodType): s is z.ZodObject => s._zod.def.type === "object"
 
+/** `{ type: "object", properties: { [key]: schema } }`, with `$defs` kept at the root so refs resolve. */
+export function wrapSchema(key: string, schema: JsonSchema, required: boolean): JsonSchema {
+  const { $defs, ...inner } = schema
+  return {
+    type: "object",
+    properties: { [key]: inner },
+    required: required ? [key] : [],
+    ...($defs !== undefined && { $defs }),
+  }
+}
+
+/** May the schema's value be absent? */
+export const optionalIn = (s: z.ZodType) => s._zod.optin === "optional"
+export const optionalOut = (s: z.ZodType) => s._zod.optout === "optional"
+
 function toTool(e: RegistryEntry, ctx: ToolContext): KitTool {
   const { summary, description, input, output, hints } = e.contract
-  const fn = (
-    ctx.services as Record<string, Record<string, (input?: unknown) => Promise<unknown>>>
-  )[e.service][e.method]
+  const bound = (ctx.services as Record<string, Record<string, unknown>>)[e.service][e.method]
   const inputZod = input ? toSchema(input) : undefined
   const wrapped = inputZod !== undefined && !isZodObject(inputZod)
   const outputZod = output && toSchema(output)
@@ -86,7 +101,7 @@ function toTool(e: RegistryEntry, ctx: ToolContext): KitTool {
     inputSchema: !input
       ? { type: "object", properties: {} }
       : wrapped
-        ? { type: "object", properties: { input: jsonSchema(input, "input") }, required: ["input"] }
+        ? wrapSchema("input", jsonSchema(input, "input"), !optionalIn(inputZod))
         : jsonSchema(input, "input"),
     inputZod: !inputZod
       ? z.object({})
@@ -98,12 +113,18 @@ function toTool(e: RegistryEntry, ctx: ToolContext): KitTool {
     call: async (args) => {
       try {
         const value = (args ?? {}) as Record<string, unknown>
-        const result = await (input ? fn(wrapped ? value.input : value) : fn())
+        const { parsed } = await invoke(bound, input ? (wrapped ? value.input : value) : undefined)
         if (!output) return { ok: true, data: undefined, images: [] }
-        const { data, images } = splitImages(stripOutput(result, output))
+        const { data, images } = splitImages(parsed)
         return { ok: true, data: toJson(data), images }
       } catch (err) {
-        return failure(err, e.name)
+        const r = await failure(err, e.name)
+        // A wrapped input's own errors belong to the `input` field the tool advertises.
+        if (wrapped && !r.ok && r.fields?._) {
+          const { _, ...rest } = r.fields
+          return { ...r, fields: { input: _, ...rest } }
+        }
+        return r
       }
     },
   }

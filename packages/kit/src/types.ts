@@ -33,9 +33,11 @@ export type Permission = BaseContext extends { caller: PermissionChecker<infer P
   : string
 
 /** Resource types whose instances can be granted (`definePermissions({ resources })`). */
-export type Resource = BaseContext extends { caller: { hasAny?(resource: infer R): boolean } }
-  ? R
-  : string
+export type Resource = BaseContext extends { caller: { hasAny?: infer F } }
+  ? F extends (resource: infer R) => boolean
+    ? R
+    : never
+  : never
 
 /**
  * Who may call a method: a permission, or `{ resource }` for anyone holding at

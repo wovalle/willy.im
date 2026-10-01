@@ -13,8 +13,14 @@ import {
   type Tool,
 } from "@modelcontextprotocol/sdk/types.js"
 import type { KitApp } from "./app.js"
-import type { JsonSchema } from "./discovery.js"
-import { tools, type KitResult, type KitTool, type ToolContext } from "./tools.js"
+import {
+  optionalOut,
+  tools,
+  wrapSchema,
+  type KitResult,
+  type KitTool,
+  type ToolContext,
+} from "./tools.js"
 
 export type McpOptions = {
   /** The server's `instructions`: a string, or computed from the tools this caller sees. */
@@ -29,22 +35,9 @@ export type McpOptions = {
 function mcpOutput(t: KitTool) {
   const schema = t.outputSchema
   if (!schema || !t.outputZod) return undefined
-  const alwaysObject =
-    schema.type === "object" &&
-    !t.outputZod.safeParse(undefined).success &&
-    !t.outputZod.safeParse(null).success
-  if (alwaysObject) return { schema, wrap: false }
-  const { $defs, ...inner } = schema
-  return {
-    schema: {
-      type: "object",
-      properties: { result: inner },
-      // An optional output may be absent: then structuredContent is `{}`.
-      required: t.outputZod.safeParse(undefined).success ? [] : ["result"],
-      ...($defs !== undefined && { $defs }),
-    } as JsonSchema,
-    wrap: true,
-  }
+  // Decided from the schema's definition, never by parsing probe values.
+  if (t.outputZod._zod.def.type === "object") return { schema, wrap: false }
+  return { schema: wrapSchema("result", schema, !optionalOut(t.outputZod)), wrap: true }
 }
 
 /** A kit tool as an MCP `Tool`, for apps that register tools on their own server. */

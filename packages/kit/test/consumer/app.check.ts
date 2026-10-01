@@ -35,5 +35,9 @@ export async function registered() {
   ;(await ctx.services.todos.list()) satisfies string[]
   // @ts-expect-error not a permission of this app
   ctx.caller.has("todos:write")
+  declareService(() => ({
+    // @ts-expect-error this app declares no resources, so `{ resource }` isn't an access rule
+    x: method({ summary: "x", permission: { resource: "thread" } }, async () => {}),
+  }))
   return app.handle(new Request("https://x.test/openapi.json"), ctx)
 }

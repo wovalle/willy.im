@@ -112,11 +112,21 @@ describe("resources", () => {
     ).toThrow('resource "thread" overlaps the permission "thread:read"')
   })
 
+  test("a resource may not prefix another resource, nor be empty", () => {
+    expect(() =>
+      definePermissions({ permissions: [], resources: ["org", "org:team"], roles: {} }),
+    ).toThrow('resource "org" prefixes the resource "org:team"')
+    expect(() => definePermissions({ permissions: [], resources: [""], roles: {} })).toThrow(
+      "not a resource name",
+    )
+  })
+
   test("hasAny is true for an instance, a covering wildcard or a superadmin", () => {
     expect(auth.checkerFor(["thread:abc"]).hasAny?.("thread")).toBe(true)
     expect(auth.checkerFor(["inbox:*"]).hasAny?.("inbox:thread")).toBe(true)
     expect(auth.checkerFor(["*"]).hasAny?.("thread")).toBe(true)
     expect(auth.checkerFor(["inbox:thread:h1"]).hasAny?.("thread")).toBe(false)
+    expect(auth.checkerFor(["thread:a:b", "thread:"]).hasAny?.("thread")).toBe(false)
     expect(auth.checkerFor(["posts:*"]).hasAny?.("thread")).toBe(false)
     expect(auth.createChecker("editor").hasAny?.("thread")).toBe(false)
   })

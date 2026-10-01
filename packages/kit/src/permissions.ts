@@ -62,7 +62,11 @@ export type PermissionsResult<
   resources: Res
 }
 
-const forbidden = () => new Response("Forbidden", { status: 403 })
+// Marked like kit's own errors (Symbol.for("kit.public-error")): a denial is meant for the caller.
+const forbidden = () =>
+  Object.assign(new Response("Forbidden", { status: 403 }), {
+    [Symbol.for("kit.public-error")]: true,
+  })
 
 function checker<P extends string, R extends string>(
   has: (p: string) => boolean,
@@ -108,6 +112,12 @@ export function definePermissions<
   const resources: readonly string[] = config.resources ?? []
   // A resource must not prefix a catalog permission: "thread:read" can't be both
   // a permission and the thread whose id is "read".
+  for (const r of resources) {
+    if (!/^[^*\s]+$/.test(r) || r.startsWith(":") || r.endsWith(":"))
+      throw new Error(`kit: "${r}" is not a resource name`)
+    const nested = resources.find((other) => other.startsWith(`${r}:`))
+    if (nested) throw new Error(`kit: resource "${r}" prefixes the resource "${nested}"; keep one`)
+  }
   for (const r of resources)
     for (const p of config.permissions)
       if (p.startsWith(`${r}:`))
@@ -115,11 +125,9 @@ export function definePermissions<
   type Resource = Res[number]
 
   /** `"thread:abc"` for a declared `thread`: the id is one segment, as the IdP issues them (no `:`, `*` or whitespace). */
-  const isInstance = (p: string) =>
-    resources.some((r) => {
-      if (!p.startsWith(`${r}:`)) return false
-      return /^[^:*\s]+$/.test(p.slice(r.length + 1))
-    })
+  const isInstanceOf = (r: string, p: string) =>
+    p.startsWith(`${r}:`) && /^[^:*\s]+$/.test(p.slice(r.length + 1))
+  const isInstance = (p: string) => resources.some((r) => isInstanceOf(r, p))
 
   function createChecker(role: keyof R & string, opts?: CheckerOptions) {
     const superadmin = opts?.superadmin ?? false
@@ -160,8 +168,7 @@ export function definePermissions<
     return checker<Permission, Resource>(
       (p) => exact.has(p) || (isInstance(p) && covered(p)),
       (r) =>
-        resources.includes(r) &&
-        (instances.some((i) => i.startsWith(`${r}:`) && isInstance(i)) || covered(`${r}:`)),
+        resources.includes(r) && (instances.some((i) => isInstanceOf(r, i)) || covered(`${r}:`)),
       [...permissions, ...instances, ...instanceWildcards],
       false,
     )

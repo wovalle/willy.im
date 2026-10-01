@@ -35,6 +35,8 @@ describe("tools", () => {
     expect(all.get("notes_list")?.inputSchema).toEqual({ type: "object", properties: {} })
     expect(all.get("notes_remove")?.hints).toEqual({ destructive: true, idempotent: true })
     expect(all.get("notes_get")?.inputZod.safeParse({ id: "1" }).success).toBe(true)
+    // schemas are shared and frozen: an adapter can't change them for everyone
+    expect(Object.isFrozen(all.get("notes_get")?.inputSchema)).toBe(true)
   })
 
   test("call returns the data stripped to the contract, through onCall", async () => {
@@ -87,6 +89,22 @@ describe("tools", () => {
       message: expect.stringMatching(/^internal error \([0-9a-f]{8}\)$/),
     })
     expect(JSON.stringify(r)).not.toContain("postgres")
+    // a Response kit didn't make (an upstream fetch) is internal too
+    const upstream = createApp({
+      context,
+      services: {
+        api: declareService(() => ({
+          call: method({ summary: "c", permission: "notes:read" }, async () => {
+            throw new Response("upstream token expired: sk_live_123", { status: 502 })
+          }),
+        })),
+      },
+    })
+    const [u] = tools(upstream, await upstream.context({ caller: user(["notes:read"]) }))
+    expect(await u.call({})).toEqual({
+      ok: false,
+      message: expect.stringMatching(/^internal error/),
+    })
     const broken = await (await byName(["notes:read"])).get("notes_broken")!.call({})
     expect(broken).toMatchObject({ ok: false, message: expect.stringMatching(/^internal error/) })
     spy.mockRestore()
@@ -117,6 +135,11 @@ describe("tools", () => {
     })
     expect(Object.keys(t.inputZod.shape)).toEqual(["input"])
     expect(await t.call({ input: "hi" })).toEqual({ ok: true, data: { q: "hi" }, images: [] })
+    expect(await t.call({ input: 1 })).toEqual({
+      ok: false,
+      message: "invalid input",
+      fields: { input: [expect.any(String)] },
+    })
   })
 
   test("`permission: { resource }` shows the tool to anyone holding an instance or a wildcard", async () => {

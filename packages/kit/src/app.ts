@@ -100,8 +100,7 @@ function validateDiscovery(discovery: DiscoveryOptions | undefined) {
   try {
     ok = ["https:", "http:"].includes(new URL(url).protocol)
   } catch {}
-  // It goes into a WWW-Authenticate quoted-string, so it must need no escaping.
-  if (!ok || /["\\\s]/.test(url) || /[\x00-\x1f]/.test(url))
+  if (!ok)
     throw new Error(`kit: discovery.auth.oauth.resourceMetadataUrl is not a valid URL: ${url}`)
 }
 

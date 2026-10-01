@@ -57,8 +57,18 @@ export function jsonSchema(schema: SchemaLike, io: "input" | "output"): JsonSche
       if (jsonSchema.format) delete jsonSchema.pattern
     },
   }) as JsonSchema
-  schemaCache[io].set(schema, rest)
-  return rest
+  // Frozen: every caller shares it, so an adapter can't change /openapi.json by mutating it.
+  const frozen = deepFreeze(rest)
+  schemaCache[io].set(schema, frozen)
+  return frozen
+}
+
+const deepFreeze = <T>(value: T): T => {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value)
+    for (const v of Object.values(value)) deepFreeze(v)
+  }
+  return value
 }
 
 /** The wording discovery uses for credentials and errors; `discovery.docs` overrides it. */

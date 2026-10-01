@@ -11,7 +11,14 @@ export const locked = (app: KitApp, caller: { kind?: string }) =>
 const NOTE =
   "Methods are listed only for authenticated callers. This request sent no credentials, so it sees none."
 
-const auth = (app: KitApp) => app.config.discovery?.auth
+// The metadata URL as `new URL` normalizes it (createApp validated it): percent-encoded,
+// so it is safe in a header's quoted-string.
+const auth = (app: KitApp) => {
+  const a = app.config.discovery?.auth
+  return a?.oauth
+    ? { ...a, oauth: { resourceMetadataUrl: new URL(a.oauth.resourceMetadataUrl).href } }
+    : a
+}
 
 /** 200 markdown: the app, why it's empty, and how to log in. */
 export function lockedLlmsTxt(app: KitApp): string {
@@ -66,7 +73,7 @@ export function lockedOpenapi(app: KitApp, origin: string) {
 /** The 401 for `/api/*`, before any method is looked up. */
 export function unauthenticated(app: KitApp): Response {
   const a = auth(app)
-  const metadata = a?.oauth?.resourceMetadataUrl // validated by createApp
+  const metadata = a?.oauth?.resourceMetadataUrl
   return Response.json(
     {
       error: "authentication required",

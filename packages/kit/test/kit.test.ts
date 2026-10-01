@@ -202,12 +202,12 @@ describe("the registry", () => {
     )
   })
 
-  test("createApp fails fast on a factory that uses the context while it builds", () => {
+  test("createApp fails fast, naming the service, on a factory that uses the context while it builds", () => {
     const eager = declareService((ctx) => {
       const db = (ctx as unknown as { db: { notes: unknown } }).db.notes
       return { db }
     })
-    expect(() => createApp({ context, services: { eager } })).toThrow()
+    expect(() => createApp({ context, services: { eager } })).toThrow('service "eager"')
   })
 })
 
@@ -217,6 +217,36 @@ describe("HTTP", () => {
     expect(await app.handle(new Request("https://x.test/notes/1"), ctx)).toBeNull()
     const res = await app.handle(post("/api/notes.get", { id: "1" }), ctx)
     expect(await res?.json()).toEqual({ id: "1", title: "First" }) // no secret, no workspaceId
+  })
+
+  test("each method's output is stripped to its own contract, even for a shared object", async () => {
+    const shared = { id: "1", title: "t", secret: "s" }
+    const two = createApp({
+      context,
+      services: {
+        x: declareService(() => ({
+          full: method(
+            {
+              summary: "f",
+              permission: "notes:read",
+              output: { id: z.string(), secret: z.string() },
+            },
+            async () => shared,
+          ),
+          slim: method(
+            { summary: "s", permission: "notes:read", output: { id: z.string() } },
+            async () => shared,
+          ),
+        })),
+      },
+    })
+    const ctx = await two.context({ caller: user(["notes:read"]) })
+    const [full, slim] = await Promise.all([
+      two.handle(post("/api/x.full"), ctx).then((r) => r!.json()),
+      two.handle(post("/api/x.slim"), ctx).then((r) => r!.json()),
+    ])
+    expect(full).toEqual({ id: "1", secret: "s" })
+    expect(slim).toEqual({ id: "1" })
   })
 
   test("a denied caller gets 403 whatever the body", async () => {
@@ -370,17 +400,25 @@ describe("discovery.anonymous none", () => {
     })
   })
 
-  test("createApp rejects a resource metadata URL it couldn't put in a header", () => {
-    for (const url of ["not a url", 'https://x.test/m"d', "https://x.test/m\\"])
-      expect(() =>
-        createApp({
-          ...app.config,
-          discovery: {
-            anonymous: "none",
-            auth: { instructions: "i", oauth: { resourceMetadataUrl: url } },
-          },
-        }),
-      ).toThrow("resourceMetadataUrl")
+  test("the resource metadata URL must be an http(s) URL, and goes out percent-encoded", async () => {
+    const withUrl = (url: string) =>
+      createApp({
+        ...app.config,
+        discovery: {
+          anonymous: "none",
+          auth: { instructions: "i", oauth: { resourceMetadataUrl: url } },
+        },
+      })
+    for (const url of ["not a url", "ftp://x.test/m"])
+      expect(() => withUrl(url)).toThrow("resourceMetadataUrl")
+    const odd = withUrl('https://bücher.test/m"d')
+    const res = (await odd.handle(
+      post("/api/notes.get"),
+      await odd.context({ caller: anonymous() }),
+    ))!
+    expect(res.headers.get("www-authenticate")).toBe(
+      'Bearer resource_metadata="https://xn--bcher-kva.test/m%22d"',
+    )
   })
 
   test("discovery.docs replaces the wording for credentials and errors", async () => {

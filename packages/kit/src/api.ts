@@ -1,7 +1,7 @@
 import type { KitApp } from "./app.js"
 import { llmsTxt, openapi, visibleTo } from "./discovery.js"
 import { locked, lockedLlmsTxt, lockedOpenapi, unauthenticated } from "./locked.js"
-import { available, permitted, stripOutput, unknownMethod } from "./method.js"
+import { available, invoke, permitted, unknownMethod } from "./method.js"
 import type { PermissionChecker } from "./permissions.js"
 import { registry } from "./registry.js"
 
@@ -67,18 +67,18 @@ export async function handle(
 
   const { input, output } = entry.contract
   try {
-    const fn = (
-      ctx.services as Record<string, Record<string, (input?: unknown) => Promise<unknown>>>
-    )[entry.service][entry.method]
+    const bound = (ctx.services as Record<string, Record<string, unknown>>)[entry.service][
+      entry.method
+    ]
     // A denied caller gets its 403 (and onCall fires) whatever the body.
     const body =
       input && permitted(ctx.caller, entry.contract.permission)
         ? await readJson(request)
         : undefined
-    const result = await fn(body)
+    // `parsed` is the output stripped to the contract: an internal column never reaches an agent.
+    const { parsed } = await invoke(bound, body)
     if (!output) return new Response(null, { status: 204 })
-    // Strips every field the contract doesn't declare, so an internal column never reaches an agent.
-    return Response.json(stripOutput(result, output))
+    return Response.json(parsed)
   } catch (e) {
     if (e instanceof Response) return e
     throw e
