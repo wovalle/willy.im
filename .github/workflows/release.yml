@@ -1,0 +1,46 @@
+name: Release
+
+# On every push to main: with pending changesets, open or update the
+# "Version Packages" PR; once that PR is merged (no changesets left), publish
+# every package whose version isn't on npm yet.
+on:
+  push:
+    branches: [main]
+
+concurrency: release-${{ github.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Version PR or publish
+        uses: changesets/action@v2
+        with:
+          publish-script: npm run release
+          create-github-releases: true
+          push-git-tags: true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"

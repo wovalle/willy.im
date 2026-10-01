@@ -20,7 +20,7 @@ function b64url(bytes: Uint8Array): string {
 
 async function setup() {
   const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair
-  const jwk = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as JsonWebKey
+  const jwk = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as JsonWebKey & { kid?: string }
   jwk.kid = "k1"
   jwk.alg = "EdDSA"
   const jwks = { keys: [jwk] }
