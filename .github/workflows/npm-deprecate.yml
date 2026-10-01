@@ -1,0 +1,29 @@
+name: npm deprecate
+
+# Marks published versions deprecated on npm, with the publishing token.
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: 'Package and range, e.g. @willyim/rbac@"<0.4.0"'
+        required: true
+      message:
+        description: Deprecation message (empty to un-deprecate)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  deprecate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm deprecate "$SPEC" "$MESSAGE"
+        env:
+          SPEC: ${{ inputs.spec }}
+          MESSAGE: ${{ inputs.message }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
