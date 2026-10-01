@@ -38,6 +38,7 @@ jobs:
       - name: Version PR or publish
         uses: changesets/action@v2
         with:
+          version-script: npm run version-packages
           publish-script: npm run release
           create-github-releases: true
           push-git-tags: true

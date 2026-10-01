@@ -13,7 +13,8 @@
     "packages:typecheck": "npm run typecheck -w @willyim/idp -w @willyim/kit -w @willyim/rbac -w @willyim/drizzle-audit -w @willyim/drizzle-repositories",
     "packages:test": "npm run test --if-present -w @willyim/idp -w @willyim/kit -w @willyim/rbac -w @willyim/drizzle-audit -w @willyim/drizzle-repositories",
     "changeset": "changeset",
-    "release": "npm run packages:build && changeset publish"
+    "release": "npm run packages:build && changeset publish",
+    "version-packages": "changeset version && npm install --package-lock-only --ignore-scripts"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3"
