@@ -79,9 +79,10 @@ type AppConfig<A extends unknown[], B, S> = {
 }
 
 /**
- * The app: `context` resolves the caller, builds the context and every service
- * on it, eagerly, into a plain object. Factories only touch `ctx.services`
- * inside method bodies, so the build order doesn't matter.
+ * The app: `context` resolves the caller and builds the context. Each service
+ * on `ctx.services` is built the first time it's read, once per context.
+ * Factories only touch `ctx.services` inside method bodies, so services may
+ * call each other in any order.
  */
 export function createApp<A extends unknown[], B, S extends Record<string, Factory>>(
   config: AppConfig<A, B, S> & ContractCheck<S> & OwnFieldsCheck<B>,
@@ -95,7 +96,9 @@ export function createApp<A extends unknown[], B, S extends Record<string, Facto
       const base = await config.context({ principal, tenantId, caller, actor }, ...args)
       const ctx: any = { ...base, caller, tenantId, actor, services: {} }
       for (const [name, factory] of Object.entries(config.services))
-        ctx.services[name] = buildService(factory, ctx, name, config.onCall as OnCall | undefined)
+        lazyService(ctx.services, name, () =>
+          buildService(factory, ctx, name, config.onCall as OnCall | undefined),
+        )
       return ctx
     },
     handle: (request, ctx) => handle(app, request, ctx),
@@ -103,6 +106,34 @@ export function createApp<A extends unknown[], B, S extends Record<string, Facto
   validateDiscovery(config.discovery)
   registry(app) // fail fast: a factory that uses ctx while building, or a bad tool name
   return app
+}
+
+/** `services[name]`, built on first read and kept; enumerable, so `Object.keys` lists it. */
+function lazyService(services: object, name: string, build: () => object) {
+  let building = false
+  Object.defineProperty(services, name, {
+    enumerable: true,
+    configurable: true,
+    get() {
+      if (building)
+        throw new Error(
+          `kit: service "${name}" was read while it builds; use ctx.services only inside method bodies`,
+        )
+      building = true
+      try {
+        const service = build()
+        Object.defineProperty(services, name, {
+          value: service,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        })
+        return service
+      } finally {
+        building = false
+      }
+    },
+  })
 }
 
 function validateDiscovery(discovery: DiscoveryOptions | undefined) {
@@ -122,8 +153,8 @@ export type App<A extends unknown[], C> = {
   config: C
   /**
    * The only door: the caller of `principal` in `tenantId` (null: no tenant;
-   * a null principal is anonymous), the app's base context, and every service
-   * bound to it. Throws a 404 `Response` for a tenant the principal has nothing in.
+   * a null principal is anonymous), the app's base context, and its services,
+   * each built on first read. Throws a 404 `Response` for a tenant the principal has nothing in.
    */
   context: (principal: Principal | null, tenantId: string | null, ...args: A) => Promise<Context>
   /** Serves `/api/<service>.<method>`, `/openapi.json` and `/llms.txt`; null for any other path. */

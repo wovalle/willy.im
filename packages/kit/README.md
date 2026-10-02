@@ -99,16 +99,16 @@ for (const t of tools(app, ctx)) runtime.register(t.name, t.description, t.input
 
 ## Concepts
 
-| Concept       | What it is                                                                                                                                                                                    |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **App**       | `createApp({ name, description, auth, context, services, onCall?, discovery?: { anonymous?, auth? } })`. Holds every service.                                                                 |
-| **Principal** | `{ id, grants, memberships: [{ tenantId, grants }], actor? }`: who is calling, as plain data you build per request. Cron and queues are a principal too.                                      |
-| **Context**   | `app.context(principal, tenantId, ...args)`, once per request, MCP session, agent turn or cron run: `caller`, `tenantId`, `actor`, whatever your builder adds, and every service bound to it. |
-| **Register**  | The `declare module "@willyim/kit"` block. It gives `ctx`, grants and `ctx.services` their types everywhere.                                                                                  |
-| **Service**   | `declareService((ctx) => ({ ... }))`. Plain functions inside stay private; only `method(...)` entries are public.                                                                             |
-| **Method**    | `method(contract, fn)`. Each call runs, in order: `when`, the permission, input validation, your function, the output check, then `onCall`.                                                   |
-| **Caller**    | `ctx.caller`: `{ has, require, granted, grants, isSuperadmin, principal, tenantId, kind? }`. `kind: "anonymous"` marks a caller with no credentials.                                          |
-| **Policies**  | `definePolicies({ note: (caller) => ({ workspaceId: caller.tenantId }) })`. Row scoping as plain data: `ctx.scope.note({ id })`.                                                              |
+| Concept       | What it is                                                                                                                                                                                                 |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **App**       | `createApp({ name, description, auth, context, services, onCall?, discovery?: { anonymous?, auth? } })`. Holds every service.                                                                              |
+| **Principal** | `{ id, grants, memberships: [{ tenantId, grants }], actor? }`: who is calling, as plain data you build per request. Cron and queues are a principal too.                                                   |
+| **Context**   | `app.context(principal, tenantId, ...args)`, once per request, MCP session, agent turn or cron run: `caller`, `tenantId`, `actor`, whatever your builder adds, and its services, each built on first read. |
+| **Register**  | The `declare module "@willyim/kit"` block. It gives `ctx`, grants and `ctx.services` their types everywhere.                                                                                               |
+| **Service**   | `declareService((ctx) => ({ ... }))`. Plain functions inside stay private; only `method(...)` entries are public. The factory runs the first time `ctx.services.<name>` is read, once per context.         |
+| **Method**    | `method(contract, fn)`. Each call runs, in order: `when`, the permission, input validation, your function, the output check (edges only), then `onCall`.                                                   |
+| **Caller**    | `ctx.caller`: `{ has, require, granted, grants, isSuperadmin, principal, tenantId, kind? }`. `kind: "anonymous"` marks a caller with no credentials.                                                       |
+| **Policies**  | `definePolicies({ note: (caller) => ({ workspaceId: caller.tenantId }) })`. Row scoping as plain data: `ctx.scope.note({ id })`.                                                                           |
 
 ### The contract
 
@@ -135,10 +135,11 @@ method({
 - **`permission: "*"`** is for superadmins only: holding every permission isn't enough.
   Discovery shows it as `superadmin`, and only to superadmins. Use it instead of checking
   `isSuperadmin` by hand.
-- **The output is checked twice.** At compile time, `createApp` fails to type-check if a method
-  returns something its `output` rejects. At run time, every call validates the return. In
-  process you get the full value; `/api`, `tools()` and MCP strip it to the contract, so an
-  internal column never leaves.
+- **The output is checked at compile time and at the edges.** `createApp` fails to type-check
+  if a method returns something its `output` rejects. At run time, `/api`, `tools()` and MCP
+  validate the return and strip it to the contract, so an internal column never leaves; a
+  return the contract rejects is an error there. In process (`ctx.services`) the output isn't
+  parsed: you get the method's value as is.
 - **`createApp` fails fast:** it builds the registry right away, so a bad or duplicate tool name
   (1-64 letters, digits, `_` or `-`) or a factory that touches `ctx` while building throws at
   startup.
@@ -180,7 +181,7 @@ reference in the data; MCP sends them as image blocks.
 
 | Surface | How                                                                | Notes                                                                                                                                                                                                                                                                                                     |
 | ------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| UI      | `ctx.services.notes.get(...)`                                      | In process, fully typed.                                                                                                                                                                                                                                                                                  |
+| UI      | `ctx.services.notes.get(...)`                                      | In process, fully typed; the output comes back as the method returned it.                                                                                                                                                                                                                                 |
 | HTTP    | `app.handle(request, ctx)`                                         | `POST /api/<service>.<method>`, `GET /openapi.json`, `GET /llms.txt`. JSON in and out, 204 for no output.                                                                                                                                                                                                 |
 | Agents  | `tools(app, ctx)`                                                  | `{ name, title, description, inputSchema, inputZod, outputSchema, outputZod, hints, call }`. `inputZod` is always a `z.object` (a non-object input is wrapped as `{ input }`). `call` never throws: `{ ok: true, data, images }` or `{ ok: false, message, fields? }`. Write a small adapter per runtime. |
 | MCP     | `toMcpServer(app, ctx, { instructions? })` from `@willyim/kit/mcp` | A `Server` from `@modelcontextprotocol/sdk` (optional peer). You bring the transport and auth. To mix kit tools with your own, use `toMcpTool(t)` and `toCallToolResult(t, result)`.                                                                                                                      |
@@ -345,13 +346,15 @@ Rules for working in a kit app:
 - **`when` is for where, `permission` for who.** Don't encode a caller check in `when`.
 - **A new permission goes in `definePermissions` first**, then sync the catalog to the IdP.
 - **Services call each other through `ctx.services` inside method bodies**, never while the
-  factory runs: the registry builds factories against an empty context.
+  factory runs: the registry builds factories against an empty context, and a context builds
+  each service lazily, so a factory must not depend on another one having run.
 - **Superadmin-only methods** use `permission: "*"`, not an `isSuperadmin` check.
 - **Grants from outside** (DB, request, IdP) go through `auth.parseGrants`; anything handed
   out (keys, invites, roles) must be `auth.covers`ed by the one handing it out.
 - **Tests:** build a context from a fake principal
   (`app.context({ id: "user:t", grants: [], memberships: [{ tenantId: "w1", grants: [...] }] }, "w1")`)
-  and call `ctx.services` directly. Snapshot `/openapi.json` per caller to catch accidental exposure.
+  and call `ctx.services` directly. In process the output isn't checked, so test an output
+  contract through `tools()` or `app.handle`. Snapshot `/openapi.json` per caller to catch accidental exposure.
 
 ## Audit: `@willyim/kit/audit`
 
