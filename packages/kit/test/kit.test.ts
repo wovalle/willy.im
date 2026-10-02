@@ -8,6 +8,7 @@ import {
   registry,
   safe,
   tools,
+  type Grant,
 } from "../src/index.js"
 import {
   anonymous,
@@ -165,11 +166,13 @@ describe("a call", () => {
     expect(await ctx.services.notes.get({ id: "1" })).toMatchObject({ id: "1" })
   })
 
-  test("service-to-service calls check the same caller", async () => {
+  test("service-to-service calls are trusted: the caller needs only the method it called", async () => {
     const tagsOnly = await ctxFor(["tags:read"])
-    expect(await status(tagsOnly.services.tags.forNote({ id: "1" }))).toBe(403)
-    const both = await ctxFor(["tags:read", "notes:read"])
-    expect(await both.services.tags.forNote({ id: "1" })).toEqual({ tags: ["a"], title: "First" })
+    expect(await tagsOnly.services.tags.forNote({ id: "1" })).toEqual({
+      tags: ["a"],
+      title: "First",
+    })
+    expect(await status(tagsOnly.services.notes.get({ id: "1" }))).toBe(403)
   })
 
   test("cron and queues are a system principal holding `*`", async () => {
@@ -201,6 +204,145 @@ describe("a call", () => {
     })({ workspaceId: "w1", userId: "u1" })
     expect(scope.note({ id: "n9" })).toEqual({ workspaceId: "w1", id: "n9" })
     expect(scope.task()).toEqual({ assignedTo: "u1" })
+  })
+})
+
+describe("calls between operations", () => {
+  // `tasks` methods (tags:read) each call one `ledger` method another way.
+  let seen: unknown
+  const nested = createApp({
+    auth,
+    context,
+    services: {
+      ledger: declareService((ctx) => ({
+        view: () => ctx, // plain: how a test reaches the context factories close over
+        write: method(
+          {
+            summary: "Write an amount.",
+            permission: "notes:write",
+            input: { amount: z.number() },
+            output: z.number(),
+          },
+          async ({ amount }) => {
+            seen = ctx.caller
+            return amount
+          },
+        ),
+        purge: method({ summary: "Purge.", permission: "*" }, async () => {}),
+        inThread: method(
+          {
+            summary: "Only in a thread.",
+            permission: "notes:read",
+            when: (c) => c.thread !== null,
+          },
+          async () => {},
+        ),
+        guarded: method(
+          { summary: "Never reached indirectly.", permission: "notes:read" },
+          async () => {
+            ctx.caller.require("notes:write")
+          },
+        ),
+      })),
+      tasks: declareService((ctx) => ({
+        write: method({ summary: "Write.", permission: "tags:read", output: z.number() }, () =>
+          (ctx.services as any).ledger.write({ amount: 1 }),
+        ),
+        writeBad: method({ summary: "Write garbage.", permission: "tags:read" }, async () => {
+          await (ctx.services as any).ledger.write({ amount: "x" as never })
+        }),
+        purge: method({ summary: "Purge.", permission: "tags:read" }, () =>
+          (ctx.services as any).ledger.purge(),
+        ),
+        inThread: method({ summary: "Call a thread method.", permission: "tags:read" }, () =>
+          (ctx.services as any).ledger.inThread(),
+        ),
+        guarded: method({ summary: "Call a guarded method.", permission: "tags:read" }, () =>
+          (ctx.services as any).ledger.guarded(),
+        ),
+      })),
+    },
+    onCall: (e) => {
+      events.push(e)
+    },
+  }) as any
+  const as = (grants: Grant[], thread: string | null = null) =>
+    nested.context(member("w1", grants), "w1", { thread })
+  /** The context the factories close over: same values, trusted services. */
+  const inner = (ctx: any) => ctx.services.ledger.view()
+
+  test("a call that enters the app is checked", async () => {
+    const ctx = await as(["tags:read"])
+    expect(await status(ctx.services.ledger.write({ amount: 1 }))).toBe(403)
+  })
+
+  test("a call one operation makes to another skips the permission", async () => {
+    const ctx = await as(["tags:read"])
+    expect(await ctx.services.tasks.write()).toBe(1)
+  })
+
+  test("a superadmin-only method is trusted the same way", async () => {
+    const ctx = await as(["tags:read"])
+    expect(await status(ctx.services.ledger.purge())).toBe(403)
+    expect(await status(ctx.services.tasks.purge())).toBe(200)
+  })
+
+  test("the nested call sees the original caller", async () => {
+    const ctx = await as(["tags:read"])
+    await ctx.services.tasks.write()
+    expect(seen).toBe(ctx.caller)
+    expect(inner(ctx).caller).toBe(ctx.caller)
+    expect(inner(ctx).scope).toBe(ctx.scope) // row policies scope by the real caller
+  })
+
+  test("`when` still applies: a hidden method is a 404 from inside too", async () => {
+    expect(await status((await as(["tags:read"])).services.tasks.inThread())).toBe(404)
+    expect(await status((await as(["tags:read"], "t1")).services.tasks.inThread())).toBe(200)
+  })
+
+  test("input is still validated: invalid input from inside is a 400", async () => {
+    const ctx = await as(["tags:read"])
+    expect(await status(ctx.services.tasks.writeBad())).toBe(400)
+  })
+
+  test("a method that must never be reached indirectly checks ctx.caller itself", async () => {
+    expect(await status((await as(["tags:read"])).services.tasks.guarded())).toBe(403)
+    expect(await status((await as(["tags:read", "notes:write"])).services.tasks.guarded())).toBe(
+      200,
+    )
+  })
+
+  test("onCall reports nested calls as internal, with the checked context", async () => {
+    const ctx = await as(["tags:read"])
+    await ctx.services.tasks.write()
+    await ctx.services.ledger.write({ amount: 1 }).catch(() => {})
+    expect(
+      events.map(({ service, method, internal, ok }) => ({ service, method, internal, ok })),
+    ).toEqual([
+      { service: "ledger", method: "write", internal: true, ok: true },
+      { service: "tasks", method: "write", internal: false, ok: true },
+      { service: "ledger", method: "write", internal: false, ok: false },
+    ])
+    for (const e of events) expect(e.ctx).toBe(ctx)
+  })
+
+  test("handle and tools stay checked, even handed the inner context", async () => {
+    const ctx = await as(["tags:read"])
+    for (const c of [ctx, inner(ctx)]) {
+      expect((await nested.handle(post("/api/ledger.write", { amount: 1 }), c))!.status).toBe(403)
+      expect(await (await nested.handle(post("/api/tasks.write"), c))!.json()).toBe(1)
+      const list = tools(nested, c)
+      expect(list.map((t) => t.name)).not.toContain("ledger_write")
+      expect(await list.find((t) => t.name === "tasks_write")!.call({})).toMatchObject({ data: 1 })
+    }
+    expect(events.filter((e) => !e.internal).map((e) => `${e.service}.${e.method}`)).toEqual([
+      "ledger.write",
+      "tasks.write",
+      "tasks.write",
+      "ledger.write",
+      "tasks.write",
+      "tasks.write",
+    ])
   })
 })
 
@@ -345,6 +487,7 @@ describe("services", () => {
         a: declareService((ctx) => {
           built.a++
           return {
+            view: () => ctx,
             ping: method({ summary: "a", permission: "notes:read", output: z.string() }, () =>
               (ctx.services as any).b.pong(),
             ),
@@ -383,6 +526,20 @@ describe("services", () => {
     for (const name in one.services) names.push(name)
     expect(names).toEqual(["a", "b"])
     expect(built).toEqual({ a: 0, b: 0 })
+  })
+
+  test("the context factories close over has the same services, lazy, sharing one build", async () => {
+    const { built, ctx } = pair()
+    const one = await ctx()
+    const inner = one.services.a.view()
+    expect(built).toEqual({ a: 1, b: 0 })
+    expect(Object.keys(inner.services)).toEqual(["a", "b"])
+    expect(inner.services.a.view).toBe(one.services.a.view) // plain members are shared
+    expect(inner.services.a.ping).not.toBe(one.services.a.ping) // methods are bound twice
+    expect(inner.services.b).toBe(inner.services.b)
+    void one.services.b
+    expect(built).toEqual({ a: 1, b: 1 })
+    expect(inner.tenantId).toBe(one.tenantId)
   })
 
   test("services call each other both ways through ctx.services", async () => {

@@ -4,7 +4,7 @@ import { jsonSchema, type JsonSchema } from "./discovery.js"
 import { splitImages, type KitImage } from "./image.js"
 import { available, invalidFields, invoke, isPublicError, permitted, toSchema } from "./method.js"
 import type { PermissionChecker } from "./permissions.js"
-import { registry, type RegistryEntry } from "./registry.js"
+import { checkedServices, registry, type RegistryEntry } from "./registry.js"
 import type { Hints } from "./types.js"
 
 export type KitResult =
@@ -41,6 +41,10 @@ export type KitTool = {
   call: (args: unknown) => Promise<KitResult>
 }
 
+/**
+ * The caller and its services. Calls always run the checked services, even when
+ * handed the context a factory closes over.
+ */
 export type ToolContext = { caller: PermissionChecker<any, any>; services: object }
 
 /** JSON-safe: dates become ISO strings, undefined keys go. */
@@ -90,7 +94,7 @@ export const optionalOut = (s: z.ZodType) => s._zod.optout === "optional"
 
 function toTool(e: RegistryEntry, ctx: ToolContext): KitTool {
   const { summary, description, input, output, hints } = e.contract
-  const bound = (ctx.services as Record<string, Record<string, unknown>>)[e.service][e.method]
+  const bound = checkedServices(ctx.services)[e.service][e.method]
   const inputZod = input ? toSchema(input) : undefined
   const wrapped = inputZod !== undefined && !isZodObject(inputZod)
   const outputZod = output && toSchema(output)

@@ -102,8 +102,12 @@ export const unknownMethod = (name: string) =>
 type Invoke = (raw?: unknown) => Promise<unknown>
 
 /** Calls a bound method for an edge: the output comes back checked and stripped to the contract. */
-export const invoke = (bound: unknown, raw?: unknown): Promise<unknown> =>
-  (bound as { [INVOKE]: Invoke })[INVOKE](raw)
+export const invoke = (bound: unknown, raw?: unknown): Promise<unknown> => {
+  const edge = (bound as { [INVOKE]?: Invoke })[INVOKE]
+  if (!edge)
+    throw new Error("kit: an edge called a trusted method; pass it what app.context returns")
+  return edge(raw)
+}
 
 // Awaited, so an audit write finishes before the response (Workers drop late work);
 // a failing onCall is logged and never fails the call.
@@ -120,14 +124,20 @@ const report = async (onCall: OnCall | undefined, event: CallEvent<any>) => {
  * Binds a method to one context. A call runs, in order: `when`, the permission,
  * the input, the implementation, then `onCall` with the outcome. Only the edges
  * check the output, between the implementation and `onCall`, and strip it to the
- * contract; internal callers get the implementation's value as is.
+ * contract; in-process callers get the implementation's value as is.
+ *
+ * `internal` binds the method for other operations (the `ctx` factories close
+ * over): the permission is skipped, the operation that entered the app having
+ * been checked already, and there is no edge entry. `ctx` is always the checked
+ * context `app.context` returned, so `when` and `onCall` never see the trusted view.
  */
 export function bind(
   m: Unbound,
   ctx: any,
   service: string,
   name: string,
-  onCall?: OnCall,
+  onCall: OnCall | undefined,
+  internal: boolean,
 ): PublicMethod {
   const { contract } = m[META]
   const input = contract.input && toSchema(contract.input)
@@ -151,12 +161,13 @@ export function bind(
         method: name,
         ctx,
         input: value,
+        internal,
         ok,
         ...(!ok && { error }),
         ms: performance.now() - started,
       })
     try {
-      requireAccess(ctx.caller, contract.permission)
+      if (!internal) requireAccess(ctx.caller, contract.permission)
       if (input) {
         const parsed = input.safeParse(raw)
         if (!parsed.success) {
@@ -184,7 +195,7 @@ export function bind(
   }
   return Object.assign((raw?: unknown) => run(raw, false), {
     [META]: { contract, service, method: name },
-    [INVOKE]: (raw?: unknown) => run(raw, true),
+    ...(!internal && { [INVOKE]: (raw?: unknown) => run(raw, true) }),
   }) as never
 }
 

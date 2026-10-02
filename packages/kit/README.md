@@ -106,7 +106,7 @@ for (const t of tools(app, ctx)) runtime.register(t.name, t.description, t.input
 | **Context**   | `app.context(principal, tenantId, ...args)`, once per request, MCP session, agent turn or cron run: `caller`, `tenantId`, `actor`, whatever your builder adds, and its services, each built on first read. |
 | **Register**  | The `declare module "@willyim/kit"` block. It gives `ctx`, grants and `ctx.services` their types everywhere.                                                                                               |
 | **Service**   | `declareService((ctx) => ({ ... }))`. Plain functions inside stay private; only `method(...)` entries are public. The factory runs the first time `ctx.services.<name>` is read, once per context.         |
-| **Method**    | `method(contract, fn)`. Each call runs, in order: `when`, the permission, input validation, your function, the output check (edges only), then `onCall`.                                                   |
+| **Method**    | `method(contract, fn)`. Each call runs, in order: `when`, the permission (calls that enter the app only), input validation, your function, the output check (edges only), then `onCall`.                   |
 | **Caller**    | `ctx.caller`: `{ has, require, granted, grants, isSuperadmin, principal, tenantId, kind? }`. `kind: "anonymous"` marks a caller with no credentials.                                                       |
 | **Policies**  | `definePolicies({ note: (caller) => ({ workspaceId: caller.tenantId }) })`. Row scoping as plain data: `ctx.scope.note({ id })`.                                                                           |
 
@@ -159,13 +159,59 @@ method({
 ### `onCall`
 
 ```ts
-createApp({ ..., onCall: ({ service, method, ctx, input, ok, error, ms }) => audit.log(...) })
+createApp({ ..., onCall: ({ service, method, ctx, input, internal, ok, error, ms }) => audit.log(...) })
 ```
 
 Fires once per call, from every surface, with the outcome: denied, invalid, failed or done.
-It's awaited before the call returns, so an audit write isn't lost when a Worker's response
-ends. A method hidden by `when` doesn't fire it. If `onCall` throws, the call still succeeds
-and the error is logged.
+`internal` is true for a call one operation made to another (see
+[Calls between operations](#calls-between-operations)), false for a call that entered the
+app; `ctx` is the context `app.context` returned either way. It's awaited before the call
+returns, so an audit write isn't lost when a Worker's response ends. A method hidden by
+`when` doesn't fire it. If `onCall` throws, the call still succeeds and the error is logged.
+
+### Calls between operations
+
+The door checks; inside, operations trust each other.
+
+- **A call that enters the app is checked:** `ctx.services.<service>.<method>()` on the
+  context `app.context` returns (a loader, an action, a script), `app.handle`, `tools()` and
+  MCP.
+- **A call one operation makes to another is trusted:** `ctx.services.<service>.<method>()`
+  inside a method body, or in any function of a service factory, skips the permission,
+  `permission: "*"` included. The method the caller invoked is where access is decided; what
+  it does inside is its own business.
+- **Trusted calls still run** `when` (a method missing from this context is still a 404),
+  input validation (it protects the body, not the caller) and `onCall`, with `internal: true`.
+- **`ctx.caller` is still the caller who entered**, so `ctx.scope` keeps scoping rows by them.
+
+```ts
+const invoices = declareService((ctx) => ({
+  send: method(
+    { summary: "Send an invoice.", permission: "invoices:send", input: { id: z.string() } },
+    // The caller needs invoices:send, not notifications:write.
+    async ({ id }) => ctx.services.notifications.create({ invoiceId: id }),
+  ),
+}))
+```
+
+**A low-permission operation reaches a high-permission one.** If `invoices.send` calls
+`notifications.create`, whoever may send an invoice creates that notification: review what
+an operation calls as part of what it allows. A method that must never run for a caller
+lacking its own permission, however it's reached, says so in its body:
+
+```ts
+purge: method({ summary: "Purge a workspace.", permission: "workspaces:purge" }, async () => {
+  ctx.caller.require("workspaces:purge") // also when another operation calls it
+  // ...
+}),
+```
+
+**The context a factory receives stays inside.** Its `services` are the trusted ones, so
+don't hand it out: a method that returns `ctx` or `ctx.services`, or a plain function on a
+service that a route calls, runs whatever it calls as trusted. A plain service member isn't a
+door; anything a caller reaches from outside is a `method()`. `app.handle`, `tools()` and
+`toMcpServer()` run the checked services whichever context they're handed, so a method that
+gives an agent `tools(app, ctx)` gives it only what the caller may call.
 
 ### Images
 
@@ -347,7 +393,9 @@ Rules for working in a kit app:
 - **A new permission goes in `definePermissions` first**, then sync the catalog to the IdP.
 - **Services call each other through `ctx.services` inside method bodies**, never while the
   factory runs: the registry builds factories against an empty context, and a context builds
-  each service lazily, so a factory must not depend on another one having run.
+  each service lazily, so a factory must not depend on another one having run. Those calls
+  skip the permission ([Calls between operations](#calls-between-operations)); a method that
+  must hold its permission however it's reached calls `ctx.caller.require(...)` itself.
 - **Superadmin-only methods** use `permission: "*"`, not an `isSuperadmin` check.
 - **Grants from outside** (DB, request, IdP) go through `auth.parseGrants`; anything handed
   out (keys, invites, roles) must be `auth.covers`ed by the one handing it out.
