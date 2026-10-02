@@ -22,24 +22,23 @@ export function catalogFromMetadata(meta: AppMetadata): AppCatalog {
 }
 
 /**
- * The caller's resolved *product* permissions for one app, read at token-mint
- * (never from the client). Admins resolve to the app's full declared catalog —
- * every flat permission plus `<type>:*` per resource type, since instances are
- * the app's to enumerate, not ours. Members get their granted product
- * permissions filtered to what the catalog still DECLARES: a flat entry that
- * is still listed, or `<type>:<id>` under a type that is still declared. The
- * instance itself is not re-checked here — that would make every token mint
- * depend on the app being up; existence is verified when the grant is written,
- * and a grant to an instance that has since gone simply matches nothing on
- * the app's side. App-scoped via metadata.app.
+ * A user's resolved *product* permissions for one app, read live (never from
+ * the client), or null when they aren't a member of it. Admins resolve to the
+ * app's full declared catalog — every flat permission plus `<type>:*` per
+ * resource type, since instances are the app's to enumerate, not ours. Members
+ * get their granted product permissions filtered to what the catalog still
+ * DECLARES: a flat entry that is still listed, or `<type>:<id>` under a type
+ * that is still declared. The instance itself is not re-checked here — that
+ * would make every token mint depend on the app being up; existence is
+ * verified when the grant is written, and a grant to an instance that has
+ * since gone simply matches nothing on the app's side.
  */
-export async function productPermissionsFor(
+export async function memberProductPermissions(
   db: BaseServiceContext["db"],
   userId: string,
-  app: string | undefined,
+  app: string,
   catalog: AppCatalog,
-): Promise<string[]> {
-  if (!app) return []
+): Promise<string[] | null> {
   const [member] = await db
     .select({
       role: schema.applicationMember.role,
@@ -53,9 +52,24 @@ export async function productPermissionsFor(
       ),
     )
     .limit(1)
-  if (!member) return []
+  if (!member) return null
   if (member.role === "admin") return adminScopesFor(catalog)
   return (member.productPermissions ?? []).filter((p) => isDeclared(p, catalog))
+}
+
+/**
+ * The caller's product permissions for the token being minted (see
+ * {@link memberProductPermissions}); nothing for a non-member or an untagged
+ * client. App-scoped via metadata.app.
+ */
+export async function productPermissionsFor(
+  db: BaseServiceContext["db"],
+  userId: string,
+  app: string | undefined,
+  catalog: AppCatalog,
+): Promise<string[]> {
+  if (!app) return []
+  return (await memberProductPermissions(db, userId, app, catalog)) ?? []
 }
 
 /**

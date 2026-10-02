@@ -3,8 +3,13 @@ import { Resend } from "resend"
 
 import * as schema from "../db/schema"
 import { recordAudit } from "./audit.server"
-import { assertCan, type Caller } from "./caller.server"
-import { isAppPermission, type AppPermission, type AppRole } from "./permissions"
+import { assertCan, assertCovers, type Caller } from "./caller.server"
+import {
+  isAppPermission,
+  resolvePermissions,
+  type AppPermission,
+  type AppRole,
+} from "./permissions"
 import { EMPTY_CATALOG, isDeclared, type AppCatalog } from "./scopes.server"
 import type { BaseServiceContext } from "./services"
 
@@ -73,9 +78,11 @@ export type InviteResult =
  * to application_member immediately (silent, no email). Otherwise create a
  * pending invitation and email a branded accept link.
  *
- * Requires `member:invite`. The check and the audit entry live here rather than
- * in the caller so the console and the management API cannot drift apart on
- * who may invite, or on what the trail records.
+ * Requires `member:invite`, and the caller must hold every management
+ * permission the invitee would get (the role's bag ∪ the explicit grants), so
+ * nobody hands out more than they have. The checks and the audit entry live
+ * here rather than in the caller so the console and the management API cannot
+ * drift apart on who may invite, or on what the trail records.
  */
 export async function addOrInviteAppMember(
   ctx: BaseServiceContext,
@@ -92,6 +99,7 @@ export async function addOrInviteAppMember(
   },
 ): Promise<InviteResult> {
   await assertCan(caller, args.app, "member:invite")
+  assertCovers(caller, args.app, resolvePermissions(args.role, args.permissions))
   const email = normalizeEmail(args.email)
   const permissions = sanitizePermissions(args.role, args.permissions)
   const productPermissions = sanitizeProductPermissions(
@@ -168,7 +176,9 @@ export async function addOrInviteAppMember(
 
 /**
  * Update an existing member's role + permissions. Guards the last admin.
- * Requires `member:manage`.
+ * Requires `member:manage`, and the caller must hold every management
+ * permission the member ends up with — no promoting anyone, yourself included,
+ * above your own grants.
  */
 export async function updateAppMember(
   ctx: BaseServiceContext,
@@ -183,6 +193,7 @@ export async function updateAppMember(
   },
 ): Promise<{ ok: true } | { error: string }> {
   await assertCan(caller, args.app, "member:manage")
+  assertCovers(caller, args.app, resolvePermissions(args.role, args.permissions))
   const [current] = await ctx.db
     .select({ role: schema.applicationMember.role })
     .from(schema.applicationMember)

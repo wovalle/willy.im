@@ -1,5 +1,7 @@
+import { and, eq } from "drizzle-orm"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
+import * as schema from "../app/db/schema"
 import {
   createUserApiKey,
   listUserApiKeys,
@@ -11,6 +13,7 @@ import type { Caller } from "../app/lib/caller.server"
 import {
   bootstrapAdminKey,
   createApplication,
+  createMember,
   createUser,
   fakeUserCaller,
   noResources,
@@ -20,7 +23,8 @@ import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
  * End-user API keys: minted by an app for one of its users, validated back
- * through the IdP. Scopes come from the app's declared product catalog.
+ * through the IdP. Scopes come from the app's declared product catalog, and
+ * never exceed what the owner holds in the app.
  */
 describe("end-user API keys", () => {
   let h: TestHarness
@@ -35,7 +39,23 @@ describe("end-user API keys", () => {
     root = (await bootstrapAdminKey(h.ctx)).caller
     await createApplication(h.ctx, { app: "acme", permissions: CATALOG })
     user = await createUser(h.ctx, { email: "enduser@acme.test" })
+    await createMember(h.ctx, {
+      app: "acme",
+      userId: user.id,
+      role: "member",
+      productPermissions: CATALOG,
+    })
   })
+
+  /** Rewrites the owner's membership in place: what a demotion or removal does. */
+  const setMembership = async (change: { productPermissions: string[] } | "removed") => {
+    const where = and(
+      eq(schema.applicationMember.applicationId, "acme"),
+      eq(schema.applicationMember.userId, user.id),
+    )
+    if (change === "removed") await h.ctx.db.delete(schema.applicationMember).where(where)
+    else await h.ctx.db.update(schema.applicationMember).set(change).where(where)
+  }
   afterEach(() => h.close())
 
   const mint = (overrides: Partial<Parameters<typeof createUserApiKey>[2]> = {}) =>
@@ -70,6 +90,29 @@ describe("end-user API keys", () => {
       error: "unknown_scopes",
       detail: ["nope:read"],
     })
+  })
+
+  it("refuses scopes the owner doesn't hold in the app, naming them", async () => {
+    await setMembership({ productPermissions: ["invoices:read"] })
+    expect(await mint({ scopes: ["invoices:read", "invoices:write"] })).toEqual({
+      error: "scopes_not_held",
+      detail: ["invoices:write"],
+    })
+    expect(await listUserApiKeys(h.ctx, root, { app: "acme" })).toHaveLength(0)
+  })
+
+  it("refuses any scope for a user who isn't a member of the app", async () => {
+    await setMembership("removed")
+    expect(await mint({ scopes: ["invoices:read"] })).toEqual({
+      error: "scopes_not_held",
+      detail: ["invoices:read"],
+    })
+  })
+
+  it("lets an app admin's key carry any declared scope", async () => {
+    await setMembership("removed")
+    await createMember(h.ctx, { app: "acme", userId: user.id, role: "admin" })
+    expect(await mint({ scopes: CATALOG })).toMatchObject({ token: expect.any(String) })
   })
 
   it("validates a live key and returns its owner and scopes", async () => {
@@ -140,6 +183,37 @@ describe("end-user API keys", () => {
     ).toEqual({
       valid: false,
       reason: "expired",
+    })
+  })
+
+  it("refuses a key whose owner has left the app, logging why", async () => {
+    const minted = await mint()
+    if (!("token" in minted)) throw new Error("mint failed")
+    await setMembership("removed")
+
+    // The SDK's schema has no reason for this; `revoked` is the closest it reads.
+    expect(await validateUserApiKey(h.ctx, root, { app: "acme", token: minted.token })).toEqual({
+      valid: false,
+      reason: "revoked",
+    })
+    expect(h.logs.find((l) => l.message === "userkey.owner_lost_access")?.fields).toMatchObject({
+      keyId: minted.id,
+      reason: "not_a_member",
+    })
+  })
+
+  it("refuses a key whose owner no longer holds every scope, rather than shrinking it", async () => {
+    const minted = await mint({ scopes: ["invoices:read", "invoices:write"] })
+    if (!("token" in minted)) throw new Error("mint failed")
+    await setMembership({ productPermissions: ["invoices:read"] })
+
+    expect(await validateUserApiKey(h.ctx, root, { app: "acme", token: minted.token })).toEqual({
+      valid: false,
+      reason: "revoked",
+    })
+    expect(h.logs.find((l) => l.message === "userkey.owner_lost_access")?.fields).toMatchObject({
+      keyId: minted.id,
+      reason: "scopes_not_held",
     })
   })
 
@@ -247,6 +321,8 @@ describe("end-user API keys scoped to a resource instance", () => {
       resourceTypes: [THREAD],
     })
     user = await createUser(h.ctx, { email: "willy@bender.test" })
+    // An app admin holds `kirby:thread:*`, which covers every instance.
+    await createMember(h.ctx, { app: "bender", userId: user.id, role: "admin" })
   })
   afterEach(() => h.close())
 

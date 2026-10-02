@@ -5,6 +5,8 @@ import { catalogOf, getApplicationByApp } from "./admin.server"
 import { generateToken, hashToken } from "./api-keys.server"
 import { recordAudit } from "./audit.server"
 import { assertCan, type Caller } from "./caller.server"
+import { memberProductPermissions } from "./claims.server"
+import { appRbac } from "./permissions"
 import type { ResourceLister } from "./resources.server"
 import { resolveScopes, type ScopeResolution } from "./scopes.server"
 import type { BaseServiceContext } from "./services"
@@ -14,7 +16,8 @@ import type { BaseServiceContext } from "./services"
  * API. The IdP is the single key store: apps mint/list/revoke/validate through
  * the management API (authenticated with their scoped `wim_` key) and never
  * persist the plaintext. Scopes are drawn from the app's declared product
- * permission catalog; enforcement is the app's job.
+ * permission catalog, and a key never carries more than its owner holds in the
+ * app — at mint and at every validation. Enforcement is the app's job.
  */
 
 const USER_TOKEN_PREFIX = "wak_"
@@ -79,14 +82,17 @@ export async function listUserApiKeys(
 export type CreateUserApiKeyResult =
   | { id: string; token: string; prefix: string }
   | { error: "unknown_user" }
+  /** The owner doesn't hold these product permissions in the app (or isn't a member). */
+  | { error: "scopes_not_held"; detail: string[] }
   | Exclude<ScopeResolution, { ok: true }>
 
 /**
  * Mints a key for one of the app's users. Returns the plaintext exactly once.
  * Scopes are validated against the app's declared catalog — a flat permission,
  * or `<type>:<id>` where the type is declared AND the app currently lists the
- * instance (asked over the type's `list` URL). Anything else is rejected, not
- * silently dropped, so the caller learns about the mismatch.
+ * instance (asked over the type's `list` URL) — and the owner must currently
+ * hold each one in the app (`<type>:*` covers its instances). Anything else is
+ * rejected, not silently dropped, so the caller learns about the mismatch.
  *
  * Requires `userkey:create`.
  */
@@ -111,15 +117,14 @@ export async function createUserApiKey(
     .limit(1)
   if (!u) return { error: "unknown_user" }
 
-  const application = await getApplicationByApp(ctx, input.app)
-  const resolved = await resolveScopes(
-    input.scopes ?? [],
-    input.app,
-    catalogOf(application),
-    deps.resources,
-  )
+  const catalog = catalogOf(await getApplicationByApp(ctx, input.app))
+  const resolved = await resolveScopes(input.scopes ?? [], input.app, catalog, deps.resources)
   if ("error" in resolved) return resolved
   const scopes = resolved.scopes
+
+  const held = (await memberProductPermissions(ctx.db, input.userId, input.app, catalog)) ?? []
+  const notHeld = scopes.filter((s) => !appRbac.covers(held, [s]))
+  if (notHeld.length) return { error: "scopes_not_held", detail: notHeld }
 
   const token = generateToken(USER_TOKEN_PREFIX)
   const keyHash = await hashToken(token)
@@ -199,6 +204,10 @@ export type UserApiKeyValidation =
  * scoped to the calling app, so a key minted for app A never validates for app
  * B. A hit bumps lastUsedAt (best effort).
  *
+ * A key is only as good as its owner: if they have left the app, or no longer
+ * hold every scope, it is refused rather than silently shrunk. The response
+ * reads `revoked` (the SDK's schema has no closer reason); the log says why.
+ *
  * Requires `userkey:validate`, so leaked keys can't be probed by a caller that
  * only holds read access. Not audited: validation is a hot read path, and a row
  * per API call would drown the trail it shares with the write operations.
@@ -227,6 +236,18 @@ export async function validateUserApiKey(
   if (row.revokedAt) return { valid: false, reason: "revoked" }
   if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return { valid: false, reason: "expired" }
 
+  const catalog = catalogOf(await getApplicationByApp(ctx, input.app))
+  const held = await memberProductPermissions(ctx.db, row.userId, input.app, catalog)
+  const scopes = row.scopes ?? []
+  if (!held || !appRbac.covers(held, scopes)) {
+    ctx.logger.warn("userkey.owner_lost_access", {
+      keyId: row.id,
+      userId: row.userId,
+      reason: held ? "scopes_not_held" : "not_a_member",
+    })
+    return { valid: false, reason: "revoked" }
+  }
+
   ctx.db
     .update(schema.userApiKey)
     .set({ lastUsedAt: new Date() })
@@ -243,7 +264,7 @@ export async function validateUserApiKey(
     keyId: row.id,
     userId: row.userId,
     workspaceId: row.workspaceId ?? null,
-    scopes: row.scopes ?? [],
+    scopes,
     name: row.name,
   }
 }
