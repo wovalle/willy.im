@@ -1,9 +1,11 @@
 import type { Route } from "./+types/apps.$app.audit"
 import { requireApiCaller } from "~/lib/caller.server"
 import { listAuditForApp } from "~/lib/audit.server"
+import { appContext } from "~/context"
 
 /** GET — recent audit entries for this app (newest first). Requires audit:read. */
-export async function loader({ request, context, params }: Route.LoaderArgs) {
+export async function loader({ request, context: router, params }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   await requireApiCaller(request, context, context.services.auth, {
     app: params.app,
     permission: "audit:read",

@@ -2,13 +2,15 @@ import type { Route } from "./+types/applications.$clientId.rotate-secret"
 import { getApplication, rotateApplicationSecret } from "~/lib/admin.server"
 import { methodNotAllowed } from "~/lib/api.server"
 import { requireApiCaller } from "~/lib/caller.server"
+import { appContext } from "~/context"
 
 /**
  * POST — mint a new client secret. The previous one stops working immediately
  * and the new plaintext is returned exactly once. Requires `app:update`
  * (enforced by the service).
  */
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   if (request.method !== "POST") return methodNotAllowed(["POST"])
   const caller = await requireApiCaller(request, context, context.services.auth)
   const application = await getApplication(context, params.clientId)

@@ -11,6 +11,7 @@ import { data } from "react-router"
 import { eq } from "drizzle-orm"
 import { logs } from "~/db/schema"
 import type { Route } from "./+types/logs.$id"
+import { appContext } from "~/context"
 
 // Types safe to serve inline on willy.im's own origin. Anything else (html,
 // svg, whatever the uploader claimed) downloads as octet-stream: this route is
@@ -28,7 +29,8 @@ const INLINE_TYPES = new Set([
   "image/webp",
 ])
 
-export const loader = async ({ params, context }: Route.LoaderArgs) => {
+export const loader = async ({ params, context: router }: Route.LoaderArgs) => {
+  const context = router.get(appContext)
   const rows = await context.db.select().from(logs).where(eq(logs.id, params.id))
   const log = rows[0]
   if (!log) return data({ error: "Not found" }, { status: 404 })

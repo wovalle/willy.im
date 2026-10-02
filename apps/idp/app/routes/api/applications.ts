@@ -3,9 +3,11 @@ import { createApplication, listApplications } from "~/lib/admin.server"
 import { readJson, methodNotAllowed } from "~/lib/api.server"
 import { requireApiCaller } from "~/lib/caller.server"
 import { CreateApplicationInput } from "@willyim/idp/schemas"
+import { appContext } from "~/context"
 
 /** GET — every registered application. Superadmin only (cross-app read). */
-export async function loader({ request, context }: Route.LoaderArgs) {
+export async function loader({ request, context: router }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   await requireApiCaller(request, context, context.services.auth, { superadmin: true })
   const applications = await listApplications(context)
   return Response.json({
@@ -17,7 +19,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
  * POST — register an application. The client secret comes back once and is not
  * recoverable. Authenticate only; createApplication owns the superadmin check.
  */
-export async function action({ request, context }: Route.ActionArgs) {
+export async function action({ request, context: router }: Route.ActionArgs) {
+  const context = router.get(appContext)
   if (request.method !== "POST") return methodNotAllowed(["POST"])
   const caller = await requireApiCaller(request, context, context.services.auth)
   const body = await readJson(request, CreateApplicationInput)

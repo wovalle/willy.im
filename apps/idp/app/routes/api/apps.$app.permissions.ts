@@ -3,13 +3,15 @@ import { getApplicationByApp, updateApplicationPermissions } from "~/lib/admin.s
 import { methodNotAllowed, readJson } from "~/lib/api.server"
 import { requireApiCaller } from "~/lib/caller.server"
 import { SetAppPermissionsInput } from "@willyim/idp/schemas"
+import { appContext } from "~/context"
 
 /**
  * PUT — replace the app's product-permission catalog wholesale. This is the
  * vocabulary members can be granted and what's emitted in the permissions
  * claim, so a replace (not a merge) is the honest verb. Requires `app:update`.
  */
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   if (request.method !== "PUT") return methodNotAllowed(["PUT"])
   const caller = await requireApiCaller(request, context, context.services.auth)
   const application = await getApplicationByApp(context, params.app)

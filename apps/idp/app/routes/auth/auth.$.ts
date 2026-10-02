@@ -1,6 +1,7 @@
 import type { Route } from "./+types/auth.$"
+import { appContext, type AppContext } from "~/context"
 
-async function handle(request: Request, context: Route.LoaderArgs["context"]) {
+async function handle(request: Request, context: AppContext) {
   const url = new URL(request.url)
   const op = url.pathname.replace(/^\/auth\//, "")
   const log = context.logger.child({ op })
@@ -18,10 +19,12 @@ async function handle(request: Request, context: Route.LoaderArgs["context"]) {
   }
 }
 
-export async function loader({ request, context }: Route.LoaderArgs) {
+export async function loader({ request, context: router }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   return handle(request, context)
 }
 
-export async function action({ request, context }: Route.ActionArgs) {
+export async function action({ request, context: router }: Route.ActionArgs) {
+  const context = router.get(appContext)
   return handle(request, context)
 }

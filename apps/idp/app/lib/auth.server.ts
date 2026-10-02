@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm"
 import { betterAuth } from "better-auth"
 import { APIError } from "better-auth/api"
-import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
 import { admin } from "better-auth/plugins/admin"
 import { emailOTP } from "better-auth/plugins/email-otp"
 import { jwt } from "better-auth/plugins/jwt"
@@ -40,6 +40,9 @@ function renderOtpEmail(baseUrl: string, email: string, otp: string) {
   }
 }
 
+/** The IdP's own audience on one of its hosts: the Better Auth base URL. */
+export const idpAudience = (origin: string) => `${origin}/auth`
+
 /**
  * Builds the auth service for one request. `requestUrl` makes the IdP
  * host-aware: when the request arrives on a configured vanity domain
@@ -55,8 +58,10 @@ export function createAuthService(
   options: {
     /**
      * Every resource URI any application declares (claims.server allResources),
-     * loaded by the worker before this is built. The token endpoint refuses a
-     * `resource` outside this list, so an access token can only ever be minted
+     * loaded by the worker before this is built. Each one is seeded as an
+     * `oauth_resource` row (RFC 8707); the token endpoint refuses a `resource`
+     * with no enabled row, and the worker disables rows no app declares any
+     * more (syncResourceRegistry), so an access token can only ever be minted
      * for an audience some registered app actually is.
      */
     audiences?: string[]
@@ -318,9 +323,6 @@ export function createAuthService(
         // own writes/verifies can never drift apart. `verify` is omitted on
         // purpose: the plugin then hashes-and-constant-time-compares.
         storeClientSecret: { hash: hashClientSecret },
-        // We serve the RFC 8414 root metadata ourselves (routes/well-known/*),
-        // so silence Better Auth's "ensure it exists" startup warnings.
-        silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
         // Each OAuth client is tagged with metadata.app (its application key).
         // We surface only that application's workspaces + roles as a claim.
         customIdTokenClaims: async ({ user, metadata }) => ({
@@ -339,9 +341,14 @@ export function createAuthService(
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
         clientRegistrationDefaultScopes: ["openid", "profile", "email", "offline_access"],
-        validAudiences: [url.origin + "/auth", ...(options.audiences ?? [])],
-        customAccessTokenClaims: ({ user, resource, metadata }) =>
-          user ? accessTokenClaimsFor(context.db, user.id, resource, metadata) : {},
+        // The audiences a token may be minted for: the IdP itself plus every
+        // app-declared resource. Seeded insert-only into `oauth_resource`.
+        resources: [idpAudience(url.origin), ...(options.audiences ?? [])],
+        // Any client may ask for any registered resource — the claims below are
+        // what scope a token to the app that owns it, not a per-client link.
+        enforcePerClientResources: false,
+        customAccessTokenClaims: ({ user, resources, metadata }) =>
+          user ? accessTokenClaimsFor(context.db, user.id, resources, metadata) : {},
         // Same claims on /userinfo, so apps that refresh server-side (or skip
         // id_token parsing) still see workspaces/permissions and — crucially —
         // a LIVE `act` claim while an admin is impersonating the user, letting

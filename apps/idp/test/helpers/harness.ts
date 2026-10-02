@@ -3,16 +3,18 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import Database from "better-sqlite3"
+import { RouterContextProvider } from "react-router"
 import { drizzle } from "drizzle-orm/better-sqlite3"
 
-import * as schema from "../../app/db/schema"
+import { appContext, type AppContext } from "../../app/context"
+import { relations } from "../../app/db/drizzle"
 import { getAppEnv } from "../../app/lib/env"
 import type { LogFields, Logger } from "../../app/lib/log"
 import type { BaseServiceContext } from "../../app/lib/services"
 
 /**
  * In-memory test harness. D1 is SQLite, so a better-sqlite3 `:memory:` database
- * with the real `drizzle/*.sql` migrations applied gives us the production
+ * with the real drizzle migrations applied gives us the production
  * schema without a Workers runtime — the service functions under test only ever
  * touch `ctx.db`, so they run unmodified against it.
  *
@@ -24,13 +26,14 @@ import type { BaseServiceContext } from "../../app/lib/services"
 const here = dirname(fileURLToPath(import.meta.url))
 const MIGRATIONS_DIR = join(here, "../../drizzle")
 
-/** The `drizzle/*.sql` files, in journal order, split into statements. */
+/** Every `drizzle/<ts>_<name>/migration.sql`, in timestamp order, split into statements. */
 function migrationStatements(): string[] {
-  return readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith(".sql"))
+  return readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
     .sort()
-    .flatMap((f) =>
-      readFileSync(join(MIGRATIONS_DIR, f), "utf8")
+    .flatMap((dir) =>
+      readFileSync(join(MIGRATIONS_DIR, dir, "migration.sql"), "utf8")
         .split("--> statement-breakpoint")
         .map((s) => s.trim())
         .filter(Boolean),
@@ -40,7 +43,7 @@ function migrationStatements(): string[] {
 /**
  * The migrated schema as a raw SQLite image, built once per process. Every
  * harness restores from this snapshot instead of replaying the migrations, so
- * the cost of `drizzle/*.sql` is paid once no matter how many tests run.
+ * the cost of the migrations is paid once no matter how many tests run.
  */
 let snapshot: Buffer | null = null
 
@@ -73,7 +76,7 @@ export function createTestHarness(options: TestHarnessOptions = {}): TestHarness
   const sqlite = new Database(schemaSnapshot())
   sqlite.pragma("foreign_keys = ON")
 
-  const db = drizzle(sqlite, { schema })
+  const db = drizzle({ client: sqlite, relations })
 
   const env: Record<string, string> = {
     APP_ENV: "development",
@@ -121,4 +124,14 @@ export function createTestHarness(options: TestHarnessOptions = {}): TestHarness
       sqlite.close()
     },
   }
+}
+
+/**
+ * Wraps a plain app-context object the way workers/app.ts does, so route
+ * handlers can be called directly: `handler({ context: routerContext(ctx), … })`.
+ */
+export function routerContext(value: Record<string, unknown>): RouterContextProvider {
+  const context = new RouterContextProvider()
+  context.set(appContext, value as unknown as AppContext)
+  return context
 }

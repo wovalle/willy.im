@@ -1,6 +1,7 @@
 import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router"
 
 import type { Route } from "./+types/root"
+import { appContext } from "~/context"
 import "./app.css"
 
 export const links: Route.LinksFunction = () => [
@@ -21,7 +22,8 @@ export const links: Route.LinksFunction = () => [
   },
 ]
 
-export const loader = async ({ context }: Route.LoaderArgs) => {
+export const loader = async ({ context: router }: Route.LoaderArgs) => {
+  const context = router.get(appContext)
   // Return a promise for now playing data to enable streaming with Suspense
   const nowPlaying = context.services.spotify.getNowPlaying().catch(() => null)
 

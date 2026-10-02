@@ -19,13 +19,16 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table"
+import { appContext } from "~/context"
 
-export async function loader({ request, context }: Route.LoaderArgs) {
+export async function loader({ request, context: router }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   await requireConsoleCaller(request, context, context.services.auth, { superadmin: true })
   return { applications: await listApplications(context) }
 }
 
-export async function action({ request, context }: Route.ActionArgs) {
+export async function action({ request, context: router }: Route.ActionArgs) {
+  const context = router.get(appContext)
   const caller = await requireConsoleCaller(request, context, context.services.auth, {
     superadmin: true,
   })

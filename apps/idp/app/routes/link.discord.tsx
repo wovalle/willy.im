@@ -5,6 +5,7 @@ import type { Route } from "./+types/link.discord"
 import * as schema from "~/db/schema"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
+import { appContext } from "~/context"
 
 /**
  * Self-service Discord linking.
@@ -43,7 +44,8 @@ export function meta() {
   return [{ title: "Link Discord · willy.im" }]
 }
 
-export async function loader({ request, context }: Route.LoaderArgs) {
+export async function loader({ request, context: router }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   const session = await context.services.auth.api.getSession({ headers: request.headers })
   // `next` so the login bounce comes back here rather than dumping them on the
   // console with no idea whether the thing they clicked worked.
@@ -68,7 +70,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   }
 }
 
-export async function action({ request, context }: Route.ActionArgs) {
+export async function action({ request, context: router }: Route.ActionArgs) {
+  const context = router.get(appContext)
   const session = await context.services.auth.api.getSession({ headers: request.headers })
   if (!session) throw redirect(`/login?next=${encodeURIComponent("/link/discord")}`)
 

@@ -88,8 +88,10 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table"
+import { appContext } from "~/context"
 
-export async function loader({ request, context, params }: Route.LoaderArgs) {
+export async function loader({ request, context: router, params }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   // The gate is app-scoped, so the app has to be resolved before it can be
   // applied: any member holding app:read may open this page, not just IdP
   // superadmins.
@@ -129,7 +131,8 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   }
 }
 
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   // Authenticate only — every intent below is gated (and audited) by the service
   // it calls, so the console and the management API can't drift apart.
   const caller = await requireConsoleCaller(request, context, context.services.auth)

@@ -9,6 +9,7 @@ import { Avatar } from "~/components/avatar"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
+import { appContext } from "~/context"
 
 export function meta() {
   return [{ title: "Account · willy.im" }]
@@ -16,7 +17,8 @@ export function meta() {
 
 type Passkey = { id: string; name?: string | null }
 
-export async function loader({ request, context }: Route.LoaderArgs) {
+export async function loader({ request, context: router }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   const caller = await requireConsoleCaller(request, context, context.services.auth)
   // Server-rendered: passkeys come from the loader (session-authenticated), not a
   // client fetch. Add/delete still run client-side (WebAuthn), then revalidate.

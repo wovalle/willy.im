@@ -14,7 +14,7 @@ import * as appPermissions from "../app/routes/api/apps.$app.permissions"
 import * as appUserKeys from "../app/routes/api/apps.$app.user-keys"
 import type { ResourceLister } from "../app/lib/resources.server"
 import { bootstrapAdminKey, createMember, createUser, stubResources } from "./helpers/fixtures"
-import { createTestHarness, type TestHarness } from "./helpers/harness"
+import { createTestHarness, routerContext, type TestHarness } from "./helpers/harness"
 
 /**
  * Route-level smoke: status + body for each family's interesting outcomes. The
@@ -45,7 +45,7 @@ describe("management API routes", () => {
     args: Record<string, unknown>,
   ): Promise<{ status: number; body: unknown }> => {
     try {
-      const res = (await handler({ context, ...args } as never)) as Response
+      const res = (await handler({ context: routerContext(context), ...args } as never)) as Response
       return { status: res.status, body: await res.json() }
     } catch (err) {
       if (!(err instanceof Response)) throw err

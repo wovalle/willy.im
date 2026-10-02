@@ -3,9 +3,11 @@ import { requireApiCaller } from "~/lib/caller.server"
 import { readJson } from "~/lib/api.server"
 import { CreateUserApiKeyInput } from "@willyim/idp/schemas"
 import { createUserApiKey, listUserApiKeys } from "~/lib/user-api-keys.server"
+import { appContext } from "~/context"
 
 /** GET — list end-user API keys (filter: ?userId=&workspaceId=). Requires userkey:read. */
-export async function loader({ request, context, params }: Route.LoaderArgs) {
+export async function loader({ request, context: router, params }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   const caller = await requireApiCaller(request, context, context.services.auth)
   const url = new URL(request.url)
   const keys = await listUserApiKeys(context, caller, {
@@ -25,7 +27,8 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 }
 
 /** POST — mint an end-user API key. Plaintext returned once. Requires userkey:create. */
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   if (request.method !== "POST") {
     return Response.json({ error: "method_not_allowed" }, { status: 405, headers: { Allow: "POST" } })
   }

@@ -33,6 +33,8 @@
       "database_name": "idp-willy-im",
       "database_id": "7a13019b-235f-4408-bdea-eead1d81778e",
       "migrations_dir": "drizzle",
+      // drizzle-kit v1 writes one folder per migration: drizzle/<ts>_<name>/migration.sql
+      "migrations_pattern": "drizzle/*/migration.sql",
     },
   ],
   "routes": [

@@ -1,7 +1,9 @@
 import { data } from "react-router"
 import { z } from "zod"
 import { kv } from "../../db/schema"
+import { getGoogleAccessToken } from "../../lib/auth.server"
 import type { Route } from "./+types/update"
+import { appContext } from "~/context"
 
 const updateSchema = z.object({
   services: z
@@ -10,7 +12,8 @@ const updateSchema = z.object({
     .default(["github", "youtube", "spotify", "goodreads"]),
 })
 
-export const action = async ({ context, request }: Route.ActionArgs) => {
+export const action = async ({ context: router, request }: Route.ActionArgs) => {
+  const context = router.get(appContext)
   try {
     let requestedServices: string[] = ["github", "youtube", "spotify", "goodreads"] // Default to all
 
@@ -79,12 +82,10 @@ export const action = async ({ context, request }: Route.ActionArgs) => {
     // Update YouTube liked videos (last 30)
     if (requestedServices.includes("youtube")) {
       try {
-        let { accessToken } = await context.services.auth.api.getAccessToken({
-          body: {
-            providerId: "google",
-            userId: context.getAppEnv("STATIC_ACCOUNT_ID"),
-          },
-        })
+        let { accessToken } = await getGoogleAccessToken(
+          context.services.auth,
+          context.getAppEnv("STATIC_ACCOUNT_ID"),
+        )
 
         if (!accessToken) {
           results.youtube.error = "No valid access token found"

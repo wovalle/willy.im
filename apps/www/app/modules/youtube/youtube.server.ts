@@ -55,7 +55,7 @@ export const createYoutubeService = declareService("youtube", (context: BaseServ
 
     try {
       const kvData = await context.db.query.kv.findFirst({
-        where: (kv, { eq }) => eq(kv.id, "youtube.liked-videos"),
+        where: { id: "youtube.liked-videos" },
       })
 
       if (!kvData?.value) {

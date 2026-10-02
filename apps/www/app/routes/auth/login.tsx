@@ -1,7 +1,9 @@
 import { authClient } from "~/lib/auth-client"
 import type { Route } from "./+types/login"
+import { appContext } from "~/context"
 
-export const loader = async ({ context }: Route.LoaderArgs) => {
+export const loader = async ({ context: router }: Route.LoaderArgs) => {
+  const context = router.get(appContext)
   const kv = await context.db.query.kv.findFirst()
 
   return {

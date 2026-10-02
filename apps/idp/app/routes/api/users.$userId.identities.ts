@@ -3,9 +3,11 @@ import { methodNotAllowed, readJson } from "~/lib/api.server"
 import { requireApiCaller } from "~/lib/caller.server"
 import { linkIdentity, listLinkedIdentities } from "~/lib/identities.server"
 import { LinkIdentityInput } from "@willyim/idp/schemas"
+import { appContext } from "~/context"
 
 /** GET — every external identity pinned to this user. Superadmin only. */
-export async function loader({ request, context, params }: Route.LoaderArgs) {
+export async function loader({ request, context: router, params }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   const caller = await requireApiCaller(request, context, context.services.auth, {
     superadmin: true,
   })
@@ -20,7 +22,8 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
  * pair was already this user's, 409 when it belongs to someone else. Superadmin
  * only: a link asserts identity with nothing to prove it.
  */
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   if (request.method !== "POST") return methodNotAllowed(["POST"])
   const caller = await requireApiCaller(request, context, context.services.auth, {
     superadmin: true,

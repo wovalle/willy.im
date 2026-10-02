@@ -1,6 +1,6 @@
 import { kv } from "../../app/db/schema"
 import type { BaseServiceContext } from "../../app/lib/services"
-import { createAuthService } from "../../app/lib/auth.server"
+import { createAuthService, getGoogleAccessToken } from "../../app/lib/auth.server"
 import { createYoutubeService } from "../../app/modules/youtube/youtube.server"
 
 export async function updateYoutube(ctx: BaseServiceContext) {
@@ -10,12 +10,7 @@ export async function updateYoutube(ctx: BaseServiceContext) {
 
   logger.info("[scheduled] [youtube] Fetching access token...")
 
-  const { accessToken } = await auth.api.getAccessToken({
-    body: {
-      providerId: "google",
-      userId: getAppEnv("STATIC_ACCOUNT_ID"),
-    },
-  })
+  const { accessToken } = await getGoogleAccessToken(auth, getAppEnv("STATIC_ACCOUNT_ID"))
 
   if (!accessToken) {
     throw new Error("No valid access token found")

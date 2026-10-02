@@ -8,8 +8,10 @@ import { eq } from "drizzle-orm"
 import { kv } from "~/db/schema"
 import { benderArtifacts } from "~/lib/bender.server"
 import type { Route } from "./+types/view"
+import { appContext } from "~/context"
 
-export const loader = async ({ params, context }: Route.LoaderArgs) => {
+export const loader = async ({ params, context: router }: Route.LoaderArgs) => {
+  const context = router.get(appContext)
   const artifact = await benderArtifacts.get(params.id).catch(() => null)
   if (artifact?.url) throw redirect(artifact.url)
 

@@ -270,16 +270,16 @@ export async function createApplication(
     clientSecret: await hashClientSecret(clientSecret),
     name,
     redirectUris: input.redirectUris,
-    // Confidential web client — the plugin's documented defaults for a client
-    // registered with a secret. `requirePKCE: true` matches its runtime default
+    // Confidential web client. The plugin only accepts credentials sent the way
+    // the client registered, and @willyim/idp posts them in the form body —
+    // so `client_secret_post`. `requirePKCE: true` matches its runtime default
     // (`client.requirePKCE ?? true`), written out so the row is self-describing.
-    tokenEndpointAuthMethod: "client_secret_basic",
+    tokenEndpointAuthMethod: "client_secret_post",
     // The SDK refreshes with grant_type=refresh_token; declare it so a plugin
     // version that enforces grants per client doesn't break new apps only.
     grantTypes: ["authorization_code", "refresh_token"],
     responseTypes: ["code"],
-    type: "web",
-    public: false,
+    applicationType: "web",
     disabled: false,
     skipConsent: false,
     requirePKCE: true,

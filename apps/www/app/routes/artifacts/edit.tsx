@@ -4,6 +4,7 @@ import { useState } from "react"
 import { benderArtifacts } from "~/lib/bender.server"
 import { requireAdmin } from "~/lib/admin"
 import type { Route } from "./+types/edit"
+import { appContext } from "~/context"
 
 export const headers = (): HeadersInit => ({
   "X-Robots-Tag": "noindex, nofollow, noarchive",
@@ -14,7 +15,8 @@ export const meta: Route.MetaFunction = ({ loaderData }) => [
   { name: "robots", content: "noindex, nofollow" },
 ]
 
-export const loader = async ({ request, params, context }: Route.LoaderArgs) => {
+export const loader = async ({ request, params, context: router }: Route.LoaderArgs) => {
+  const context = router.get(appContext)
   await requireAdmin(request, context.services.auth)
 
   const artifact = await benderArtifacts.get(params.id)
@@ -23,7 +25,8 @@ export const loader = async ({ request, params, context }: Route.LoaderArgs) => 
   return { artifact }
 }
 
-export const action = async ({ request, params, context }: Route.ActionArgs) => {
+export const action = async ({ request, params, context: router }: Route.ActionArgs) => {
+  const context = router.get(appContext)
   await requireAdmin(request, context.services.auth)
 
   const formData = await request.formData()

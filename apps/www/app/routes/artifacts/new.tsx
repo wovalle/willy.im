@@ -2,6 +2,7 @@ import { Form, redirect, useActionData } from "react-router"
 import { benderArtifacts } from "~/lib/bender.server"
 import { requireAdmin } from "~/lib/admin"
 import type { Route } from "./+types/new"
+import { appContext } from "~/context"
 
 const slugify = (title: string) =>
   title
@@ -10,12 +11,14 @@ const slugify = (title: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "note"
 
-export const loader = async ({ request, context }: Route.LoaderArgs) => {
+export const loader = async ({ request, context: router }: Route.LoaderArgs) => {
+  const context = router.get(appContext)
   await requireAdmin(request, context.services.auth)
   return null
 }
 
-export const action = async ({ request, context }: Route.ActionArgs) => {
+export const action = async ({ request, context: router }: Route.ActionArgs) => {
+  const context = router.get(appContext)
   await requireAdmin(request, context.services.auth)
 
   const formData = await request.formData()

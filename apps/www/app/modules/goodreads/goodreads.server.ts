@@ -114,7 +114,7 @@ export const createGoodreadsService = declareService("goodreads", (context: Base
     }
     try {
       const kvData = await context.db.query.kv.findFirst({
-        where: (kv, { eq }) => eq(kv.id, "goodreads.data"),
+        where: { id: "goodreads.data" },
       })
 
       if (!kvData?.value) {
