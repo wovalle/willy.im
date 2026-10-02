@@ -2,9 +2,9 @@ import assert from "node:assert/strict"
 import { test } from "vitest"
 
 import Database from "better-sqlite3"
-import { asc, eq, isNull } from "drizzle-orm"
+import { SQL, asc, eq, is, isNull } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/better-sqlite3"
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core"
+import { getTableConfig, integer, sqliteTable, text } from "drizzle-orm/sqlite-core"
 
 import { d1AuditLogTable } from "../../src/audit/d1/index.js"
 import { withAudit } from "../../src/audit/d1-runtime/index.js"
@@ -315,4 +315,78 @@ test("withAudit.db gives access to raw db for non-audited ops", async () => {
   } finally {
     sqlite.close()
   }
+})
+
+test("withAudit.record logs an event the wrapper didn't make, with the bound context", async () => {
+  const sqlite = new Database(":memory:")
+  const auditLogsWithCtx = d1AuditLogTable({
+    contextColumns: [{ column: "application_id" }, { column: "actor" }],
+  })
+  const db = drizzle({ client: sqlite })
+  try {
+    sqlite.exec(`
+      CREATE TABLE audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        row_id TEXT,
+        user_id TEXT,
+        application_id TEXT,
+        actor TEXT,
+        old_data TEXT,
+        new_data TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `)
+
+    await withAudit(db, auditLogsWithCtx, {
+      userId: "u1",
+      context: { application_id: "notes", actor: "user:u1" },
+    }).record({ table: "member", operation: "invite", newData: { email: "a@b.c" } })
+    // A machine caller: no user, named in a context column.
+    await withAudit(db, auditLogsWithCtx, {
+      userId: null,
+      context: { application_id: "notes", actor: "apikey:k1" },
+    }).record({ table: "api_key", operation: "revoke", rowId: "k1" })
+
+    const [invite, revoke] = db
+      .select()
+      .from(auditLogsWithCtx)
+      .orderBy(asc(auditLogsWithCtx.id))
+      .all() as Record<string, unknown>[]
+    assert.equal(invite!.operation, "invite")
+    assert.equal(invite!.user_id, "u1")
+    assert.equal(invite!.actor, "user:u1")
+    assert.equal(invite!.application_id, "notes")
+    assert.deepEqual(JSON.parse(invite!.new_data as string), { email: "a@b.c" })
+    assert.equal(invite!.old_data, null)
+    assert.equal(revoke!.user_id, null)
+    assert.equal(revoke!.actor, "apikey:k1")
+    assert.equal(revoke!.row_id, "k1")
+  } finally {
+    sqlite.close()
+  }
+})
+
+test("d1AuditLogTable declares created_at's default as SQL, as the install SQL does", () => {
+  const created = getTableConfig(d1AuditLogTable()).columns.find((c) => c.name === "created_at")
+  assert.ok(is(created!.default, SQL))
+})
+
+test("d1AuditLogTable indexes each context column unless told not to", () => {
+  const { indexes } = getTableConfig(
+    d1AuditLogTable({
+      contextColumns: [{ column: "workspace_id" }, { column: "actor", index: false }],
+    }),
+  )
+  const names = indexes.map((i) => i.config.name)
+  assert.ok(names.includes("audit_logs_workspace_id_idx"))
+  assert.ok(!names.includes("audit_logs_actor_idx"))
+})
+
+test("d1AuditLogTable types its context columns by name", () => {
+  const table = d1AuditLogTable({ contextColumns: [{ column: "application_id" }] })
+  assert.equal(table.application_id.name, "application_id")
+  // @ts-expect-error: only declared context columns exist
+  void table.workspace_id
 })

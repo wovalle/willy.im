@@ -367,7 +367,7 @@ export): [AUDIT.md](AUDIT.md).
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `@willyim/kit/audit/postgres`   | `pgAuditLogTable`, `createAuditInstallSql`, `createAttachAuditTriggersSql`, `withAuditedTransaction`       |
 | `@willyim/kit/audit/d1`         | `d1AuditLogTable`, `createD1AuditInstallSql`, `createAttachD1AuditTriggersSql`, `withD1AuditedTransaction` |
-| `@willyim/kit/audit/d1-runtime` | `withAudit(db, auditTable, { userId, context? })`: audited `insert` / `update` / `delete`                  |
+| `@willyim/kit/audit/d1-runtime` | `withAudit(db, auditTable, { userId, context? })`: audited `insert` / `update` / `delete`, plus `record` |
 | `@willyim/kit/audit/context`    | `runWithAuditContext` / `ensureAuditedTx`: ambient actor over `AsyncLocalStorage` (Postgres)               |
 | `@willyim/kit/audit`            | all of the above plus `computeDiff`                                                                        |
 

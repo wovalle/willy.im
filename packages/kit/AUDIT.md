@@ -73,6 +73,9 @@ await audit.insert(users, { id: "u1", name: "Ada" })
 await audit.update(users, eq(users.id, "u1"), { name: "Ada Lovelace" })
 await audit.delete(users, eq(users.id, "u1"))
 
+// A change made through another library, or an action that writes no row
+await audit.record({ table: "user", operation: "impersonate", rowId: "u1" })
+
 // Non-audited access is still available
 audit.db.select().from(users).all()
 ```
@@ -336,7 +339,10 @@ Opt-in ambient layer (AsyncLocalStorage). See [Ambient Context](#ambient-context
 - `.insert(table, data)` — Insert + audit log
 - `.update(table, where, data)` — Fetch old rows, update, audit log (per row)
 - `.delete(table, where)` — Fetch old rows, delete, audit log (per row)
+- `.record({ table, operation, rowId?, oldData?, newData? })` — Log one event the wrapper didn't make itself (a write through another library, or an action with no row change). `operation` is free-form (`"invite"`, `"revoke"`…)
 - `.db` — Raw Drizzle instance for non-audited operations
+
+`context.userId` may be `null` when no user acted (a machine caller): name it in a context column instead.
 
 ## Computing Diffs
 

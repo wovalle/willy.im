@@ -10,7 +10,8 @@ import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
 type JsonValue = Record<string, unknown>
 
 export type AuditContext = {
-  userId: string
+  /** Who acted. Null when no user did (a machine caller you name in a context column). */
+  userId: string | null
   /** Map of extra audit context column name → value (matching contextColumns). */
   context?: Record<string, string>
 }
@@ -19,7 +20,7 @@ export type AuditLogInsertShape = {
   table_name: string
   operation: string
   row_id: string | null
-  user_id: string
+  user_id: string | null
   old_data: string | null
   new_data: string | null
   [key: string]: unknown
@@ -50,7 +51,25 @@ function getRowId(row: JsonValue, pk: SQLiteColumn | null): string | null {
   return val != null ? String(val) : null
 }
 
+/** An event `record` logs: what the wrapper can't see for itself. */
+export type AuditEvent = {
+  /** What was touched: a table, or any entity type ("user", "oauth_client"). */
+  table: string
+  /** `INSERT` / `UPDATE` / `DELETE`, or a verb of your own ("invite", "revoke"). */
+  operation: string
+  rowId?: string | null
+  oldData?: JsonValue | null
+  newData?: JsonValue | null
+}
+
 export type AuditedDb<TDb extends DrizzleSQLiteDb> = {
+  /**
+   * Log one event with this wrapper's context, without writing anything else:
+   * a change made through another library (an auth framework, an external API)
+   * or an action that changes no row.
+   */
+  record: (event: AuditEvent) => Promise<void>
+
   /**
    * Insert a row and log an INSERT audit event.
    * Returns the inserted row.
@@ -167,6 +186,21 @@ export function withAudit<TDb extends DrizzleSQLiteDb>(
 
   return {
     db,
+
+    async record(event) {
+      await (db as any)
+        .insert(auditTable)
+        .values(
+          buildAuditRow(
+            event.table,
+            event.operation,
+            event.rowId ?? null,
+            event.oldData ?? null,
+            event.newData ?? null,
+          ),
+        )
+        .run()
+    },
 
     async insert(table, data) {
       const tableName = getTableName(table)
