@@ -39,3 +39,5 @@ yarn-error.log*
 .contentlayer
 *.tsbuildinfo
 .playwright-mcp/
+
+__pycache__/
