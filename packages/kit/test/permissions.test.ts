@@ -9,24 +9,16 @@ const auth = definePermissions({
 })
 
 describe("roles", () => {
-  test("a role grants exactly its permissions", () => {
-    const viewer = auth.createChecker("viewer")
+  test("a role is a named bag of permissions: `auth.roles[role]` are grants", () => {
+    const viewer = auth.checkerFor(auth.roles.viewer)
     expect(viewer.has("posts:read")).toBe(true)
     expect(viewer.has("posts:write")).toBe(false)
     expect(viewer.granted).toEqual(["posts:read"])
     expect(viewer.isSuperadmin).toBe(false)
   })
 
-  test("a superadmin role grants everything", () => {
-    const admin = auth.createChecker("viewer", { superadmin: true })
-    expect(auth.permissions.every((p) => admin.has(p))).toBe(true)
-    expect(admin.has("thread:abc")).toBe(true)
-    expect(admin.granted).toEqual([...auth.permissions])
-    expect(admin.isSuperadmin).toBe(true)
-  })
-
   test("require throws a 403 Response", () => {
-    const viewer = auth.createChecker("viewer")
+    const viewer = auth.checkerFor(auth.roles.viewer)
     expect(() => viewer.require("posts:read")).not.toThrow()
     const err = (() => {
       try {
@@ -37,6 +29,84 @@ describe("roles", () => {
     })()
     expect(err).toBeInstanceOf(Response)
     expect((err as Response).status).toBe(403)
+  })
+})
+
+describe("covers", () => {
+  const cases: [held: string, wanted: string, covered: boolean][] = [
+    ["*", "ns:read", true],
+    ["ns:*", "ns:read", true],
+    ["ns:*", "ns:*", true],
+    ["ns:*", "*", false],
+    ["ns:read", "ns:read", true],
+    ["ns:read", "ns:*", false],
+    ["thread:*", "thread:abc", true],
+    ["thread:abc", "thread:*", false],
+    ["thread:abc", "thread:abd", false],
+    ["a:*", "ab:x", false],
+    ["a:*", "a:b:*", true],
+    ["bravo:*", "bravo", false],
+  ]
+  test.each(cases)("%s covers %s: %s", (held, wanted, covered) => {
+    expect(auth.covers([held], [wanted])).toBe(covered)
+  })
+
+  test("every wanted grant must be covered, by any held grant", () => {
+    expect(auth.covers(["posts:read", "thread:*"], ["posts:read", "thread:x"])).toBe(true)
+    expect(auth.covers(["posts:read"], ["posts:read", "posts:write"])).toBe(false)
+  })
+
+  test("holding every concrete permission under a namespace doesn't cover its wildcard", () => {
+    expect(auth.covers(["posts:read", "posts:write"], ["posts:*"])).toBe(false)
+  })
+
+  test("nothing wanted is covered by anything, even nothing", () => {
+    expect(auth.covers([], [])).toBe(true)
+  })
+})
+
+describe("parseGrants", () => {
+  test("keeps `*`, catalog permissions, known wildcards and instances, deduped, in order", () => {
+    expect(
+      auth.parseGrants([
+        "posts:read",
+        "*",
+        "posts:*",
+        "thread:*",
+        "thread:abc",
+        "inbox:*",
+        "posts:read",
+      ]),
+    ).toEqual({
+      grants: ["posts:read", "*", "posts:*", "thread:*", "thread:abc", "inbox:*"],
+      rejected: [],
+    })
+  })
+
+  test("a wildcard names a namespace of the catalog, a resource or a nested resource", () => {
+    expect(auth.parseGrants(["inbox:thread:*", "inbox:thread:h1"]).rejected).toEqual([])
+  })
+
+  test("rejects unknown permissions", () => {
+    expect(auth.parseGrants(["billing:manage", "posts:delete", "posts"]).rejected).toEqual([
+      "billing:manage",
+      "posts:delete",
+      "posts",
+    ])
+  })
+
+  test("rejects instance ids with `:`, `*` or whitespace, and empty ones", () => {
+    const bad = ["thread:a:b", "thread:*x", "thread:a b", "thread: ", "thread:", "note:abc"]
+    expect(auth.parseGrants(bad)).toEqual({ grants: [], rejected: bad })
+  })
+
+  test("rejects a wildcard of an unknown namespace, and malformed wildcards", () => {
+    const bad = ["billing:*", "post:*", "postsx:read:*", ":*", "*:", "*:*", "thread:abc:*"]
+    expect(auth.parseGrants(bad)).toEqual({ grants: [], rejected: bad })
+  })
+
+  test("rejected grants are deduped too", () => {
+    expect(auth.parseGrants(["nope", "nope"]).rejected).toEqual(["nope"])
   })
 })
 
@@ -128,7 +198,7 @@ describe("resources", () => {
     expect(auth.checkerFor(["inbox:thread:h1"]).hasAny?.("thread")).toBe(false)
     expect(auth.checkerFor(["thread:a:b", "thread:"]).hasAny?.("thread")).toBe(false)
     expect(auth.checkerFor(["posts:*"]).hasAny?.("thread")).toBe(false)
-    expect(auth.createChecker("editor").hasAny?.("thread")).toBe(false)
+    expect(auth.checkerFor(auth.roles.editor).hasAny?.("thread")).toBe(false)
   })
 })
 

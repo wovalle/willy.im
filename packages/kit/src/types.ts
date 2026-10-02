@@ -1,14 +1,14 @@
 import type { z } from "zod"
-import type { PermissionChecker } from "./permissions.js"
+import type * as permissions from "./permissions.js"
 
 /**
- * The app registers its two pieces here, once:
+ * The app registers its three pieces here, once:
  *
  *   declare module "@willyim/kit" {
- *     interface Register { context: typeof context; services: typeof services }
+ *     interface Register { auth: typeof auth; context: typeof context; services: typeof services }
  *   }
  *
- * Two keys on purpose: registering `typeof app` makes a type cycle.
+ * Separate keys on purpose: registering `typeof app` makes a type cycle.
  */
 export interface Register {}
 
@@ -16,8 +16,40 @@ export interface Register {}
 // service types to `any`; this form doesn't.
 type Reg<K extends string> = K extends keyof Register ? Register[K] : never
 
-/** What the app's context builder returns, before kit adds `services`. */
-export type BaseContext = Reg<"context"> extends (...args: any[]) => infer B ? Awaited<B> : never
+// The registered catalog: permission names and resource types. Unregistered: plain strings.
+type Catalog = [Reg<"auth">] extends [never]
+  ? { p: string; res: string }
+  : Reg<"auth"> extends {
+        permissions: readonly (infer P extends string)[]
+        resources: readonly (infer Res extends string)[]
+      }
+    ? { p: P; res: Res }
+    : { p: string; res: string }
+
+/** A grant in this app: `"*"`, a permission, a `"ns:*"` wildcard or a resource instance. */
+export type Grant = permissions.Grant<Catalog["p"], Catalog["res"]>
+
+/** Who is calling, with grants typed from the app's catalog. */
+export type Principal = permissions.Principal<Grant>
+
+/** `ctx.caller`: the principal's grants in the request's tenant. */
+export type Caller = permissions.Caller<Catalog["p"], Catalog["res"]>
+
+/** What kit hands the app's `context` builder, before the app's own arguments. */
+export type ContextInput = {
+  principal: Principal | null
+  tenantId: string | null
+  caller: Caller
+  /** Who is really acting: `principal.actor.id` when impersonating, else `principal.id`. */
+  actor: string | null
+}
+
+/** What kit adds to the app's base context, besides `services`. */
+export type KitFields = Omit<ContextInput, "principal">
+
+/** The app's context builder's return, plus `caller`, `tenantId` and `actor`. */
+export type BaseContext = KitFields &
+  (Reg<"context"> extends (...args: any[]) => infer B ? Awaited<B> : never)
 
 /** The built services: each factory's return, keyed by the name the app gave it. */
 export type Services = {
@@ -27,24 +59,21 @@ export type Services = {
 /** The context every method sees: the app's base context plus `services`. */
 export type Context = BaseContext & { services: Services }
 
-/** Permission names, taken from the registered caller's checker. */
-export type Permission = BaseContext extends { caller: PermissionChecker<infer P, any> }
-  ? P
-  : string
+/** Permission names (and resource instances), from the registered catalog. */
+export type Permission = Catalog["p"] | `${Catalog["res"]}:${string}`
 
 /** Resource types whose instances can be granted (`definePermissions({ resources })`). */
-export type Resource = BaseContext extends { caller: { hasAny?: infer F } }
-  ? F extends (resource: infer R) => boolean
-    ? R
-    : never
-  : never
+export type Resource = Catalog["res"]
 
 /**
- * Who may call a method: a permission, or `{ resource }` for anyone holding at
- * least one instance of that resource (`"thread:abc"`) or a wildcard over it.
- * With `{ resource }` the body checks the specific id with `ctx.caller.has`.
+ * Who may call a method: a permission, `"*"` for superadmins only, or
+ * `{ resource }` for anyone holding at least one instance of that resource
+ * (`"thread:abc"`) or a wildcard over it. With `{ resource }` the body checks the
+ * specific id with `ctx.caller.has`.
  */
-export type Access = [Resource] extends [never] ? Permission : Permission | { resource: Resource }
+export type Access = [Resource] extends [never]
+  ? Permission | "*"
+  : Permission | "*" | { resource: Resource }
 
 /** A zod schema, or a plain shape (`{ id: z.string() }`) that kit wraps in `z.object`. */
 export type SchemaLike = z.ZodType | z.core.$ZodShape
@@ -72,7 +101,7 @@ export type Contract<
   summary: string
   /** The long text: rules, examples, edge cases. Tool descriptions use it instead of `summary`. */
   description?: string
-  /** Who may call it: a permission, or `{ resource }` (see `Access`). */
+  /** Who may call it: a permission, `"*"` or `{ resource }` (see `Access`). */
   permission: Access
   /** Omitted: the method takes no arguments. */
   input?: I

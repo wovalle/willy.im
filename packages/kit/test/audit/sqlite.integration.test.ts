@@ -1,13 +1,13 @@
 import assert from "node:assert/strict"
-import test from "node:test"
+import { test } from "vitest"
 
 import Database from "better-sqlite3"
 import { asc, eq, isNull } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/better-sqlite3"
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core"
 
-import { d1AuditLogTable } from "../src/d1/index.js"
-import { withAudit } from "../src/d1-runtime/index.js"
+import { d1AuditLogTable } from "../../src/audit/d1/index.js"
+import { withAudit } from "../../src/audit/d1-runtime/index.js"
 
 const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -25,7 +25,7 @@ const auditLogs = d1AuditLogTable()
 
 function setupDb() {
   const sqlite = new Database(":memory:")
-  const db = drizzle({ client: sqlite, schema: { auditLogs, users, invoices } })
+  const db = drizzle({ client: sqlite })
 
   sqlite.exec(`
     CREATE TABLE audit_logs (
@@ -197,7 +197,7 @@ test("withAudit with workspace_id", async () => {
   const auditLogsWithWs = d1AuditLogTable({
     contextColumns: [{ column: "workspace_id" }],
   })
-  const db = drizzle({ client: sqlite, schema: { auditLogs: auditLogsWithWs, users } })
+  const db = drizzle({ client: sqlite })
 
   try {
     sqlite.exec(`
@@ -243,7 +243,7 @@ test("withAudit with generic context columns", async () => {
       { column: "request_id" },
     ],
   })
-  const db = drizzle({ client: sqlite, schema: { auditLogs: auditLogsWithCtx, users } })
+  const db = drizzle({ client: sqlite })
 
   try {
     sqlite.exec(`

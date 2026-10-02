@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import test from "node:test"
+import { test } from "vitest"
 
 import { PGlite } from "@electric-sql/pglite"
 import { asc, eq } from "drizzle-orm"
@@ -12,7 +12,7 @@ import {
   createAuditInstallSql,
   pgAuditLogTable,
   withAuditedTransaction,
-} from "../src/postgres/index.js"
+} from "../../src/audit/postgres/index.js"
 
 const users = pgTable("users", {
   id: text("id").primaryKey(),

@@ -92,15 +92,15 @@ export type AuditedDb<TDb extends DrizzleSQLiteDb> = {
  * better-sqlite3 (sync), but writes are best-effort: a failure between the data
  * write and the audit insert can leave one without the other.
  *
- * For atomic auditing on D1, use the trigger-based approach from `@willyim/drizzle-audit/d1`.
+ * For atomic auditing on D1, use the trigger-based approach from `@willyim/kit/audit/d1`.
  *
  * @param db - A Drizzle SQLite database instance (D1, better-sqlite3, libsql)
  * @param auditTable - The Drizzle table definition for audit_logs
  * @param context - The audit context (userId, optional context columns)
  *
  * @example
- * import { withAudit } from "drizzle-audit/d1-runtime"
- * import { d1AuditLogTable } from "drizzle-audit/d1"
+ * import { withAudit } from "@willyim/kit/audit/d1-runtime"
+ * import { d1AuditLogTable } from "@willyim/kit/audit/d1"
  *
  * const auditLogs = d1AuditLogTable()
  * const audited = withAudit(db, auditLogs, { userId: session.userId })

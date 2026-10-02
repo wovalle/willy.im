@@ -1,8 +1,15 @@
 import { handle, type HandlerContext } from "./api.js"
 import type { OnCall } from "./method.js"
-import type { PermissionChecker } from "./permissions.js"
+import type { PermissionsResult } from "./permissions.js"
 import { buildService, registry, type Factory } from "./registry.js"
-import type { CallEvent, Context, ContractErrors } from "./types.js"
+import type {
+  CallEvent,
+  Context,
+  ContextInput,
+  ContractErrors,
+  KitFields,
+  Principal,
+} from "./types.js"
 
 /** A service: a factory from the context to plain methods and `method(...)`s. */
 export function declareService<S>(
@@ -17,6 +24,11 @@ export function declareService<S>(
 type ContractCheck<S> = [ContractErrors<S>] extends [never]
   ? unknown
   : { "kit: contract mismatch": ContractErrors<S> }
+
+// The same trick for a context builder that returns a field kit sets itself.
+type OwnFieldsCheck<B> = [keyof B & keyof KitFields] extends [never]
+  ? unknown
+  : { "kit: the context builder returns fields kit sets": keyof B & keyof KitFields }
 
 export type DiscoveryOptions = {
   /**
@@ -47,44 +59,44 @@ export type DiscoveryOptions = {
   }
 }
 
-type AppConfig<A extends unknown[], SA extends unknown[], B, S> = {
+type AppConfig<A extends unknown[], B, S> = {
   /** The app's name: the title of its OpenAPI document and llms.txt, and the MCP server name. */
   name?: string
   /** One paragraph for discovery: what the app is for. */
   description?: string
-  /** Builds the base context for a request: `caller`, `scope`, `db`, `logger`… */
-  context: (...args: A) => B | Promise<B>
-  /** Builds the base context for cron and queues. Its `caller` should be a superadmin. */
-  system?: (...args: SA) => B | Promise<B>
+  /** The app's `definePermissions` result: it turns a principal into `ctx.caller`. */
+  auth: PermissionsResult<any, any, any>
+  /**
+   * Builds the app's part of a request's context (`db`, `scope`, `logger`…) from
+   * what kit resolved, plus the app's own arguments. kit adds `caller`,
+   * `tenantId` and `actor`; don't return them.
+   */
+  context: (kit: ContextInput, ...args: A) => B | Promise<B>
   services: S
-  /** Called once per call from every surface, with the outcome. For audit logs and metrics. */
-  onCall?: (event: CallEvent<B & { services: any }>) => void | Promise<void>
+  /** Called once per call from every surface, with the outcome. For logs, metrics and tracing. */
+  onCall?: (event: CallEvent<KitFields & B & { services: any }>) => void | Promise<void>
   discovery?: DiscoveryOptions
 }
 
 /**
- * The app: its entry points build a context and every service on it, eagerly,
- * into a plain object. Factories only touch `ctx.services` inside method bodies,
- * so the build order doesn't matter.
+ * The app: `context` resolves the caller, builds the context and every service
+ * on it, eagerly, into a plain object. Factories only touch `ctx.services`
+ * inside method bodies, so the build order doesn't matter.
  */
-export function createApp<
-  A extends unknown[],
-  B extends { caller: PermissionChecker<any> },
-  S extends Record<string, Factory>,
-  SA extends unknown[] = never,
->(config: AppConfig<A, SA, B, S> & ContractCheck<S>) {
-  const build = async (base: B | Promise<B>): Promise<Context> => {
-    const ctx: any = { ...(await base), services: {} }
-    for (const [name, factory] of Object.entries(config.services))
-      ctx.services[name] = buildService(factory, ctx, name, config.onCall as OnCall | undefined)
-    return ctx
-  }
-  const app: App<A, SA, AppConfig<A, SA, B, S> & ContractCheck<S>> = {
+export function createApp<A extends unknown[], B, S extends Record<string, Factory>>(
+  config: AppConfig<A, B, S> & ContractCheck<S> & OwnFieldsCheck<B>,
+) {
+  const app: App<A, AppConfig<A, B, S> & ContractCheck<S> & OwnFieldsCheck<B>> = {
     config,
-    context: (...args) => build(config.context(...args)),
-    systemContext: (...args) => {
-      if (!config.system) throw new Error("kit: createApp has no `system` context builder")
-      return build(config.system(...args))
+    context: async (principal, tenantId, ...args) => {
+      // Before the app's builder runs: a tenant the principal can't see is a 404.
+      const caller = config.auth.callerFor(principal, tenantId)
+      const actor = principal?.actor?.id ?? principal?.id ?? null
+      const base = await config.context({ principal, tenantId, caller, actor }, ...args)
+      const ctx: any = { ...base, caller, tenantId, actor, services: {} }
+      for (const [name, factory] of Object.entries(config.services))
+        ctx.services[name] = buildService(factory, ctx, name, config.onCall as OnCall | undefined)
+      return ctx
     },
     handle: (request, ctx) => handle(app, request, ctx),
   }
@@ -106,12 +118,14 @@ function validateDiscovery(discovery: DiscoveryOptions | undefined) {
 
 // Spelled out so the emitted declarations keep `Context` as an alias, which the
 // app's `Register` then resolves, instead of inlining kit's unregistered one.
-export type App<A extends unknown[], SA extends unknown[], C> = {
+export type App<A extends unknown[], C> = {
   config: C
-  /** Builds the context for a request: the app's base context, plus every service bound to it. */
-  context: (...args: A) => Promise<Context>
-  /** The same, from the `system` builder, for cron and queues. */
-  systemContext: (...args: SA) => Promise<Context>
+  /**
+   * The only door: the caller of `principal` in `tenantId` (null: no tenant;
+   * a null principal is anonymous), the app's base context, and every service
+   * bound to it. Throws a 404 `Response` for a tenant the principal has nothing in.
+   */
+  context: (principal: Principal | null, tenantId: string | null, ...args: A) => Promise<Context>
   /** Serves `/api/<service>.<method>`, `/openapi.json` and `/llms.txt`; null for any other path. */
   handle: (request: Request, ctx: HandlerContext) => Promise<Response | null>
 }

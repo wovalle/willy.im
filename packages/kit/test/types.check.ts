@@ -7,9 +7,11 @@ import {
   kitImage,
   method,
   type Context,
+  type Grant,
+  type Principal,
   type PublicName,
 } from "../src/index.js"
-import { context, services, user } from "./fixture.js"
+import { app, auth, context, services } from "./fixture.js"
 
 declare const ctx: Context
 
@@ -68,6 +70,7 @@ export const contractFields = declareService(() => ({
     async () => {},
   ),
   instance: method({ summary: "y", permission: "thread:abc" }, async () => {}),
+  superadminOnly: method({ summary: "z", permission: "*" }, async () => {}),
 }))
 
 const wrongReturn = declareService(() => ({
@@ -89,16 +92,42 @@ const imageOutput = declareService(() => ({
 }))
 
 export function contractChecks() {
-  createApp({ context, services: { ...services, imageOutput } })
+  createApp({ auth, context, services: { ...services, imageOutput } })
   // @ts-expect-error "bad.get returns a value its output schema rejects"
-  createApp({ context, services: { ...services, bad: wrongReturn } })
+  createApp({ auth, context, services: { ...services, bad: wrongReturn } })
   // @ts-expect-error "bad.remove returns a value but its contract has no output schema"
-  createApp({ context, services: { ...services, bad: returnsWithoutOutput } })
+  createApp({ auth, context, services: { ...services, bad: returnsWithoutOutput } })
 }
 
-export function systemContextArgs() {
-  const app = createApp({ context, services })
-  // @ts-expect-error no `system` builder, so systemContext can't be called
-  app.systemContext({ workspaceId: "w1" })
-  return app.context({ caller: user([]) })
+export async function principals() {
+  const ok: Principal = {
+    id: "user:u1",
+    grants: ["*", "notes:*", "thread:abc", "thread:*"],
+    memberships: [{ tenantId: "w1", grants: auth.roles.owner }],
+  }
+  // @ts-expect-error a typo in a grant literal
+  const typo: Principal = { id: "user:u1", grants: ["notes:raed"], memberships: [] }
+  // @ts-expect-error a wildcard over a namespace the catalog doesn't have
+  const unknownNs: Grant = "billing:*"
+  // grants from the DB go through parseGrants, which types them
+  const parsed: Grant[] = auth.parseGrants(["notes:read"]).grants
+  // @ts-expect-error raw strings aren't grants
+  await app.context({ id: "user:u1", grants: [] as string[], memberships: [] }, null)
+  return [ok, typo, unknownNs, parsed]
+}
+
+export async function contextArgs() {
+  // the app's own arguments follow the principal and the tenant
+  const c = await app.context(null, null, { thread: "t1" })
+  c.tenantId satisfies string | null
+  c.actor satisfies string | null
+  c.caller.require("notes:*", "thread:abc")
+  // @ts-expect-error require takes grants of this app
+  c.caller.require("notes:raed")
+  // @ts-expect-error the tenant is a string id
+  await app.context(null, 1)
+  // @ts-expect-error a context builder must not return `caller`: kit builds it
+  createApp({ auth, context: () => ({ caller: 1 }), services })
+  // @ts-expect-error `auth` is required
+  createApp({ context, services })
 }

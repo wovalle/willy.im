@@ -53,36 +53,44 @@ export const notes = declareService((ctx) => ({
 
 ```ts
 // app/app.ts
-import { createApp } from "@willyim/kit"
+import { createApp, type ContextInput } from "@willyim/kit"
 
-const context = async (request: Request) => {
-  const caller = await callerFrom(request) // see "Callers"
-  return { caller, db, scope: policies(caller) }
-}
+// kit resolves the caller; you add the rest. Scope rows by the tenant.
+const context = ({ caller }: ContextInput) => ({ db, scope: policies(caller) })
 export const services = { notes }
-export const app = createApp({ name: "notes", description: "Personal notes.", context, services })
+export const app = createApp({
+  name: "notes",
+  description: "Personal notes.",
+  auth,
+  context,
+  services,
+})
 
 declare module "@willyim/kit" {
   interface Register {
+    auth: typeof auth
     context: typeof context
     services: typeof services
   }
 }
 ```
 
-Then use it from every surface:
+Then use it from every surface. Build the principal from the request (see "Principals and
+tenants") and pick the tenant there:
 
 ```ts
 // a React Router loader
 export const loader = async ({ request, params }) =>
-  (await app.context(request)).services.notes.get({ id: params.id })
+  (await app.context(await principalFrom(request), params.workspace)).services.notes.get({
+    id: params.id,
+  })
 
 // HTTP: POST /api/notes.get, GET /openapi.json, GET /llms.txt (null for any other path)
-const response = await app.handle(request, await app.context(request))
+const response = await app.handle(request, await app.context(principal, tenantId))
 
 // MCP: you bring the transport
 import { toMcpServer } from "@willyim/kit/mcp"
-const server = toMcpServer(app, await app.context(request))
+const server = toMcpServer(app, await app.context(principal, tenantId))
 
 // any agent runtime
 import { tools } from "@willyim/kit"
@@ -91,16 +99,16 @@ for (const t of tools(app, ctx)) runtime.register(t.name, t.description, t.input
 
 ## Concepts
 
-| Concept            | What it is                                                                                                                                                              |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **App**            | `createApp({ name, description, context, system?, services, onCall?, discovery?: { anonymous?, auth? } })`. Holds every service.                                        |
-| **Context**        | Built once per request, MCP session, agent turn or cron run: `caller` plus whatever you add (`db`, `scope`, `thread`, `signal`, …). Every service is bound to it.       |
-| **Register**       | The `declare module "@willyim/kit"` block. It gives `ctx`, permissions and `ctx.services` their types everywhere.                                                       |
-| **Service**        | `declareService((ctx) => ({ ... }))`. Plain functions inside stay private; only `method(...)` entries are public.                                                       |
-| **Method**         | `method(contract, fn)`. Each call runs, in order: `when`, the permission, input validation, your function, the output check, then `onCall`.                             |
-| **Caller**         | `{ has, require, granted, isSuperadmin, kind? }`, from `auth.createChecker(role)` or `auth.checkerFor(grants)`. `kind: "anonymous"` marks a caller with no credentials. |
-| **Policies**       | `definePolicies({ note: (caller) => ({ workspaceId: caller.workspaceId }) })`. Row scoping as plain data: `ctx.scope.note({ id })`.                                     |
-| **System context** | `app.systemContext(...)`, from the `system` builder, for cron and queues. Give it a superadmin caller.                                                                  |
+| Concept       | What it is                                                                                                                                                                                    |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **App**       | `createApp({ name, description, auth, context, services, onCall?, discovery?: { anonymous?, auth? } })`. Holds every service.                                                                 |
+| **Principal** | `{ id, grants, memberships: [{ tenantId, grants }], actor? }`: who is calling, as plain data you build per request. Cron and queues are a principal too.                                      |
+| **Context**   | `app.context(principal, tenantId, ...args)`, once per request, MCP session, agent turn or cron run: `caller`, `tenantId`, `actor`, whatever your builder adds, and every service bound to it. |
+| **Register**  | The `declare module "@willyim/kit"` block. It gives `ctx`, grants and `ctx.services` their types everywhere.                                                                                  |
+| **Service**   | `declareService((ctx) => ({ ... }))`. Plain functions inside stay private; only `method(...)` entries are public.                                                                             |
+| **Method**    | `method(contract, fn)`. Each call runs, in order: `when`, the permission, input validation, your function, the output check, then `onCall`.                                                   |
+| **Caller**    | `ctx.caller`: `{ has, require, granted, grants, isSuperadmin, principal, tenantId, kind? }`. `kind: "anonymous"` marks a caller with no credentials.                                          |
+| **Policies**  | `definePolicies({ note: (caller) => ({ workspaceId: caller.tenantId }) })`. Row scoping as plain data: `ctx.scope.note({ id })`.                                                              |
 
 ### The contract
 
@@ -108,7 +116,7 @@ for (const t of tools(app, ctx)) runtime.register(t.name, t.description, t.input
 method({
   summary: "One line. An agent reads it to choose the method.",
   description: "Optional. Paragraphs: rules, examples, edge cases.",
-  permission: "notes:write",           // who may call it, or { resource: "thread" }
+  permission: "notes:write",           // who may call it; "*" or { resource: "thread" }
   input: { title: z.string() },        // a zod schema or a plain shape; omit for no input
   output: { id: z.string() },          // required if it returns a value; omit for none
   when: (ctx) => ctx.thread !== null,  // optional: where it exists; omit for everywhere
@@ -124,6 +132,9 @@ method({
 - **`permission: { resource: "thread" }`** lets in anyone holding at least one `thread:<id>`
   grant (or `thread:*`, or `*`), so such callers see the method. The body then checks the id:
   ``ctx.caller.require(`thread:${id}`)``.
+- **`permission: "*"`** is for superadmins only: holding every permission isn't enough.
+  Discovery shows it as `superadmin`, and only to superadmins. Use it instead of checking
+  `isSuperadmin` by hand.
 - **The output is checked twice.** At compile time, `createApp` fails to type-check if a method
   returns something its `output` rejects. At run time, every call validates the return. In
   process you get the full value; `/api`, `tools()` and MCP strip it to the contract, so an
@@ -201,35 +212,86 @@ the message and any invalid fields. A tool outside the caller's list, forbidden 
 nonexistent, is the same `Unknown tool` error. Build one server per request or session.
 Unauthenticated MCP never reaches kit: your transport answers 401 + `WWW-Authenticate` first.
 
-## Callers and grants
+## Principals and tenants
 
 ```ts
 const auth = definePermissions({
   permissions: ["notes:read", "notes:write"],
   resources: ["thread"], // instance grants: "thread:abc"
-  roles: { owner: ["notes:read", "notes:write"] },
+  roles: { owner: ["notes:read", "notes:write"], viewer: ["notes:read"] },
 })
 
-auth.createChecker("owner") // a member, by role
-auth.createChecker("owner", { superadmin: true })
-auth.checkerFor(key.scopes) // an API key or a token, by grants
+// Built per request from live data: a session, a key row, the IdP.
+const principal: Principal = {
+  id: `user:${user.id}`, // the app's choice; also the audit identity
+  grants: user.staff ? ["notes:read"] : [], // global: every tenant, and the null tenant
+  memberships: rows.map((m) => ({ tenantId: m.workspaceId, grants: auth.roles[m.role] })),
+}
+const ctx = await app.context(principal, workspaceId)
 ```
 
-What `checkerFor` understands:
+`app.context(principal | null, tenantId | null, ...args)` is the only door:
+
+- **In a tenant**, the caller holds `membership.grants ∪ principal.grants`.
+- **No tenant** (`null`: person-level or install-wide methods): `principal.grants` only.
+- **A tenant the principal has nothing in** (no membership, no global grants) throws a 404
+  `Response` before your builder runs, so tenants don't leak.
+- **`null` principal**: an anonymous caller (`kind: "anonymous"`, no grants). Never a 404.
+- Your `context` builder receives `{ principal, tenantId, caller, actor }` plus your own
+  arguments, and returns the rest (`db`, `scope`, `logger`…). kit sets `ctx.caller`,
+  `ctx.tenantId` and `ctx.actor` (`principal.actor?.id ?? principal.id`: the impersonator when
+  impersonating). Returning one of them doesn't compile.
+- Tenant ids are strings: convert numeric ids with `String()` at the edge.
+- **Cron and queues** are a principal: `app.context({ id: "system:cron", grants: ["*"], memberships: [] }, ws)`.
+- **API keys**: one membership with the key's scopes. Refuse the key unless its owner is still
+  a member and `auth.covers(ownerGrants, scopes)`: never silently shrink it.
+- **Single-tenant apps**: `memberships: []`, global grants, a `null` tenant.
+
+### Grants
+
+`Grant` is typed from your catalog (`Register.auth`), so a typo in a literal doesn't compile:
 
 - `"notes:read"`: that permission.
 - `"notes:*"`: every permission and instance under `notes:`. Not `notesx:`.
-- `"*"`: a superadmin. `has` is always true. Grants must come from a trusted source (the IdP,
-  your own key table): never let a user pick their own scopes without rejecting `"*"`.
+- `"*"`: a superadmin. `has` is always true.
 - `"thread:abc"`: one instance of a declared resource; `"thread:*"` for all of them. Check it in
   the method body: ``ctx.caller.has(`thread:${id}`)``. The id is one segment (no `:`, `*` or
   whitespace).
 
-Anything else is dropped. `require` throws a 403 `Response`. A resource may not prefix a
-catalog permission (`thread` and `thread:read` together throw), so a grant always means one
-thing.
+A resource may not prefix a catalog permission (`thread` and `thread:read` together throw), so
+a grant always means one thing.
+
+- **`auth.parseGrants(strings)`** → `{ grants, rejected }`: the runtime boundary for grants
+  from the DB, a request or the IdP. It rejects unknown permissions, wildcards over namespaces
+  the catalog doesn't have, and bad instance ids. Run it on write (membership grants, key
+  scopes) and on load. `app.context` drops anything it rejects.
+- **`auth.covers(held, wanted)`**: is every grant in `wanted` covered by `held`? `"*"` covers
+  all; `"ns:*"` covers `"ns:x"` and `"ns:*"`; `"thread:*"` covers `"thread:abc"`. Holding every
+  concrete `ns:` permission does not cover `"ns:*"`. Check it when minting a key, inviting or
+  changing a role (the minter must cover what they hand out), and when using a key or a stored
+  delegation (the owner must still cover it).
+- **`ctx.caller.require(...grants)`** throws a 403 `Response` unless the caller covers every
+  argument (AND; no arguments passes). Always run it in the **target** tenant's context:
+  minting a key for `w2` checks `w2`'s grants, not the current tenant's.
+- `ctx.caller.grants` are the grants as held in this tenant; `granted` expands them to the
+  catalog permissions and instances, for `@willyim/kit/react`.
+
+`auth.callerFor` and `auth.checkerFor` are the low-level pieces `app.context` uses. Grants must
+come from a trusted source: never let a user hand out grants they don't cover.
 
 `Register` is global: one kit app per TypeScript program.
+
+### From 0.1
+
+- `createApp` takes `auth` (your `definePermissions` result); `context` receives
+  `{ principal, tenantId, caller, actor }` first and no longer returns `caller`.
+- `app.context(request)` → `app.context(principal, tenantId, request)`. Delete custom `Caller`
+  types and hand-built checkers; policies scope by `caller.tenantId`.
+- `system` / `app.systemContext` are gone: pass a system principal holding `["*"]`.
+- `auth.createChecker(role)` is gone: expand roles with `auth.roles[role]` into membership
+  grants. `{ superadmin: true }` is the grant `"*"`.
+- `Register` gains `auth: typeof auth`.
+- Raw `isSuperadmin` checks become `permission: "*"`.
 
 ## Identity: `@willyim/kit/idp`
 
@@ -247,7 +309,20 @@ const keys = createUserKeys({
   app: "notes",
 })
 const result = await keys.authenticate(request)
-const caller = result.ok ? { kind: "key", ...auth.checkerFor(result.key.scopes) } : anonymousCaller
+// A key is one membership with its scopes, in the key's workspace.
+const principal: Principal | null = result.ok
+  ? {
+      id: `apikey:${result.key.keyId}`,
+      grants: [],
+      memberships: [
+        {
+          tenantId: result.key.workspaceId ?? "",
+          grants: auth.parseGrants(result.key.scopes).grants,
+        },
+      ],
+    }
+  : null
+const ctx = await app.context(principal, result.ok ? result.key.workspaceId : null)
 ```
 
 ## For agents
@@ -256,8 +331,11 @@ Rules for working in a kit app:
 
 - **Anything a route, an API client or an agent calls with input is a `method()`.** Internals
   stay plain functions in the service.
-- **Never take tenant ids as input** (`workspaceId`, `userId`). Read them from `ctx.caller` and
-  `ctx.scope`.
+- **Never take tenant ids as input** (`workspaceId`, `userId`). The surface picks the tenant
+  (hostname, path, cookie, key) and passes it to `app.context`; methods read `ctx.tenantId` and
+  scope rows through `ctx.scope`.
+- **Never build callers by hand.** Build a `Principal` and go through `app.context`; check
+  extra grants with `ctx.caller.require(...)` in the target tenant's context.
 - **Write `summary` for a model choosing between methods.** Put rules and examples in
   `description`, and describe fields with zod `.describe()`.
 - **Declare in `output` only what outside callers need.** Undeclared keys are stripped at the
@@ -268,22 +346,100 @@ Rules for working in a kit app:
 - **A new permission goes in `definePermissions` first**, then sync the catalog to the IdP.
 - **Services call each other through `ctx.services` inside method bodies**, never while the
   factory runs: the registry builds factories against an empty context.
-- **Tests:** build a context with a fake caller (`auth.checkerFor([...])`) and call
-  `ctx.services` directly. Snapshot `/openapi.json` per caller to catch accidental exposure.
+- **Superadmin-only methods** use `permission: "*"`, not an `isSuperadmin` check.
+- **Grants from outside** (DB, request, IdP) go through `auth.parseGrants`; anything handed
+  out (keys, invites, roles) must be `auth.covers`ed by the one handing it out.
+- **Tests:** build a context from a fake principal
+  (`app.context({ id: "user:t", grants: [], memberships: [{ tenantId: "w1", grants: [...] }] }, "w1")`)
+  and call `ctx.services` directly. Snapshot `/openapi.json` per caller to catch accidental exposure.
+
+## Audit: `@willyim/kit/audit`
+
+Audit logging for Drizzle (formerly `@willyim/drizzle-audit`, same API). Needs `drizzle-orm >= 1`
+(optional peer; kit's root entry never imports it). Postgres records changes with triggers; D1 and
+SQLite use triggers or the `withAudit` wrapper. Full reference (schemas, diffs, CLI, every
+export): [AUDIT.md](AUDIT.md).
+
+| Entry                           | What                                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `@willyim/kit/audit/postgres`   | `pgAuditLogTable`, `createAuditInstallSql`, `createAttachAuditTriggersSql`, `withAuditedTransaction`       |
+| `@willyim/kit/audit/d1`         | `d1AuditLogTable`, `createD1AuditInstallSql`, `createAttachD1AuditTriggersSql`, `withD1AuditedTransaction` |
+| `@willyim/kit/audit/d1-runtime` | `withAudit(db, auditTable, { userId, context? })`: audited `insert` / `update` / `delete`                  |
+| `@willyim/kit/audit/context`    | `runWithAuditContext` / `ensureAuditedTx`: ambient actor over `AsyncLocalStorage` (Postgres)               |
+| `@willyim/kit/audit`            | all of the above plus `computeDiff`                                                                        |
+
+Kit hands your `context` builder `actor` (the impersonator when impersonating, else the
+principal) and `tenantId`. Kit itself does no auditing; you attach it with one of two patterns.
+
+D1 / SQLite: bind `withAudit` once in `context`. Every service and nested `ctx.services` call
+shares that `ctx.db`, so every write carries the right actor. Writes through a db handle outside
+`ctx.db` are not audited.
+
+```ts
+import { d1AuditLogTable } from "@willyim/kit/audit/d1"
+import { withAudit } from "@willyim/kit/audit/d1-runtime"
+
+const auditLogs = d1AuditLogTable({ contextColumns: [{ column: "workspace_id" }] })
+
+const app = createApp({
+  // ...
+  context: ({ actor, tenantId }) => ({
+    db: withAudit(drizzle(env.DB), auditLogs, {
+      userId: actor,
+      context: { workspace_id: tenantId ?? "" }, // empty values leave the column NULL
+    }),
+  }),
+})
+
+// in a method: await ctx.db.insert(notes, { id, body }); ctx.db.db is the raw, unaudited handle
+```
+
+Postgres (triggers read the actor from transaction settings, so there is no wrapper). Set the
+ambient actor once at the surface (request, agent turn, cron run) with `runWithAuditContext`;
+services write through `ensureAuditedTx`, which opens one audited transaction lazily on the first
+write and reuses it for nested writes. Reads never open one. A write outside a context throws.
+
+```ts
+import { ensureAuditedTx, runWithAuditContext } from "@willyim/kit/audit/context"
+
+// at the surface, once ctx is built
+return runWithAuditContext(
+  { actorId: ctx.actor, context: { workspace_id: ctx.tenantId ?? "" } },
+  () => app.handle(request, ctx),
+)
+
+// in a method
+await ensureAuditedTx(ctx.db, (tx) => tx.insert(notes).values({ id, body }))
+```
+
+`runWithAuditContext` also takes a thunk, resolved only on the first write. The explicit
+`withAuditedTransaction(db, actorId, fn, { context })` and `setAuditContext` from
+`@willyim/kit/audit/postgres` still work without `AsyncLocalStorage` (Workers need
+`nodejs_compat` for `/audit/context`).
+
+Kit never records method input (it can hold secrets, e.g. a key being validated); the audit log
+holds row changes only. Use `onCall` for logs, metrics and tracing.
+
+Migrations: `kit-audit generate --config audit.config.ts` runs `drizzle-kit generate` (optional
+peer) and appends the audit SQL from your config (`createAuditSql()` or `createWebAuditSql()`) to
+the new migration only when it changed. Flags: `--drizzle-config`, `--migrations-dir`, `--cwd`;
+anything else (or after `--`) goes to drizzle-kit.
 
 ## Packages and versions
 
 Install only `@willyim/kit`:
 
-| Entry                                                        | What                                                                               |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `@willyim/kit`                                               | methods, services, the registry, discovery, HTTP, `tools()`, permissions, policies |
-| `@willyim/kit/mcp`                                           | `toMcpServer` (peer: `@modelcontextprotocol/sdk`)                                  |
-| `@willyim/kit/react`                                         | `createPermissionsHook`                                                            |
-| `@willyim/kit/idp` (`/drizzle`, `/react-router`, `/schemas`) | `@willyim/idp`                                                                     |
+| Entry                                                                                 | What                                                                               |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `@willyim/kit`                                                                        | methods, services, the registry, discovery, HTTP, `tools()`, permissions, policies |
+| `@willyim/kit/mcp`                                                                    | `toMcpServer` (peer: `@modelcontextprotocol/sdk`)                                  |
+| `@willyim/kit/react`                                                                  | `createPermissionsHook`                                                            |
+| `@willyim/kit/idp` (`/drizzle`, `/react-router`, `/schemas`)                          | `@willyim/idp`                                                                     |
+| `@willyim/kit/audit` (`/context`, `/d1`, `/d1-runtime`, `/postgres`), bin `kit-audit` | Drizzle audit logging (peers: `drizzle-orm`, `drizzle-kit` for the CLI)            |
 
 kit pins `@willyim/idp` to an exact version, and changesets releases kit whenever idp
-releases. `@willyim/rbac` is deprecated; its last release re-exports kit.
+releases. `@willyim/rbac` and `@willyim/drizzle-audit` are deprecated; their last releases
+re-export kit.
 
 ## License
 

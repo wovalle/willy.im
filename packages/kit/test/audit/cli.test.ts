@@ -11,12 +11,40 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
-import test from "node:test"
 import { fileURLToPath } from "node:url"
 
+import ts from "typescript"
+import { afterAll, beforeAll, test } from "vitest"
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
-// Tests run from dist/test, the built CLI sits in dist/src/cli.
-const CLI = resolve(__dirname, "../src/cli/generate-migration.js")
+const CLI_SRC = resolve(__dirname, "../../src/audit/cli")
+
+// The CLI runs as a child process, so it needs real JS. Transpile the two CLI
+// sources (generate-migration + the runner it spawns) into a temp ESM dir.
+let cliDir = ""
+let CLI = ""
+
+beforeAll(() => {
+  cliDir = mkdtempSync(join(tmpdir(), "kit-audit-cli-bin-"))
+  writeFileSync(join(cliDir, "package.json"), '{ "type": "module" }\n', "utf-8")
+  for (const name of ["generate-migration", "runner"]) {
+    const { outputText } = ts.transpileModule(
+      readFileSync(join(CLI_SRC, `${name}.ts`), "utf-8"),
+      {
+        compilerOptions: {
+          module: ts.ModuleKind.ESNext,
+          target: ts.ScriptTarget.ES2022,
+        },
+      },
+    )
+    writeFileSync(join(cliDir, `${name}.js`), outputText, "utf-8")
+  }
+  CLI = join(cliDir, "generate-migration.js")
+})
+
+afterAll(() => {
+  if (cliDir) rmSync(cliDir, { recursive: true, force: true })
+})
 
 const AUDIT_SQL_V1 = "-- audit v1\nCREATE TABLE IF NOT EXISTS audit_logs (id BIGSERIAL);"
 const AUDIT_SQL_V2 = "-- audit v2\nCREATE TABLE IF NOT EXISTS audit_logs (id BIGSERIAL);"

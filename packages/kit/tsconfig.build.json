@@ -4,6 +4,11 @@
     "rootDir": "src",
     "types": []
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["src/idp"]
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/idp",
+    "src/audit"
+  ]
 }

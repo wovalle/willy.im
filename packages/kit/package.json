@@ -33,12 +33,40 @@
     "./idp/schemas": {
       "types": "./dist/idp/schemas.d.ts",
       "default": "./dist/idp/schemas.js"
+    },
+    "./audit": {
+      "types": "./dist/audit/index.d.ts",
+      "default": "./dist/audit/index.js"
+    },
+    "./audit/context": {
+      "types": "./dist/audit/context/index.d.ts",
+      "default": "./dist/audit/context/index.js"
+    },
+    "./audit/d1": {
+      "types": "./dist/audit/d1/index.d.ts",
+      "default": "./dist/audit/d1/index.js"
+    },
+    "./audit/d1-runtime": {
+      "types": "./dist/audit/d1-runtime/index.d.ts",
+      "default": "./dist/audit/d1-runtime/index.js"
+    },
+    "./audit/postgres": {
+      "types": "./dist/audit/postgres/index.d.ts",
+      "default": "./dist/audit/postgres/index.js"
+    },
+    "./audit/cli": {
+      "types": "./dist/audit/cli/generate-migration.d.ts",
+      "default": "./dist/audit/cli/generate-migration.js"
     }
+  },
+  "bin": {
+    "kit-audit": "./dist/audit/cli/generate-migration.js"
   },
   "files": [
     "dist",
     "README.md",
     "AGENTS.md",
+    "AUDIT.md",
     "LICENSE"
   ],
   "sideEffects": false,
@@ -46,7 +74,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -R src/idp dist/idp",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && tsc -p tsconfig.audit.json && cp -R src/idp dist/idp",
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/consumer",
     "test": "vitest run"
@@ -60,7 +88,9 @@
     "permissions",
     "zod",
     "react-router",
-    "cloudflare-workers"
+    "cloudflare-workers",
+    "drizzle",
+    "audit-log"
   ],
   "license": "MIT",
   "repository": {
@@ -73,6 +103,8 @@
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
+    "drizzle-kit": ">=1.0.0-0",
+    "drizzle-orm": ">=1.0.0-0",
     "react": ">=18",
     "zod": "^4.1.0"
   },
@@ -80,13 +112,24 @@
     "@modelcontextprotocol/sdk": {
       "optional": true
     },
+    "drizzle-kit": {
+      "optional": true
+    },
+    "drizzle-orm": {
+      "optional": true
+    },
     "react": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.16",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.7",
+    "better-sqlite3": "^12.11.1",
+    "drizzle-orm": "^1.0.0-beta.15-859cf75",
+    "miniflare": "^4.20260410.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4",
     "zod": "^4.1.11"

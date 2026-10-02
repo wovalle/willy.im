@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
-import test from "node:test"
+import { test } from "vitest"
 
-import { computeDiff } from "../src/compute-diff.js"
+import { computeDiff } from "../../src/audit/compute-diff.js"
 
 test("UPDATE — only changed fields are emitted", () => {
   const result = computeDiff(
