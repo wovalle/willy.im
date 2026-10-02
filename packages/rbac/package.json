@@ -1,6 +1,6 @@
 {
   "name": "@willyim/rbac",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Deprecated: use @willyim/kit, which includes these permissions",
   "deprecated": "@willyim/rbac is part of @willyim/kit now. Install @willyim/kit and import definePermissions from \"@willyim/kit\" (the hook from \"@willyim/kit/react\").",
   "type": "module",
@@ -44,7 +44,7 @@
     "directory": "packages/rbac"
   },
   "dependencies": {
-    "@willyim/kit": "^0.2.0",
+    "@willyim/kit": "^0.3.0",
     "zod": "^4.1.11"
   },
   "peerDependencies": {
