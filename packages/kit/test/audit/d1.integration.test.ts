@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import test from "node:test"
+import { test } from "vitest"
 
 import Database from "better-sqlite3"
 import { asc, eq, sql } from "drizzle-orm"
@@ -13,7 +13,7 @@ import {
   d1AuditLogTable,
   d1AuditContextTable,
   withD1AuditedTransaction,
-} from "../src/d1/index.js"
+} from "../../src/audit/d1/index.js"
 
 const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -30,7 +30,7 @@ const auditContext = d1AuditContextTable()
 
 function setupDb() {
   const sqlite = new Database(":memory:")
-  const db = drizzle({ client: sqlite, schema: { auditLogs, auditContext, users, invoices } })
+  const db = drizzle({ client: sqlite })
 
   sqlite.exec(createD1AuditInstallSql())
   sqlite.exec(`
@@ -111,7 +111,7 @@ test("d1 auditing works end to end (without row data)", () => {
 
 test("d1 column-aware triggers capture full row data", () => {
   const sqlite = new Database(":memory:")
-  const db = drizzle({ client: sqlite, schema: { auditLogs, auditContext, users } })
+  const db = drizzle({ client: sqlite })
 
   try {
     sqlite.exec(createD1AuditInstallSql())
@@ -160,7 +160,7 @@ test("d1 workspace_id column and context are stored when enabled", () => {
   const auditLogsWithWorkspace = d1AuditLogTable({
     contextColumns: [{ column: "workspace_id" }],
   })
-  const db = drizzle({ client: sqlite, schema: { auditLogs: auditLogsWithWorkspace, auditContext, users } })
+  const db = drizzle({ client: sqlite })
 
   try {
     sqlite.exec(createD1AuditInstallSql({ contextColumns: [{ column: "workspace_id" }] }))
@@ -217,10 +217,7 @@ test("d1 generic contextColumns populate and stay NULL without context", () => {
     { column: "request_id" },
   ]
   const auditLogsWithCtx = d1AuditLogTable({ contextColumns })
-  const db = drizzle({
-    client: sqlite,
-    schema: { auditLogs: auditLogsWithCtx, auditContext, users },
-  })
+  const db = drizzle({ client: sqlite })
 
   try {
     sqlite.exec(createD1AuditInstallSql({ contextColumns }))
@@ -312,7 +309,7 @@ test("d1 writes without audit context produce rows with user_id = NULL", () => {
 
 test("d1 trigger SQL handles table names with special characters", () => {
   const sqlite = new Database(":memory:")
-  const db = drizzle({ client: sqlite, schema: { auditLogs, auditContext } })
+  const db = drizzle({ client: sqlite })
 
   try {
     sqlite.exec(createD1AuditInstallSql())
@@ -340,7 +337,7 @@ test("d1 trigger SQL handles table names with special characters", () => {
 
 test("d1 column-aware triggers handle column names with special characters", () => {
   const sqlite = new Database(":memory:")
-  const db = drizzle({ client: sqlite, schema: { auditLogs, auditContext } })
+  const db = drizzle({ client: sqlite })
 
   try {
     sqlite.exec(createD1AuditInstallSql())

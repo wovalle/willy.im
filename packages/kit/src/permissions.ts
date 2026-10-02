@@ -1,23 +1,55 @@
 /**
- * Permissions are the primitive; roles are named bags of them. A caller is a
- * `PermissionChecker`, built from a role (`createChecker`) or from raw grants
- * such as an API key's scopes (`checkerFor`).
+ * Permissions are the primitive; roles are named bags of them. A `Principal`
+ * holds grants, globally and per tenant; `callerFor` turns one into the caller
+ * of a request in one tenant (apps go through `app.context`, which calls it).
  *
- * Grants `checkerFor` understands:
+ * Grants kit understands:
  *
  *   "clients:read"   that catalog permission
  *   "clients:*"      every catalog permission, and every instance, under `clients:`
  *   "*"              everything: a superadmin
  *   "thread:abc"     one instance of a declared resource (`resources: ["thread"]`)
  *
- * Anything else is dropped. Grants must come from a trusted source (the IdP,
- * your own key table): `"*"` makes a superadmin, so never let a user choose
- * their own scopes without rejecting it.
+ * `parseGrants` rejects anything else. Grants must come from a trusted source
+ * (the IdP, your own key table): `"*"` makes a superadmin, so a user handing out
+ * grants must `covers` them first.
  */
 
-export type PermissionChecker<P extends string, R extends string = never> = {
+/** Every `"a"`, `"a:b"`… that prefixes a permission: what `"a:*"` may name. */
+export type Namespace<P extends string> = P extends `${infer N}:${infer Rest}`
+  ? N | `${N}:${Namespace<Rest>}`
+  : never
+
+/** `"<resource>:<id>"` for each declared resource. */
+export type Instance<Res extends readonly string[]> = `${Res[number]}:${string}`
+
+/** A grant a principal may hold: `"*"`, a permission, a `"ns:*"` wildcard or an instance. */
+export type Grant<P extends string = string, Res extends string = never> =
+  | "*"
+  | P
+  | `${Namespace<P | Res>}:*`
+  | `${Res}:*`
+  | `${Res}:${string}`
+
+/**
+ * Who is calling, as plain data the app builds per request from live data (a
+ * session, a key, the IdP). Tenant ids are strings.
+ */
+export type Principal<G extends string = string> = {
+  /** `"user:<id>"`, `"apikey:<id>"`, `"system:cron"`…: the app's choice, and the audit identity. */
+  id: string
+  /** Global: every tenant, and the null tenant. `["*"]` is a superadmin. */
+  grants: readonly G[]
+  /** Per tenant. The app expands roles (`auth.roles[role]`) when building them. */
+  memberships: readonly { tenantId: string; grants: readonly G[] }[]
+  /** Impersonation only: who is really acting. */
+  actor?: { id: string }
+}
+
+export type PermissionChecker<P extends string, R extends string = never, G extends string = P> = {
   has(permission: P): boolean
-  require(permission: P): void
+  /** Throws a 403 unless the caller covers every grant (see `covers`). No grants: passes. */
+  require(...grants: G[]): void
   /**
    * Does the caller hold any instance of `resource` (`"thread:abc"`), or a
    * wildcard covering them? What `permission: { resource }` checks; the method
@@ -28,13 +60,19 @@ export type PermissionChecker<P extends string, R extends string = never> = {
   isSuperadmin: boolean
 }
 
-export type CheckerOptions = {
-  /** Grants every permission, whatever the role. Your app decides who is one. */
-  superadmin?: boolean
+/** The caller of a request: a checker over the principal's grants in one tenant. */
+export type Caller<P extends string = string, Res extends string = never> = PermissionChecker<
+  P | `${Res}:${string}`,
+  Res,
+  Grant<P, Res>
+> & {
+  principal: Principal<Grant<P, Res>> | null
+  tenantId: string | null
+  /** The grants in this tenant, as held: membership ∪ global, parsed. */
+  grants: Grant<P, Res>[]
+  /** No credentials at all. */
+  kind?: "anonymous"
 }
-
-/** `"<resource>:<id>"` for each declared resource. */
-export type Instance<Res extends readonly string[]> = `${Res[number]}:${string}`
 
 export type DefinePermissionsConfig<
   P extends readonly string[],
@@ -52,11 +90,25 @@ export type PermissionsResult<
   R extends Record<string, readonly P[number][]>,
   Res extends readonly string[],
 > = {
-  createChecker(
-    role: keyof R & string,
-    opts?: CheckerOptions,
-  ): PermissionChecker<P[number] | Instance<Res>, Res[number]>
-  checkerFor(grants: readonly string[]): PermissionChecker<P[number] | Instance<Res>, Res[number]>
+  /** Low level: a checker over raw grants. Unknown grants are dropped. */
+  checkerFor(
+    grants: readonly string[],
+  ): PermissionChecker<P[number] | Instance<Res>, Res[number], Grant<P[number], Res[number]>>
+  /**
+   * Low level: the caller of `principal` in `tenantId`; apps use `app.context`.
+   * Throws a 404 for a tenant the principal has neither a membership in nor global grants.
+   */
+  callerFor(
+    principal: Principal<Grant<P[number], Res[number]>> | null,
+    tenantId: string | null,
+  ): Caller<P[number], Res[number]>
+  /** The runtime boundary for grants from the DB, a request or the IdP. */
+  parseGrants(strings: readonly string[]): {
+    grants: Grant<P[number], Res[number]>[]
+    rejected: string[]
+  }
+  /** Does `held` cover every grant in `wanted`? Wildcard-aware; nothing wanted is covered. */
+  covers(held: readonly string[], wanted: readonly string[]): boolean
   permissions: P
   roles: R
   resources: Res
@@ -68,16 +120,22 @@ const forbidden = () =>
     [Symbol.for("kit.public-error")]: true,
   })
 
-function checker<P extends string, R extends string>(
+const notFound = () =>
+  Object.assign(Response.json({ error: "not found" }, { status: 404 }), {
+    [Symbol.for("kit.public-error")]: true,
+  })
+
+function checker<P extends string, R extends string, G extends string>(
   has: (p: string) => boolean,
   hasAny: (resource: string) => boolean,
+  held: readonly string[],
   granted: string[],
   isSuperadmin: boolean,
-): PermissionChecker<P, R> {
+): PermissionChecker<P, R, G> {
   return {
     has,
-    require: (p) => {
-      if (!has(p)) throw forbidden()
+    require: (...grants) => {
+      if (!covers(held, grants)) throw forbidden()
     },
     hasAny,
     granted: granted as P[],
@@ -101,6 +159,14 @@ export function matches(granted: readonly string[], permission: string): boolean
   }
   return false
 }
+
+/**
+ * Does `held` cover every grant in `wanted`? `"*"` covers all, `"x:*"` covers
+ * `"x:<anything>"` (`"x:*"` included), anything else only itself. Holding every
+ * permission under `x:` doesn't cover `"x:*"`.
+ */
+export const covers = (held: readonly string[], wanted: readonly string[]) =>
+  wanted.every((w) => matches(held, w))
 
 export function definePermissions<
   const P extends readonly string[],
@@ -129,23 +195,33 @@ export function definePermissions<
     p.startsWith(`${r}:`) && /^[^:*\s]+$/.test(p.slice(r.length + 1))
   const isInstance = (p: string) => resources.some((r) => isInstanceOf(r, p))
 
-  function createChecker(role: keyof R & string, opts?: CheckerOptions) {
-    const superadmin = opts?.superadmin ?? false
-    const rolePerms = config.roles[role] as readonly string[]
-    const set = new Set(rolePerms)
-    return checker<Permission, Resource>(
-      (p) => superadmin || set.has(p),
-      () => superadmin,
-      superadmin ? [...config.permissions] : [...rolePerms],
-      superadmin,
+  type G = Grant<P[number], Resource>
+
+  /** `"x:*"` names something: a catalog permission or a resource under `x:`, or the resource `x`. */
+  const isWildcard = (g: string) => {
+    const prefix = wildcardPrefix(g)
+    return (
+      prefix !== null &&
+      (resources.includes(prefix.slice(0, -1)) ||
+        [...config.permissions, ...resources].some((p) => p.startsWith(prefix)))
     )
   }
 
+  function parseGrants(strings: readonly string[]) {
+    const grants = new Set<string>()
+    const rejected = new Set<string>()
+    for (const g of strings)
+      (g === "*" || catalog.has(g) || isWildcard(g) || isInstance(g) ? grants : rejected).add(g)
+    return { grants: [...grants] as G[], rejected: [...rejected] }
+  }
+
   function checkerFor(grants: readonly string[]) {
+    const held = parseGrants(grants).grants
     if (grants.includes("*"))
-      return checker<Permission, Resource>(
+      return checker<Permission, Resource, G>(
         () => true,
         () => true,
+        held,
         [...config.permissions],
         true,
       )
@@ -165,18 +241,33 @@ export function definePermissions<
     ]
     const exact = new Set<string>([...permissions, ...instances])
 
-    return checker<Permission, Resource>(
+    return checker<Permission, Resource, G>(
       (p) => exact.has(p) || (isInstance(p) && covered(p)),
       (r) =>
         resources.includes(r) && (instances.some((i) => isInstanceOf(r, i)) || covered(`${r}:`)),
+      held,
       [...permissions, ...instances, ...instanceWildcards],
       false,
     )
   }
 
+  // In a tenant: membership ∪ global grants; with no tenant: global only. A tenant
+  // the principal has nothing in is a 404, so tenants don't leak.
+  function callerFor(principal: Principal<G> | null, tenantId: string | null) {
+    if (principal === null)
+      return { ...checkerFor([]), principal, tenantId, grants: [], kind: "anonymous" as const }
+    const global = parseGrants(principal.grants).grants
+    const memberships = principal.memberships.filter((m) => m.tenantId === tenantId)
+    if (tenantId !== null && memberships.length === 0 && global.length === 0) throw notFound()
+    const grants = parseGrants([...memberships.flatMap((m) => m.grants), ...global]).grants
+    return { ...checkerFor(grants), principal, tenantId, grants }
+  }
+
   return {
-    createChecker,
     checkerFor,
+    callerFor,
+    parseGrants,
+    covers,
     permissions: config.permissions,
     roles: config.roles,
     resources: (config.resources ?? []) as Res,

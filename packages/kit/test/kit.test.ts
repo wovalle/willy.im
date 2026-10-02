@@ -1,7 +1,28 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 import { z } from "zod"
-import { createApp, declareService, definePolicies, method, registry, safe } from "../src/index.js"
-import { anonymous, app, context, events, reset, status, user } from "./fixture.js"
+import {
+  createApp,
+  declareService,
+  definePolicies,
+  method,
+  registry,
+  safe,
+  tools,
+} from "../src/index.js"
+import {
+  anonymous,
+  app,
+  auth,
+  context,
+  ctxFor,
+  events,
+  key,
+  member,
+  reset,
+  rows,
+  status,
+  superadmin,
+} from "./fixture.js"
 
 beforeEach(() => {
   reset()
@@ -16,7 +37,7 @@ const post = (path: string, body?: unknown) =>
 
 describe("a call", () => {
   test("a method whose `when` is false doesn't exist: the unknown-method 404, before the permission, and no onCall", async () => {
-    const ctx = await app.context({ caller: user([]) }) // no thread, no grants
+    const ctx = await ctxFor([]) // no thread, no grants
     const err = await ctx.services.notes.reply({ text: 1 as never }).catch((e: any) => e)
     expect(err.status).toBe(404)
     expect(await err.json()).toEqual({ error: "no method notes.reply; see /openapi.json" })
@@ -26,6 +47,7 @@ describe("a call", () => {
   test("a `when` that throws hides the method", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {})
     const shaky = createApp({
+      auth,
       context,
       services: {
         x: declareService(() => ({
@@ -42,13 +64,14 @@ describe("a call", () => {
         })),
       },
     })
-    const ctx = await shaky.context({ caller: user(["notes:read"]) })
+    const ctx = await shaky.context(member("w1", ["notes:read"]), "w1")
     expect(await status((ctx.services as any).x.y())).toBe(404)
     spy.mockRestore()
   })
 
   test("errors on the input as a whole are reported under `_`", async () => {
     const strict = createApp({
+      auth,
       context,
       services: {
         x: declareService(() => ({
@@ -65,7 +88,7 @@ describe("a call", () => {
         })),
       },
     })
-    const ctx = await strict.context({ caller: user(["notes:read"]) })
+    const ctx = await strict.context(member("w1", ["notes:read"]), "w1")
     const err = await (ctx.services as any).x.y({ a: 2, b: 1 }).catch((e: any) => e)
     expect((await err.json()).fields).toEqual({ _: ["a must be below b"] })
   })
@@ -73,6 +96,7 @@ describe("a call", () => {
   test("onCall is awaited before the call returns", async () => {
     const seen: string[] = []
     const slow = createApp({
+      auth,
       context,
       services: app.config.services,
       onCall: async (e) => {
@@ -80,18 +104,18 @@ describe("a call", () => {
         seen.push(e.method)
       },
     })
-    const ctx = await slow.context({ caller: user(["notes:read"]) })
+    const ctx = await slow.context(member("w1", ["notes:read"]), "w1")
     await ctx.services.notes.get({ id: "1" })
     expect(seen).toEqual(["get"])
   })
 
   test("the permission is checked before the input", async () => {
-    const ctx = await app.context({ caller: user([]), thread: "t1" })
+    const ctx = await ctxFor([], "t1")
     expect(await status(ctx.services.notes.reply({ text: 1 as never }))).toBe(403)
   })
 
   test("invalid input is a 400 with field errors; input takes a plain shape or any zod schema", async () => {
-    const ctx = await app.context({ caller: user(["notes:*"]) })
+    const ctx = await ctxFor(["notes:*"])
     const err = await ctx.services.notes.get({ id: 1 as never }).catch((e: any) => e)
     expect(err.status).toBe(400)
     expect(await err.json()).toEqual({
@@ -104,19 +128,19 @@ describe("a call", () => {
   })
 
   test("an output the contract rejects is an error", async () => {
-    const ctx = await app.context({ caller: user(["notes:read"]) })
+    const ctx = await ctxFor(["notes:read"])
     await expect(ctx.services.notes.broken()).rejects.toThrow(
       "notes.broken returned a value its output schema rejects",
     )
   })
 
   test("internal callers get the full value", async () => {
-    const ctx = await app.context({ caller: user(["notes:read"]) })
+    const ctx = await ctxFor(["notes:read"])
     expect(await ctx.services.notes.get({ id: "1" })).toHaveProperty("secret", "s")
   })
 
   test("onCall fires once per call with the parsed input and the outcome", async () => {
-    const ctx = await app.context({ caller: user(["notes:read"]) })
+    const ctx = await ctxFor(["notes:read"])
     await ctx.services.notes.create({ title: "x", pages: "2" }).catch(() => {})
     await ctx.services.notes.get({ id: "1" })
     await ctx.services.notes.broken().catch(() => {})
@@ -134,31 +158,33 @@ describe("a call", () => {
 
   test("a throwing onCall doesn't fail the call", async () => {
     const loud = createApp({
+      auth,
       context,
       services: app.config.services,
       onCall: () => {
         throw new Error("audit down")
       },
     })
-    const ctx = await loud.context({ caller: user(["notes:read"]) })
+    const ctx = await loud.context(member("w1", ["notes:read"]), "w1")
     expect(await ctx.services.notes.get({ id: "1" })).toMatchObject({ id: "1" })
   })
 
   test("service-to-service calls check the same caller", async () => {
-    const tagsOnly = await app.context({ caller: user(["tags:read"]) })
+    const tagsOnly = await ctxFor(["tags:read"])
     expect(await status(tagsOnly.services.tags.forNote({ id: "1" }))).toBe(403)
-    const both = await app.context({ caller: user(["tags:read", "notes:read"]) })
+    const both = await ctxFor(["tags:read", "notes:read"])
     expect(await both.services.tags.forNote({ id: "1" })).toEqual({ tags: ["a"], title: "First" })
   })
 
-  test("systemContext has a superadmin caller", async () => {
-    const ctx = await app.systemContext({ workspaceId: "w9" })
+  test("cron and queues are a system principal holding `*`", async () => {
+    const ctx = await app.context({ id: "system:cron", grants: ["*"], memberships: [] }, "w9")
     expect(ctx.caller.isSuperadmin).toBe(true)
+    expect(ctx.tenantId).toBe("w9")
     expect(await ctx.services.tags.forNote({ id: "1" })).toEqual({ tags: ["a"], title: "First" })
   })
 
   test("safe returns field errors from FormData or an object, and rethrows anything else", async () => {
-    const ctx = await app.context({ caller: user(["notes:*"]) })
+    const ctx = await ctxFor(["notes:*"])
     const form = new FormData()
     form.set("title", "x")
     form.set("pages", "-3")
@@ -194,12 +220,12 @@ describe("the registry", () => {
       declareService(() => ({
         x: method({ summary: "x", permission: "notes:read", name }, async () => {}),
       }))
-    expect(() => createApp({ context, services: { a: named("has space") } })).toThrow(
+    expect(() => createApp({ auth, context, services: { a: named("has space") } })).toThrow(
       'tool name "has space"',
     )
-    expect(() => createApp({ context, services: { a: named("same"), b: named("same") } })).toThrow(
-      'a.x and b.x share the tool name "same"',
-    )
+    expect(() =>
+      createApp({ auth, context, services: { a: named("same"), b: named("same") } }),
+    ).toThrow('a.x and b.x share the tool name "same"')
   })
 
   test("createApp fails fast, naming the service, on a factory that uses the context while it builds", () => {
@@ -207,13 +233,13 @@ describe("the registry", () => {
       const db = (ctx as unknown as { db: { notes: unknown } }).db.notes
       return { db }
     })
-    expect(() => createApp({ context, services: { eager } })).toThrow('service "eager"')
+    expect(() => createApp({ auth, context, services: { eager } })).toThrow('service "eager"')
   })
 })
 
 describe("HTTP", () => {
   test("handle leaves other paths to the router and strips output to the contract", async () => {
-    const ctx = await app.context({ caller: user(["notes:read"]) })
+    const ctx = await ctxFor(["notes:read"])
     expect(await app.handle(new Request("https://x.test/notes/1"), ctx)).toBeNull()
     const res = await app.handle(post("/api/notes.get", { id: "1" }), ctx)
     expect(await res?.json()).toEqual({ id: "1", title: "First" }) // no secret, no workspaceId
@@ -222,6 +248,7 @@ describe("HTTP", () => {
   test("each method's output is stripped to its own contract, even for a shared object", async () => {
     const shared = { id: "1", title: "t", secret: "s" }
     const two = createApp({
+      auth,
       context,
       services: {
         x: declareService(() => ({
@@ -240,7 +267,7 @@ describe("HTTP", () => {
         })),
       },
     })
-    const ctx = await two.context({ caller: user(["notes:read"]) })
+    const ctx = await two.context(member("w1", ["notes:read"]), "w1")
     const [full, slim] = await Promise.all([
       two.handle(post("/api/x.full"), ctx).then((r) => r!.json()),
       two.handle(post("/api/x.slim"), ctx).then((r) => r!.json()),
@@ -250,7 +277,7 @@ describe("HTTP", () => {
   })
 
   test("a denied caller gets 403 whatever the body", async () => {
-    const ctx = await app.context({ caller: user([]) })
+    const ctx = await ctxFor([])
     const res = await app.handle(
       new Request("https://x.test/api/notes.get", { method: "POST", body: "{bad" }),
       ctx,
@@ -261,6 +288,7 @@ describe("HTTP", () => {
 
   test("a plain z.date() input isn't advertised as a string; z.coerce.date() is", async () => {
     const dated = createApp({
+      auth,
       context,
       services: {
         x: declareService(() => ({
@@ -275,7 +303,7 @@ describe("HTTP", () => {
         })),
       },
     })
-    const ctx = await dated.context({ caller: user(["notes:read"]) })
+    const ctx = await dated.context(member("w1", ["notes:read"]), "w1")
     const doc = await (await dated.handle(new Request("https://x.test/openapi.json"), ctx))!.json()
     const props =
       doc.paths["/api/x.y"].post.requestBody.content["application/json"].schema.properties
@@ -284,12 +312,12 @@ describe("HTTP", () => {
   })
 
   test("a method hidden by `when` answers like a missing one, whatever the verb", async () => {
-    const ctx = await app.context({ caller: user(["notes:*"]) })
+    const ctx = await ctxFor(["notes:*"])
     const hidden = await app.handle(new Request("https://x.test/api/notes.reply"), ctx)
     const missing = await app.handle(new Request("https://x.test/api/notes.nope"), ctx)
     expect(hidden?.status).toBe(404)
     expect(missing?.status).toBe(404)
-    const inThread = await app.context({ caller: user(["notes:*"]), thread: "t1" })
+    const inThread = await ctxFor(["notes:*"], "t1")
     expect(
       await (await app.handle(post("/api/notes.reply", { text: "hi" }), inThread))?.json(),
     ).toEqual({
@@ -305,13 +333,13 @@ const paths = async (ctx: Parameters<typeof app.handle>[1], a = app) =>
 
 describe("discovery", () => {
   test("lists what the caller may call and what exists in its context", async () => {
-    expect(await paths(await app.context({ caller: user(["notes:read"]) }))).toEqual([
+    expect(await paths(await ctxFor(["notes:read"]))).toEqual([
       "/api/notes.list",
       "/api/notes.get",
       "/api/notes.snapshot",
       "/api/notes.broken",
     ])
-    const writer = await app.context({ caller: user(["notes:write"]), thread: "t1" })
+    const writer = await ctxFor(["notes:write"], "t1")
     expect(await paths(writer)).toEqual([
       "/api/notes.create",
       "/api/notes.remove",
@@ -320,12 +348,12 @@ describe("discovery", () => {
   })
 
   test("an anonymous caller sees every method by default, and calls reach the method", async () => {
-    const ctx = await app.context({ caller: anonymous() })
+    const ctx = await app.context(anonymous, null)
     expect((await paths(ctx)).length).toBe(7) // all but notes.reply, which needs a thread
     expect((await app.handle(post("/api/notes.get", { id: "1" }), ctx))?.status).toBe(403)
   })
   test("a contract's description is in openapi.json and llms.txt", async () => {
-    const ctx = await app.context({ caller: user(["notes:write"]), thread: "t1" })
+    const ctx = await ctxFor(["notes:write"], "t1")
     const doc = await (await app.handle(new Request("https://x.test/openapi.json"), ctx))!.json()
     expect(doc.paths["/api/notes.reply"].post.description).toBe(
       "Posts the text as a reply. Only exists inside a thread.\n\nRequires the `notes:write` permission.",
@@ -347,7 +375,7 @@ describe("discovery.anonymous none", () => {
       },
     },
   })
-  const anon = () => closed.context({ caller: anonymous() })
+  const anon = () => closed.context(anonymous, null)
   const methodNames = registry(app).flatMap((e) => [e.name, e.tool])
 
   test("llms.txt tells an anonymous caller why it sees no methods and how to authenticate", async () => {
@@ -412,10 +440,7 @@ describe("discovery.anonymous none", () => {
     for (const url of ["not a url", "ftp://x.test/m"])
       expect(() => withUrl(url)).toThrow("resourceMetadataUrl")
     const odd = withUrl('https://bücher.test/m"d')
-    const res = (await odd.handle(
-      post("/api/notes.get"),
-      await odd.context({ caller: anonymous() }),
-    ))!
+    const res = (await odd.handle(post("/api/notes.get"), await odd.context(anonymous, null)))!
     expect(res.headers.get("www-authenticate")).toBe(
       'Bearer resource_metadata="https://xn--bcher-kva.test/m%22d"',
     )
@@ -428,7 +453,7 @@ describe("discovery.anonymous none", () => {
         docs: { key: "tok_…", bearer: "A token.", errors: { conflict: "Already done." } },
       },
     })
-    const ctx = await worded.context({ caller: user(["notes:read"]) })
+    const ctx = await worded.context(member("w1", ["notes:read"]), "w1")
     const doc = await (await worded.handle(new Request("https://x.test/openapi.json"), ctx))!.json()
     expect(doc.components.securitySchemes.bearer.description).toBe("A token.")
     expect(doc.components.responses.Conflict.description).toBe("Already done.")
@@ -437,7 +462,201 @@ describe("discovery.anonymous none", () => {
   })
 
   test("an authenticated caller is unaffected", async () => {
-    const ctx = await closed.context({ caller: user(["notes:read"]) })
+    const ctx = await closed.context(member("w1", ["notes:read"]), "w1")
     expect(await paths(ctx, closed)).toContain("/api/notes.get")
+  })
+})
+
+describe("app.context", () => {
+  const caller = async (...args: Parameters<typeof app.context>) =>
+    (await app.context(...args)).caller
+
+  test("a member gets membership ∪ global grants in the tenant", async () => {
+    const c = await caller(
+      {
+        id: "user:u1",
+        grants: ["tags:read"],
+        memberships: [{ tenantId: "w1", grants: ["notes:read"] }],
+      },
+      "w1",
+    )
+    expect(c.grants).toEqual(["notes:read", "tags:read"])
+    expect(c.has("notes:read") && c.has("tags:read")).toBe(true)
+    expect(c.tenantId).toBe("w1")
+  })
+
+  test("the null tenant uses only global grants", async () => {
+    const c = await caller(
+      {
+        id: "user:u1",
+        grants: ["tags:read"],
+        memberships: [{ tenantId: "w1", grants: ["notes:read"] }],
+      },
+      null,
+    )
+    expect(c.grants).toEqual(["tags:read"])
+    expect(c.has("notes:read")).toBe(false)
+  })
+
+  test("a non-member with no global grants is a 404, before the app's builder runs", async () => {
+    const builder = vi.fn(context)
+    const strict = createApp({ auth, context: builder, services: app.config.services })
+    const err = await strict.context(member("w1", ["notes:read"]), "w2").catch((e) => e)
+    expect(err).toBeInstanceOf(Response)
+    expect(err.status).toBe(404)
+    expect(await err.json()).toEqual({ error: "not found" })
+    expect(builder).not.toHaveBeenCalled()
+  })
+
+  test("a non-member with global grants (staff) is let in with them", async () => {
+    const staff = { id: "user:staff", grants: ["notes:read" as const], memberships: [] }
+    const c = await caller(staff, "w2")
+    expect(c.grants).toEqual(["notes:read"])
+    expect((await caller(superadmin(), "w2")).isSuperadmin).toBe(true)
+  })
+
+  test('an anonymous caller never 404s and has kind "anonymous" and no grants', async () => {
+    const c = await caller(anonymous, "w2")
+    expect(c.kind).toBe("anonymous")
+    expect(c.principal).toBeNull()
+    expect(c.tenantId).toBe("w2")
+    expect(c.grants).toEqual([])
+  })
+
+  test("duplicate memberships for one tenant are unioned", async () => {
+    const c = await caller(
+      {
+        id: "user:u1",
+        grants: [],
+        memberships: [
+          { tenantId: "w1", grants: ["notes:read"] },
+          { tenantId: "w1", grants: ["tags:read", "notes:read"] },
+          { tenantId: "w2", grants: ["notes:write"] },
+        ],
+      },
+      "w1",
+    )
+    expect(c.grants).toEqual(["notes:read", "tags:read"])
+  })
+
+  test("grants the catalog doesn't know are dropped", async () => {
+    const c = await caller(
+      {
+        id: "user:u1",
+        grants: [],
+        memberships: [{ tenantId: "w1", grants: ["nope:read" as never] }],
+      },
+      "w1",
+    )
+    expect(c.grants).toEqual([])
+  })
+
+  test("ctx carries caller, tenantId and actor = actor.id ?? id; the builder gets them too", async () => {
+    const seen = vi.fn()
+    const spy = createApp({
+      auth,
+      context: (kit: Parameters<typeof context>[0]) => {
+        seen(kit)
+        return context(kit)
+      },
+      services: app.config.services,
+    })
+    const ctx = await spy.context(key("w1", ["notes:read"]), "w1")
+    expect(ctx.actor).toBe("apikey:k1")
+    expect(ctx.tenantId).toBe("w1")
+    expect(ctx.caller.principal?.id).toBe("apikey:k1")
+    expect(seen.mock.calls[0][0]).toMatchObject({ tenantId: "w1", actor: "apikey:k1" })
+    expect(seen.mock.calls[0][0].caller).toBe(ctx.caller)
+    const impersonated = await spy.context(
+      { ...member("w1", []), actor: { id: "user:admin" } },
+      "w1",
+    )
+    expect(impersonated.actor).toBe("user:admin")
+    expect((await spy.context(anonymous, null)).actor).toBeNull()
+  })
+
+  test("policies scope by ctx.tenantId", async () => {
+    const ctx = await app.context(member("w2", ["notes:write"]), "w2")
+    const { id } = await ctx.services.notes.create({ title: "x", pages: 1 })
+    expect(rows.get(id)?.workspaceId).toBe("w2")
+  })
+})
+
+describe("caller.require", () => {
+  test("is an AND across its arguments", async () => {
+    const { caller } = await ctxFor(["notes:read"])
+    expect(() => caller.require("notes:read")).not.toThrow()
+    const err = (() => {
+      try {
+        caller.require("notes:read", "notes:write")
+      } catch (e) {
+        return e
+      }
+    })()
+    expect((err as Response).status).toBe(403)
+  })
+
+  test("with no arguments passes", async () => {
+    const { caller } = await ctxFor([])
+    expect(() => caller.require()).not.toThrow()
+  })
+
+  test("takes wildcards and instances, through covers", async () => {
+    const { caller } = await ctxFor(["notes:*", "thread:abc"])
+    expect(() => caller.require("notes:*", "notes:write", "thread:abc")).not.toThrow()
+    expect(() => caller.require("thread:*")).toThrow()
+    expect(() => caller.require("*")).toThrow()
+  })
+
+  test("grants held in one tenant don't satisfy it in another tenant's context", async () => {
+    const principal = {
+      id: "user:u1",
+      grants: [],
+      memberships: [
+        { tenantId: "w1", grants: ["notes:*" as const] },
+        { tenantId: "w2", grants: ["notes:read" as const] },
+      ],
+    }
+    // minting a notes:write key for w2 is checked in w2's context
+    const w1 = (await app.context(principal, "w1")).caller
+    const w2 = (await app.context(principal, "w2")).caller
+    expect(() => w1.require("notes:write")).not.toThrow()
+    expect(() => w2.require("notes:write")).toThrow()
+  })
+})
+
+describe('`permission: "*"`', () => {
+  const admin = createApp({
+    auth,
+    context,
+    services: {
+      ...app.config.services,
+      ops: declareService(() => ({
+        purge: method({ summary: "Purge everything.", permission: "*" }, async () => {}),
+      })),
+    },
+  })
+  const opsTools = async (...args: Parameters<typeof admin.context>) =>
+    tools(admin, await admin.context(...args)).filter((t) => t.name === "ops_purge")
+
+  test("a superadmin may call it", async () => {
+    const ctx = await admin.context(superadmin(), null)
+    expect(await status((ctx.services as any).ops.purge())).toBe(200)
+  })
+
+  test("a member holding every permission is denied with a 403", async () => {
+    const ctx = await admin.context(member("w1", ["notes:*", "tags:*", "thread:*"]), "w1")
+    expect(await status((ctx.services as any).ops.purge())).toBe(403)
+  })
+
+  test("it is hidden from discovery and tools for anyone but a superadmin", async () => {
+    const everything = await admin.context(member("w1", ["notes:*", "tags:*"]), "w1")
+    expect(await paths(everything, admin)).not.toContain("/api/ops.purge")
+    expect(await opsTools(member("w1", ["notes:*", "tags:*"]), "w1")).toEqual([])
+    const root = await admin.context(superadmin(), null)
+    expect(await paths(root, admin)).toContain("/api/ops.purge")
+    expect(await opsTools(superadmin(), null)).toHaveLength(1)
+    const doc = await (await admin.handle(new Request("https://x.test/openapi.json"), root))!.json()
+    expect(doc.paths["/api/ops.purge"].post["x-permission"]).toBe("superadmin")
   })
 })

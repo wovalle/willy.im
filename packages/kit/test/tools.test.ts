@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 import { z } from "zod"
-import { createApp, declareService, method, tools } from "../src/index.js"
-import { app, context, events, reset, user } from "./fixture.js"
+import { createApp, declareService, method, tools, type Grant } from "../src/index.js"
+import { app, auth, context, ctxFor, events, member, reset } from "./fixture.js"
 
 beforeEach(() => {
   reset()
   events.length = 0
 })
 
-const byName = async (grants: string[], thread: string | null = null) =>
-  new Map(tools(app, await app.context({ caller: user(grants), thread })).map((t) => [t.name, t]))
+const byName = async (grants: Grant[], thread: string | null = null) =>
+  new Map(tools(app, await ctxFor(grants, thread)).map((t) => [t.name, t]))
 
 describe("tools", () => {
   test("lists what the caller may call in this context", async () => {
@@ -72,6 +72,7 @@ describe("tools", () => {
 
   test("any other error reaches the caller as an internal error with an id, never its message", async () => {
     const leaky = createApp({
+      auth,
       context,
       services: {
         db: declareService(() => ({
@@ -81,7 +82,7 @@ describe("tools", () => {
         })),
       },
     })
-    const t = tools(leaky, await leaky.context({ caller: user(["notes:read"]) }))[0]
+    const t = tools(leaky, await leaky.context(member("w1", ["notes:read"]), "w1"))[0]
     const spy = vi.spyOn(console, "error").mockImplementation(() => {})
     const r = await t.call({})
     expect(r).toEqual({
@@ -91,6 +92,7 @@ describe("tools", () => {
     expect(JSON.stringify(r)).not.toContain("postgres")
     // a Response kit didn't make (an upstream fetch) is internal too
     const upstream = createApp({
+      auth,
       context,
       services: {
         api: declareService(() => ({
@@ -100,7 +102,7 @@ describe("tools", () => {
         })),
       },
     })
-    const [u] = tools(upstream, await upstream.context({ caller: user(["notes:read"]) }))
+    const [u] = tools(upstream, await upstream.context(member("w1", ["notes:read"]), "w1"))
     expect(await u.call({})).toEqual({
       ok: false,
       message: expect.stringMatching(/^internal error/),
@@ -112,6 +114,7 @@ describe("tools", () => {
 
   test("an input that isn't an object is wrapped as { input }", async () => {
     const search = createApp({
+      auth,
       context,
       services: {
         find: declareService(() => ({
@@ -127,7 +130,7 @@ describe("tools", () => {
         })),
       },
     })
-    const t = tools(search, await search.context({ caller: user(["notes:read"]) }))[0]
+    const t = tools(search, await search.context(member("w1", ["notes:read"]), "w1"))[0]
     expect(t.inputSchema).toEqual({
       type: "object",
       properties: { input: { type: "string" } },
@@ -144,6 +147,7 @@ describe("tools", () => {
 
   test("`permission: { resource }` shows the tool to anyone holding an instance or a wildcard", async () => {
     const threads = createApp({
+      auth,
       context,
       services: {
         thread: declareService((ctx) => ({
@@ -156,13 +160,13 @@ describe("tools", () => {
         })),
       },
     })
-    const names = async (grants: string[]) =>
-      tools(threads, await threads.context({ caller: user(grants) })).map((t) => t.name)
+    const names = async (grants: Grant[]) =>
+      tools(threads, await threads.context(member("w1", grants), "w1")).map((t) => t.name)
     expect(await names(["thread:abc"])).toEqual(["thread_read"])
     expect(await names(["thread:*"])).toEqual(["thread_read"])
     expect(await names(["*"])).toEqual(["thread_read"])
     expect(await names(["notes:read"])).toEqual([])
-    const [read] = tools(threads, await threads.context({ caller: user(["thread:abc"]) }))
+    const [read] = tools(threads, await threads.context(member("w1", ["thread:abc"]), "w1"))
     expect(await read.call({ id: "abc" })).toEqual({ ok: true, data: undefined, images: [] })
     expect(await read.call({ id: "xyz" })).toEqual({ ok: false, message: "Forbidden" })
   })

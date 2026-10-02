@@ -60,6 +60,5 @@ export function resolvePermissions(role: AppRole, granted: string[] = []): AppPe
   // Effective = the role's bag ∪ the explicit grants (filtered to the catalog, in
   // case it shrank since the grant). admin's bag is everything, so the union is
   // the whole catalog; member's bag is empty, so it's just their grants.
-  const checker = appRbac.createChecker(role)
-  return [...new Set([...checker.granted, ...granted.filter(isAppPermission)])]
+  return [...new Set([...appRbac.roles[role], ...granted.filter(isAppPermission)])]
 }

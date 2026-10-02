@@ -6,7 +6,6 @@ export { kitImage, type KitImage } from "./image.js"
 export { method } from "./method.js"
 export {
   definePermissions,
-  type CheckerOptions,
   type DefinePermissionsConfig,
   type Instance,
   type PermissionChecker,
@@ -16,15 +15,21 @@ export { definePolicies } from "./policies.js"
 export { registry, type RegistryEntry } from "./registry.js"
 export { tools, type KitResult, type KitTool, type ToolContext } from "./tools.js"
 export type {
+  Access,
   BaseContext,
   CallEvent,
+  Caller,
   Context,
+  ContextInput,
   Contract,
+  Grant,
   Hints,
   Permission,
+  Principal,
   PublicMethod,
   PublicName,
   Register,
+  Resource,
   Result,
   Services,
 } from "./types.js"

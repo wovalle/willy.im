@@ -11,15 +11,15 @@
  */
 
 import assert from "node:assert/strict"
-import { after, before, test } from "node:test"
+import { afterAll, beforeAll, test } from "vitest"
 
 import { asc, eq, isNull } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core"
 import { Miniflare } from "miniflare"
 
-import { d1AuditLogTable } from "../src/d1/index.js"
-import { withAudit } from "../src/d1-runtime/index.js"
+import { d1AuditLogTable } from "../../src/audit/d1/index.js"
+import { withAudit } from "../../src/audit/d1-runtime/index.js"
 
 const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -37,7 +37,7 @@ const auditLogs = d1AuditLogTable()
 
 let mf: Miniflare
 
-before(async () => {
+beforeAll(async () => {
   mf = new Miniflare({
     modules: true,
     script: `export default { fetch() { return new Response("ok") } }`,
@@ -45,7 +45,7 @@ before(async () => {
   })
 })
 
-after(async () => {
+afterAll(async () => {
   await mf.dispose()
 })
 
@@ -62,7 +62,7 @@ async function setupDb() {
   ]) {
     await d1.prepare(sql).run()
   }
-  return drizzle(d1, { schema: { auditLogs, users, invoices } })
+  return drizzle(d1)
 }
 
 test("withAudit insert logs audit row with new_data (real D1)", async () => {

@@ -2,14 +2,14 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { beforeEach, describe, expect, test } from "vitest"
 import { z } from "zod"
-import { createApp, declareService, method } from "../src/index.js"
+import { createApp, declareService, method, type Grant } from "../src/index.js"
 import { toMcpServer, type McpOptions } from "../src/mcp.js"
-import { app, context, reset, user } from "./fixture.js"
+import { app, auth, context, ctxFor, member, reset } from "./fixture.js"
 
 beforeEach(reset)
 
-async function connect(grants: string[], thread: string | null = null, options?: McpOptions) {
-  const server = toMcpServer(app, await app.context({ caller: user(grants), thread }), options)
+async function connect(grants: Grant[], thread: string | null = null, options?: McpOptions) {
+  const server = toMcpServer(app, await ctxFor(grants, thread), options)
   const [a, b] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: "test", version: "1" })
   await Promise.all([server.connect(a), client.connect(b)])
@@ -91,6 +91,7 @@ describe("MCP", () => {
 
   test("an optional output is wrapped, and an absent one is an empty structuredContent", async () => {
     const maybe = createApp({
+      auth,
       context,
       services: {
         x: declareService(() => ({
@@ -106,7 +107,7 @@ describe("MCP", () => {
         })),
       },
     })
-    const server = toMcpServer(maybe, await maybe.context({ caller: user(["notes:read"]) }))
+    const server = toMcpServer(maybe, await maybe.context(member("w1", ["notes:read"]), "w1"))
     const [a, b] = InMemoryTransport.createLinkedPair()
     const client = new Client({ name: "test", version: "1" })
     await Promise.all([server.connect(a), client.connect(b)])

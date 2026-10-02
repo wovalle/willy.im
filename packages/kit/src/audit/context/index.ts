@@ -28,10 +28,10 @@ import type {
 
 if (typeof AsyncLocalStorage === "undefined") {
   throw new Error(
-    "@willyim/drizzle-audit/context requires AsyncLocalStorage from node:async_hooks. " +
+    "@willyim/kit/audit/context requires AsyncLocalStorage from node:async_hooks. " +
       "On Cloudflare Workers enable the `nodejs_compat` flag (with a recent compatibility " +
       "date). On other runtimes use the explicit withAuditedTransaction(db, actorId, cb) " +
-      "from @willyim/drizzle-audit/postgres instead.",
+      "from @willyim/kit/audit/postgres instead.",
   )
 }
 

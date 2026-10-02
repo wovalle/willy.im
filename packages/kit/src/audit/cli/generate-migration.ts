@@ -8,7 +8,7 @@
  * migration shipped (tracked by hash in <migrations-dir>/.drizzle-audit.json).
  * This keeps trigger DDL out of migrations that don't change it.
  *
- * Usage: drizzle-audit generate [options] [-- extra drizzle-kit args]
+ * Usage: kit-audit generate [options] [-- extra drizzle-kit args]
  * Options:
  *   --config <path>         Path to audit config (TS or JS) exporting createAuditSql/createWebAuditSql
  *   --drizzle-config <path> Path to drizzle config for drizzle-kit (default: drizzle.config.ts)
@@ -27,6 +27,7 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 
 const DEFAULT_DRIZZLE_CONFIG = "drizzle.config.ts"
 const DEFAULT_MIGRATIONS_DIR = "drizzle"
+// File and marker names predate the move into kit; kept so existing migrations stay recognised.
 const STATE_FILE = ".drizzle-audit.json"
 const MARKER = "-- drizzle-audit"
 
@@ -40,7 +41,7 @@ function parseArgs(): {
   const args = process.argv.slice(2)
   if (args[0] !== "generate") {
     console.error(
-      "Usage: drizzle-audit generate --config <path> [options] [-- extra drizzle-kit args]",
+      "Usage: kit-audit generate --config <path> [options] [-- extra drizzle-kit args]",
     )
     process.exit(1)
   }
@@ -194,7 +195,7 @@ async function main() {
     console.error(
       "Create an empty migration to carry the audit changes, e.g.:",
     )
-    console.error("  drizzle-audit generate --config ... -- --custom --name audit-update")
+    console.error("  kit-audit generate --config ... -- --custom --name audit-update")
     process.exit(1)
   }
 

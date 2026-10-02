@@ -10,6 +10,9 @@ import {
   kitImage,
   method,
   type CallEvent,
+  type ContextInput,
+  type Grant,
+  type Principal,
 } from "../src/index.js"
 
 export const auth = definePermissions({
@@ -18,17 +21,11 @@ export const auth = definePermissions({
   roles: { owner: ["notes:read", "notes:write", "tags:read"], viewer: ["notes:read"] },
 })
 
-export type Caller = {
-  kind: "user" | "key" | "system" | "anonymous"
-  userId: string
-  workspaceId: string
-} & ReturnType<typeof auth.checkerFor>
-
 export const policies = definePolicies({
-  note: (caller: Caller) => ({ workspaceId: caller.workspaceId }),
+  note: (caller: { tenantId: string | null }) => ({ workspaceId: caller.tenantId }),
 })
 
-type Row = { id: string; title: string; workspaceId: string; secret: string }
+type Row = { id: string; title: string; workspaceId: string | null; secret: string }
 export const rows = new Map<string, Row>()
 export const reset = () => {
   rows.clear()
@@ -128,11 +125,10 @@ export const tags = declareService((ctx) => ({
   ),
 }))
 
-export const context = ({ caller, thread = null }: { caller: Caller; thread?: string | null }) => ({
-  caller,
-  thread,
-  scope: policies(caller),
-})
+export const context = (
+  { caller }: ContextInput,
+  { thread = null }: { thread?: string | null } = {},
+) => ({ thread, scope: policies(caller) })
 
 export const services = { notes, tags }
 
@@ -141,25 +137,36 @@ export const events: CallEvent<any>[] = []
 export const app = createApp({
   name: "notes",
   description: "Fixture app.",
+  auth,
   context,
-  system: ({ workspaceId }: { workspaceId: string }) =>
-    context({
-      caller: { kind: "system", userId: "system", workspaceId, ...auth.checkerFor(["*"]) },
-    }),
   services,
   onCall: (e) => {
     events.push(e)
   },
 })
 
-export const user = (grants: string[]): Caller => ({
-  kind: "user",
-  userId: "u1",
-  workspaceId: "w1",
-  ...auth.checkerFor(grants),
+/** A person with `grants` in `tenantId` only. */
+export const member = (tenantId: string, grants: Grant[]): Principal => ({
+  id: "user:u1",
+  grants: [],
+  memberships: [{ tenantId, grants }],
 })
 
-export const anonymous = (): Caller => ({ ...user([]), kind: "anonymous" })
+/** An API key scoped to one tenant: one membership with the key's scopes. */
+export const key = (tenantId: string, scopes: Grant[]): Principal => ({
+  id: "apikey:k1",
+  grants: [],
+  memberships: [{ tenantId, grants: scopes }],
+})
+
+export const superadmin = (): Principal => ({ id: "user:root", grants: ["*"], memberships: [] })
+
+/** No credentials. */
+export const anonymous = null
+
+/** A context in tenant w1 for a member holding `grants`. */
+export const ctxFor = (grants: Grant[], thread: string | null = null) =>
+  app.context(member("w1", grants), "w1", { thread })
 
 /** The status of a call that may throw a `Response`. */
 export const status = (p: Promise<unknown>) =>
@@ -170,6 +177,7 @@ export const status = (p: Promise<unknown>) =>
 
 declare module "../src/index.js" {
   interface Register {
+    auth: typeof auth
     context: typeof context
     services: typeof services
   }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import test from "node:test"
+import { test } from "vitest"
 
 import {
   currentAudit,
@@ -7,7 +7,7 @@ import {
   hasAuditContext,
   maybeCurrentAudit,
   runWithAuditContext,
-} from "../src/context/index.js"
+} from "../../src/audit/context/index.js"
 
 // A minimal fake of the drizzle surface `ensureAuditedTx` needs: a
 // transaction-capable db whose tx records the SQL passed to `execute` (which is

@@ -1,19 +1,35 @@
 {
   "name": "@willyim/drizzle-audit",
   "version": "0.8.0",
-  "description": "Lightweight audit logging for Drizzle ORM using database triggers (Postgres + D1/SQLite)",
+  "description": "Deprecated: use @willyim/kit/audit",
+  "deprecated": "@willyim/drizzle-audit is part of @willyim/kit now. Install @willyim/kit and import from \"@willyim/kit/audit\" (and /audit/context, /audit/d1, /audit/d1-runtime, /audit/postgres); the CLI is `kit-audit`.",
   "type": "module",
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/src/index.js",
-    "./postgres": "./dist/src/postgres/index.js",
-    "./context": "./dist/src/context/index.js",
-    "./d1": "./dist/src/d1/index.js",
-    "./d1-runtime": "./dist/src/d1-runtime/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "default": "./dist/postgres.js"
+    },
+    "./context": {
+      "types": "./dist/context.d.ts",
+      "default": "./dist/context.js"
+    },
+    "./d1": {
+      "types": "./dist/d1.d.ts",
+      "default": "./dist/d1.js"
+    },
+    "./d1-runtime": {
+      "types": "./dist/d1-runtime.d.ts",
+      "default": "./dist/d1-runtime.js"
+    }
   },
   "bin": {
-    "drizzle-audit": "./dist/src/cli/generate-migration.js"
+    "drizzle-audit": "./dist/cli.js"
   },
   "files": [
     "dist",
@@ -21,9 +37,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test ./dist/test/**/*.test.js"
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "drizzle",
@@ -42,6 +57,9 @@
     "url": "https://github.com/wovalle/willy.im",
     "directory": "packages/drizzle_audit"
   },
+  "dependencies": {
+    "@willyim/kit": "^0.1.0"
+  },
   "peerDependencies": {
     "drizzle-kit": ">=1.0.0-0",
     "drizzle-orm": ">=1.0.0-0"
@@ -53,16 +71,9 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.7",
-    "drizzle-orm": "^1.0.0-beta.15-859cf75",
-    "miniflare": "^4.20260410.0",
     "typescript": "^5.9.3"
   },
   "publishConfig": {
     "access": "public"
-  },
-  "optionalDependencies": {
-    "@electric-sql/pglite": "^0.3.16",
-    "@types/better-sqlite3": "^7.6.13",
-    "better-sqlite3": "^11.10.0"
   }
 }

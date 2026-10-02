@@ -65,16 +65,16 @@ export const available = (contract: Contract, ctx: unknown) => {
 
 type Caller = {
   has(permission: string): boolean
-  require(permission: string): void
+  require(...grants: string[]): void
   hasAny?(resource: string): boolean
 }
 
-/** An access rule at run time: a permission, or `{ resource }`. */
+/** An access rule at run time: a permission, `"*"` (superadmins only), or `{ resource }`. */
 type Access = string | { resource: string }
 
 const forbidden = () => publicError(new Response("Forbidden", { status: 403 }))
 
-/** May this caller call a method with this access rule? */
+/** May this caller call a method with this access rule? `"*"` passes only a superadmin's `has`. */
 export const permitted = (caller: Caller, access: Access) =>
   typeof access === "string" ? caller.has(access) : (caller.hasAny?.(access.resource) ?? false)
 
@@ -93,7 +93,7 @@ export const requireAccess = (caller: Caller, access: Access) => {
 
 /** How an access rule reads in discovery. */
 export const describeAccess = (access: Access) =>
-  typeof access === "string" ? access : `${access.resource}:<id>`
+  access === "*" ? "superadmin" : typeof access === "string" ? access : `${access.resource}:<id>`
 
 /** The error for a method that doesn't exist, or doesn't exist in this context. */
 export const unknownMethod = (name: string) =>
