@@ -10,6 +10,8 @@ import {
   tools,
   type Grant,
 } from "../src/index.js"
+import { toSchema } from "../src/method.js"
+import { META } from "../src/types.js"
 import {
   anonymous,
   app,
@@ -326,6 +328,15 @@ describe("calls between operations", () => {
     for (const e of events) expect(e.ctx).toBe(ctx)
   })
 
+  test("either view may bind a method first; each keeps its own semantics", async () => {
+    const trustedFirst = await as(["tags:read"])
+    expect(await inner(trustedFirst).services.ledger.write({ amount: 1 })).toBe(1)
+    expect(await status(trustedFirst.services.ledger.write({ amount: 1 }))).toBe(403)
+    const checkedFirst = await as(["tags:read"])
+    expect(await status(checkedFirst.services.ledger.write({ amount: 1 }))).toBe(403)
+    expect(await inner(checkedFirst).services.ledger.write({ amount: 1 })).toBe(1)
+  })
+
   test("handle and tools stay checked, even handed the inner context", async () => {
     const ctx = await as(["tags:read"])
     for (const c of [ctx, inner(ctx)]) {
@@ -570,6 +581,94 @@ describe("services", () => {
     read = true
     const ctx = (await loop.context(member("w1", []), "w1")) as any
     expect(() => ctx.services.self).toThrow('service "self" was read while it builds')
+  })
+})
+
+describe("binding", () => {
+  // Module-level contracts, as a service may share them across its factory runs.
+  const shape = { id: z.string() }
+  const out = { id: z.string() }
+  const lookup = {
+    summary: "Look up.",
+    permission: "notes:read" as const,
+    input: shape,
+    output: out,
+  }
+  const one = createApp({
+    auth,
+    context,
+    services: {
+      svc: declareService((ctx) => ({
+        view: () => ctx,
+        lookup: method(lookup, async ({ id }) => ({ id, extra: 1 })),
+        other: method({ summary: "Other.", permission: "notes:read" }, async () => {}),
+      })),
+    },
+  }) as any
+  const ctx = async () => (await one.context(member("w1", ["notes:read"]), "w1")) as any
+  const both = (c: any) => [c.services.svc, c.services.svc.view().services.svc]
+
+  test("both views enumerate every member, plain functions included, before and after binding", async () => {
+    for (const view of both(await ctx())) {
+      expect(Object.keys(view)).toEqual(["view", "lookup", "other"])
+      const names: string[] = []
+      for (const name in view) names.push(name)
+      expect(names).toEqual(["view", "lookup", "other"])
+      const copy = { ...view }
+      expect(Object.keys(copy)).toEqual(["view", "lookup", "other"])
+      expect(copy.lookup).toBe(view.lookup)
+      expect(Object.values(view).every((m) => typeof m === "function")).toBe(true)
+      expect(Object.getOwnPropertyDescriptor(view, "lookup")).toMatchObject({
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      })
+    }
+  })
+
+  test("a method is bound at most once per view, the first time it's read", async () => {
+    const c = await ctx()
+    const [checked, trusted] = both(c)
+    const first = checked.lookup
+    expect(checked.lookup).toBe(first)
+    expect({ ...checked }.lookup).toBe(first)
+    expect(trusted.lookup).not.toBe(first)
+    expect(trusted.lookup).toBe(trusted.lookup)
+    expect(Object.create(checked).other).toBe(checked.other)
+    checked.other = "replaced"
+    expect(checked.other).toBe("replaced")
+  })
+
+  test("[META] names the method on the first read and every read after, in both views", async () => {
+    const meta = { contract: lookup, service: "svc", method: "lookup" }
+    for (const view of both(await ctx())) {
+      expect(view.lookup[META]).toEqual(meta)
+      expect(view.lookup[META]).toEqual(meta)
+      expect(Object.values(view).map((m: any) => m[META]?.method)).toEqual([
+        undefined,
+        "lookup",
+        "other",
+      ])
+    }
+    expect(registry(one).find((e) => e.name === "svc.lookup")).toMatchObject(meta)
+  })
+
+  test("a contract's schemas are built once, shared by the registry and every context", async () => {
+    const entry = registry(one).find((e) => e.name === "svc.lookup")!
+    const [a, b] = [await ctx(), await ctx()]
+    const contracts = [entry.contract, ...both(a), ...both(b)].map((v) =>
+      "lookup" in v ? v.lookup[META].contract : v,
+    )
+    for (const c of contracts) {
+      expect(toSchema(c.input)).toBe(toSchema(shape))
+      expect(toSchema(c.output)).toBe(toSchema(out))
+    }
+    const tool = (c: any) => tools(one, c).find((t) => t.name === "svc_lookup")!
+    expect(tool(a).inputZod).toBe(tool(b).inputZod)
+    expect(tool(a).outputZod).toBe(toSchema(out))
+    // The shared schemas still check and strip at the edges only.
+    expect(await a.services.svc.lookup({ id: "1" })).toEqual({ id: "1", extra: 1 })
+    expect(await tool(b).call({ id: "1" })).toEqual({ ok: true, data: { id: "1" }, images: [] })
   })
 })
 

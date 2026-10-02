@@ -49,8 +49,19 @@ export function method<
 export const isMethod = (value: unknown): value is Unbound =>
   typeof value === "function" && META in value
 
-/** A contract's `input` / `output` as a schema: a plain shape is wrapped in `z.object`. */
-export const toSchema = (s: SchemaLike): z.ZodType => ("_zod" in s ? (s as z.ZodType) : z.object(s))
+const wrapped = new WeakMap<object, z.ZodType>()
+
+/**
+ * A contract's `input` / `output` as a schema: a plain shape is wrapped in
+ * `z.object`, once per shape, so every binding, the registry and the adapters
+ * share one schema.
+ */
+export const toSchema = (s: SchemaLike): z.ZodType => {
+  if ("_zod" in s) return s as z.ZodType
+  let schema = wrapped.get(s)
+  if (!schema) wrapped.set(s, (schema = z.object(s)))
+  return schema
+}
 
 /** Does the method exist in this context? A `when` that throws counts as false, and is logged. */
 export const available = (contract: Contract, ctx: unknown) => {
@@ -120,6 +131,72 @@ const report = async (onCall: OnCall | undefined, event: CallEvent<any>) => {
   }
 }
 
+/** One method bound to one context: what a call needs, shared by both of its entries. */
+type Binding = {
+  m: Unbound
+  ctx: any
+  service: string
+  name: string
+  onCall: OnCall | undefined
+  internal: boolean
+}
+
+const checkOutput = ({ service, name }: Binding, schema: z.ZodType, result: unknown) => {
+  const checked = schema.safeParse(result)
+  if (!checked.success)
+    throw new Error(
+      `kit: ${service}.${name} returned a value its output schema rejects: ${checked.error.message}`,
+    )
+  return checked.data
+}
+
+// Edge calls (`/api`, `tools()`, MCP) return the output checked and stripped; internal ones, the raw value.
+async function run(b: Binding, raw: unknown, edge: boolean) {
+  const { m, ctx, service, name, onCall, internal } = b
+  const { contract } = m[META]
+  if (!available(contract, ctx)) throw unknownMethod(`${service}.${name}`)
+  const started = performance.now()
+  let value = raw
+  const done = (ok: boolean, error?: unknown) =>
+    report(onCall, {
+      service,
+      method: name,
+      ctx,
+      input: value,
+      internal,
+      ok,
+      ...(!ok && { error }),
+      ms: performance.now() - started,
+    })
+  try {
+    if (!internal) requireAccess(ctx.caller, contract.permission)
+    const input = contract.input && toSchema(contract.input)
+    if (input) {
+      const parsed = input.safeParse(raw)
+      if (!parsed.success) {
+        const { formErrors, fieldErrors } = z.flattenError(parsed.error)
+        // Errors on the input as a whole (a root `.refine`, a wrong type) go under "_".
+        const fields = {
+          ...(formErrors.length > 0 && { _: formErrors }),
+          ...fieldErrors,
+        } as Partial<Record<string, string[]>>
+        throw Object.assign(
+          publicError(Response.json({ error: "invalid input", fields }, { status: 400 })),
+          { [INVALID]: fields },
+        )
+      }
+      value = parsed.data
+    }
+    const result = await (input ? m.fn(value) : m.fn())
+    const out = edge && contract.output ? checkOutput(b, toSchema(contract.output), result) : result
+    await done(true)
+    return out
+  } catch (error) {
+    await done(false, error)
+    throw error
+  }
+}
+
 /**
  * Binds a method to one context. A call runs, in order: `when`, the permission,
  * the input, the implementation, then `onCall` with the outcome. Only the edges
@@ -139,64 +216,12 @@ export function bind(
   onCall: OnCall | undefined,
   internal: boolean,
 ): PublicMethod {
-  const { contract } = m[META]
-  const input = contract.input && toSchema(contract.input)
-  const output = contract.output && toSchema(contract.output)
-  const checkOutput = (schema: z.ZodType, result: unknown) => {
-    const checked = schema.safeParse(result)
-    if (!checked.success)
-      throw new Error(
-        `kit: ${service}.${name} returned a value its output schema rejects: ${checked.error.message}`,
-      )
-    return checked.data
-  }
-  // Edge calls (`/api`, `tools()`, MCP) return the output checked and stripped; internal ones, the raw value.
-  const run = async (raw: unknown, edge: boolean) => {
-    if (!available(contract, ctx)) throw unknownMethod(`${service}.${name}`)
-    const started = performance.now()
-    let value = raw
-    const done = (ok: boolean, error?: unknown) =>
-      report(onCall, {
-        service,
-        method: name,
-        ctx,
-        input: value,
-        internal,
-        ok,
-        ...(!ok && { error }),
-        ms: performance.now() - started,
-      })
-    try {
-      if (!internal) requireAccess(ctx.caller, contract.permission)
-      if (input) {
-        const parsed = input.safeParse(raw)
-        if (!parsed.success) {
-          const { formErrors, fieldErrors } = z.flattenError(parsed.error)
-          // Errors on the input as a whole (a root `.refine`, a wrong type) go under "_".
-          const fields = {
-            ...(formErrors.length > 0 && { _: formErrors }),
-            ...fieldErrors,
-          } as Partial<Record<string, string[]>>
-          throw Object.assign(
-            publicError(Response.json({ error: "invalid input", fields }, { status: 400 })),
-            { [INVALID]: fields },
-          )
-        }
-        value = parsed.data
-      }
-      const result = await (input ? m.fn(value) : m.fn())
-      const out = edge && output ? checkOutput(output, result) : result
-      await done(true)
-      return out
-    } catch (error) {
-      await done(false, error)
-      throw error
-    }
-  }
-  return Object.assign((raw?: unknown) => run(raw, false), {
-    [META]: { contract, service, method: name },
-    ...(!internal && { [INVOKE]: (raw?: unknown) => run(raw, true) }),
-  }) as never
+  const b: Binding = { m, ctx, service, name, onCall, internal }
+  const bound = Object.assign((raw?: unknown) => run(b, raw, false), {
+    [META]: { contract: m[META].contract, service, method: name },
+  })
+  if (!internal) Object.assign(bound, { [INVOKE]: (raw?: unknown) => run(b, raw, true) })
+  return bound as never
 }
 
 /** The field errors of a 400 thrown by `bind`, or undefined for anything else. */

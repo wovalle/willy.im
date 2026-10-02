@@ -3,7 +3,56 @@ import { META, type MethodMeta } from "./types.js"
 
 export type Factory = ((ctx: any) => object) & { description?: string }
 
-/** A built service with its public methods bound to `ctx`, checked or `internal`; plain members as is. */
+type View = {
+  source: Record<PropertyKey, unknown>
+  ctx: unknown
+  service: string
+  onCall: OnCall | undefined
+  internal: boolean
+}
+
+const views = new WeakMap<object, View>()
+
+/** The object a lazy member was read through: the view itself, or something that inherits from it. */
+function viewOf(target: object) {
+  for (let o: object | null = target; o; o = Object.getPrototypeOf(o)) {
+    const view = views.get(o)
+    if (view) return { view: o, state: view }
+  }
+  throw new Error("kit: a bound method was read outside its service")
+}
+
+const setMember = (view: object, name: PropertyKey, value: unknown) =>
+  Object.defineProperty(view, name, { value, enumerable: true, configurable: true, writable: true })
+
+// One accessor pair per method name, shared by every view: a context binds no closure up front.
+const accessors = new Map<string, PropertyDescriptor>()
+function lazyMember(name: string): PropertyDescriptor {
+  let accessor = accessors.get(name)
+  if (!accessor) {
+    accessor = {
+      enumerable: true,
+      configurable: true,
+      get(this: object) {
+        const { view, state } = viewOf(this)
+        const { source, ctx, service, onCall, internal } = state
+        const bound = bind(source[name] as never, ctx, service, name, onCall, internal)
+        setMember(view, name, bound)
+        return bound
+      },
+      set(this: object, value: unknown) {
+        setMember(viewOf(this).view, name, value)
+      },
+    }
+    accessors.set(name, accessor)
+  }
+  return accessor
+}
+
+/**
+ * A built service with its public methods bound to `ctx`, checked or `internal`;
+ * plain members as is. Each method is bound the first time it's read, and kept.
+ */
 export function bindService(
   built: object,
   ctx: unknown,
@@ -11,9 +60,15 @@ export function bindService(
   onCall: OnCall | undefined,
   internal: boolean,
 ) {
-  const methods: Record<string, unknown> = { ...built }
-  for (const [name, m] of Object.entries(methods))
-    if (isMethod(m)) methods[name] = bind(m, ctx, service, name, onCall, internal)
+  const source: Record<PropertyKey, unknown> = { ...built }
+  const methods: Record<PropertyKey, unknown> = {}
+  views.set(methods, { source, ctx, service, onCall, internal })
+  for (const key of Reflect.ownKeys(source)) {
+    const value = source[key]
+    if (typeof key === "string" && isMethod(value))
+      Object.defineProperty(methods, key, lazyMember(key))
+    else setMember(methods, key, value)
+  }
   return methods
 }
 
@@ -30,9 +85,9 @@ export const checkedServices = (services: object) =>
     Record<string, unknown>
   >
 
-function buildEmpty(factory: Factory, service: string) {
+function buildEmpty(factory: Factory, service: string): Record<string, unknown> {
   try {
-    return bindService(factory({ services: {} }), { services: {} }, service, undefined, false)
+    return { ...factory({ services: {} }) }
   } catch (e) {
     throw new Error(
       `kit: service "${service}" failed to build against an empty context; use ctx only inside method bodies (${e instanceof Error ? e.message : String(e)})`,
@@ -65,14 +120,16 @@ export function registry(app: { config: { services: Record<string, Factory> } })
   const hit = cache.get(app.config.services)
   if (hit) return hit
   const entries = Object.entries(app.config.services).flatMap(([service, factory]) =>
-    Object.values(buildEmpty(factory, service)).flatMap((m) => {
+    Object.entries(buildEmpty(factory, service)).flatMap(([method, m]) => {
       if (!isMethod(m)) return []
-      const meta = m[META]
+      const { contract } = m[META]
       return [
         {
-          ...meta,
-          name: `${service}.${meta.method}`,
-          tool: meta.contract.name ?? `${service}_${meta.method}`,
+          contract,
+          service,
+          method,
+          name: `${service}.${method}`,
+          tool: contract.name ?? `${service}_${method}`,
           description: factory.description,
         },
       ]
