@@ -438,8 +438,8 @@ Install only `@willyim/kit`:
 | `@willyim/kit/audit` (`/context`, `/d1`, `/d1-runtime`, `/postgres`), bin `kit-audit` | Drizzle audit logging (peers: `drizzle-orm`, `drizzle-kit` for the CLI)            |
 
 kit pins `@willyim/idp` to an exact version, and changesets releases kit whenever idp
-releases. `@willyim/rbac` and `@willyim/drizzle-audit` are deprecated; their last releases
-re-export kit.
+releases. `@willyim/rbac` is deprecated; its last release re-exports kit.
+`@willyim/drizzle-audit` is deprecated: use `@willyim/kit/audit`.
 
 ## License
 

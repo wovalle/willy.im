@@ -9,9 +9,9 @@
     "postbuild": "npm run postbuild --workspaces --if-present",
     "start": "npm run start --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "packages:build": "npm run build --if-present -w @willyim/idp -w @willyim/kit -w @willyim/rbac -w @willyim/drizzle-audit -w @willyim/drizzle-repositories",
-    "packages:typecheck": "npm run typecheck --if-present -w @willyim/idp -w @willyim/kit -w @willyim/rbac -w @willyim/drizzle-audit -w @willyim/drizzle-repositories",
-    "packages:test": "npm run test --if-present -w @willyim/idp -w @willyim/kit -w @willyim/rbac -w @willyim/drizzle-audit -w @willyim/drizzle-repositories",
+    "packages:build": "npm run build --if-present -w @willyim/idp -w @willyim/kit -w @willyim/rbac -w @willyim/drizzle-repositories",
+    "packages:typecheck": "npm run typecheck --if-present -w @willyim/idp -w @willyim/kit -w @willyim/rbac -w @willyim/drizzle-repositories",
+    "packages:test": "npm run test --if-present -w @willyim/idp -w @willyim/kit -w @willyim/rbac -w @willyim/drizzle-repositories",
     "changeset": "changeset",
     "release": "npm run packages:build && changeset publish",
     "version-packages": "changeset version && npm install --package-lock-only --ignore-scripts"
@@ -23,7 +23,6 @@
     "packages/idp-client",
     "packages/kit",
     "packages/rbac",
-    "packages/drizzle_audit",
     "packages/drizzle_repositories",
     "apps/www",
     "apps/idp"
