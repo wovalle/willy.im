@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import v8 from "node:v8"
+import vm from "node:vm"
 import { test } from "vitest"
 
 import {
@@ -137,4 +139,74 @@ test("context is isolated per runWithAuditContext scope", async () => {
     return currentAudit().actorId
   })
   assert.deepEqual(await Promise.all([a, b]), ["A", "B"])
+})
+
+// What workerd does: the ALS store stays reachable after the request ends (here, a
+// pending timer created inside the scope holds it). The resolver closes over the
+// request; once fn settles it must not keep the request alive through the store.
+// Each piece lives in its own function so that no closure but the resolver can
+// reach the request (V8 closures share their enclosing scope's context).
+const noop = () => {}
+let pending: ReturnType<typeof setTimeout> | undefined
+/** A request-scoped unit of work with a lazy resolver; returns only a WeakRef to the request. */
+async function requestScopeLeavingTheStoreReachable() {
+  const request = { body: new Array(100_000).fill("x") }
+  const ref = new WeakRef(request)
+  await runWithAuditContext(
+    () => ({ actorId: `user_${request.body.length}` }),
+    async () => {
+      pending = setTimeout(noop, 60_000) // keeps this scope's ALS store alive
+    },
+  )
+  return ref
+}
+
+test("a lazy resolver is unreachable from the store once fn settles", async () => {
+  v8.setFlagsFromString("--expose-gc")
+  const gc = vm.runInNewContext("gc") as () => void
+  const ref = await requestScopeLeavingTheStoreReachable()
+  for (let i = 0; i < 3 && ref.deref(); i++) {
+    await new Promise((r) => setImmediate(r))
+    gc()
+  }
+  clearTimeout(pending)
+  assert.equal(ref.deref(), undefined, "the request was retained through the audit store")
+})
+
+test("a write that outlives the scope uses the actor resolved inside it", async () => {
+  const { db, executed } = makeFakeDb()
+  let afterScope: Promise<unknown> | undefined
+  await runWithAuditContext({ actorId: "eager" }, async () => {
+    afterScope = new Promise((r) => setTimeout(r, 0)).then(() =>
+      ensureAuditedTx(db, async () => currentAudit().actorId),
+    )
+  })
+  assert.equal(await afterScope, "eager")
+  assert.ok(executed.length > 0)
+})
+
+test("a write that outlives the scope without a resolved actor fails loudly", async () => {
+  const { db } = makeFakeDb()
+  let afterScope: Promise<unknown> | undefined
+  await runWithAuditContext(
+    () => ({ actorId: "lazy" }),
+    async () => {
+      afterScope = new Promise((r) => setTimeout(r, 0)).then(() => ensureAuditedTx(db, async () => 1))
+    },
+  )
+  await assert.rejects(afterScope!, /the scope has ended/)
+})
+
+test("a synchronous fn releases the resolver too, and a throwing one rethrows", () => {
+  assert.equal(runWithAuditContext(() => ({ actorId: "x" }), () => 42), 42)
+  assert.throws(
+    () =>
+      runWithAuditContext(
+        () => ({ actorId: "x" }),
+        () => {
+          throw new Error("boom")
+        },
+      ),
+    /boom/,
+  )
 })

@@ -57,8 +57,13 @@ export type AuditContextInput =
   | (() => AuditContext | Promise<AuditContext>)
 
 type Cell = {
-  resolve: () => AuditContext | Promise<AuditContext>
-  /** Memoised result of `resolve` once it has run. */
+  /**
+   * The lazy resolver, until it has run or the scope has ended. Dropped when
+   * `fn` settles: on workerd the store stays reachable from native code after
+   * the request, and a resolver closes over the request (db, sockets, auth).
+   */
+  resolve: (() => AuditContext | Promise<AuditContext>) | null
+  /** Memoised result of `resolve` once it has run (plain data, kept). */
   resolved: AuditContext | null
   /** The currently-open audited tx, tracked for reentrancy. */
   tx: AuditSqlExecutor | null
@@ -69,14 +74,34 @@ const als = new AsyncLocalStorage<Cell>()
 /**
  * Establish the ambient audit actor for the duration of `fn`. No transaction is
  * opened here — `ensureAuditedTx` opens one lazily on the first write below.
+ *
+ * When `fn` settles the lazy resolver is released, so the scope can't keep the
+ * request it closes over alive. Work that outlives `fn` (a `waitUntil` write)
+ * still sees an actor that was already resolved; an unresolved one is an error.
  */
 export function runWithAuditContext<T>(
   audit: AuditContextInput,
   fn: () => T,
 ): T {
-  const resolve = typeof audit === "function" ? audit : () => audit
-  const resolved = typeof audit === "function" ? null : audit
-  return als.run({ resolve, resolved, tx: null }, fn)
+  const cell: Cell =
+    typeof audit === "function"
+      ? { resolve: audit, resolved: null, tx: null }
+      : { resolve: null, resolved: audit, tx: null }
+  const release = () => {
+    cell.resolve = null
+  }
+  let result: T
+  try {
+    result = als.run(cell, fn)
+  } catch (e) {
+    release()
+    throw e
+  }
+  if (result && typeof (result as { then?: unknown }).then === "function") {
+    return Promise.resolve(result).finally(release) as T
+  }
+  release()
+  return result
 }
 
 /** The ambient audit context if one is set AND already resolved, else null. */
@@ -139,7 +164,14 @@ export async function ensureAuditedTx<
   // Reentrant: a tx is already open in this context — reuse it.
   if (cell.tx) return run(cell.tx as TTransaction)
 
-  const audit = cell.resolved ?? (cell.resolved = await cell.resolve())
+  if (!cell.resolved && !cell.resolve) {
+    throw new Error(
+      "audit actor unavailable: the scope has ended — runWithAuditContext's fn had " +
+        "settled before this write resolved the actor (resolve it before returning, " +
+        "or pass an eager AuditContext)",
+    )
+  }
+  const audit = cell.resolved ?? (cell.resolved = await cell.resolve!())
 
   return db.transaction(async (tx) => {
     await setAuditContext(tx, audit.actorId, { ...options, context: audit.context })
