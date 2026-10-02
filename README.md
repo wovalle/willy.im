@@ -16,7 +16,6 @@ packages/
   idp-client/           @willyim/idp — OIDC client, sessions, react-router guards
   rbac/                 @willyim/rbac — deprecated, re-exports kit
   drizzle_repositories/ generic Drizzle repository layer
-  drizzle_audit/        audit logging via DB triggers
   butler/               Telegram / intent utilities
 ```
 
