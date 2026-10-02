@@ -26,6 +26,9 @@ import {
   CreateApplicationInput,
   CreateUserApiKeyInput,
   CreateWorkspaceInput,
+  SetWorkspaceMemberInput,
+  WorkspaceMemberListSchema,
+  WorkspaceMemberSchema,
   InviteMemberInput,
   InviteMemberResult,
   MemberListSchema,
@@ -235,6 +238,30 @@ export const operations = {
     input: CreateWorkspaceInput,
     successCode: "201",
     success: WorkspaceCreatedSchema,
+  },
+  "get /api/v1/apps/{app}/workspaces/{workspaceId}/members": {
+    summary: "List a workspace's members and their roles",
+    permission: "member:read",
+    params: { ...APP_PARAM, workspaceId: "Workspace id, from the app's workspaces." },
+    successCode: "200",
+    success: WorkspaceMemberListSchema,
+  },
+  "put /api/v1/apps/{app}/workspaces/{workspaceId}/members": {
+    summary: "Put an existing user in a workspace with a role (or change it)",
+    description:
+      "The user must already exist at the IdP (404 `unknown_user` otherwise: invite them to the app first). Idempotent: the same call twice leaves one membership.",
+    permission: "member:manage",
+    params: { ...APP_PARAM, workspaceId: "Workspace id, from the app's workspaces." },
+    input: SetWorkspaceMemberInput,
+    successCode: "200",
+    success: WorkspaceMemberSchema,
+  },
+  "delete /api/v1/apps/{app}/workspaces/{workspaceId}/members/{userId}": {
+    summary: "Remove someone from a workspace",
+    permission: "member:manage",
+    params: { ...APP_PARAM, workspaceId: "Workspace id.", userId: "The member's user id." },
+    successCode: "200",
+    success: OkSchema,
   },
 
   "get /api/v1/apps/{app}/user-keys": {
