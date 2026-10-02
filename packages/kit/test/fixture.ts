@@ -120,7 +120,7 @@ export const tags = declareService((ctx) => ({
       input: { id: z.string() },
       output: { tags: z.array(z.string()), title: z.string() },
     },
-    // service-to-service: notes.get checks notes:read against the same caller
+    // service-to-service: notes.get is trusted, so tags:read alone is enough
     async ({ id }) => ({ tags: ["a"], title: (await ctx.services.notes.get({ id })).title }),
   ),
 }))

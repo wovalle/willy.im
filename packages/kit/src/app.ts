@@ -1,7 +1,7 @@
 import { handle, type HandlerContext } from "./api.js"
 import type { OnCall } from "./method.js"
 import type { PermissionsResult } from "./permissions.js"
-import { buildService, registry, type Factory } from "./registry.js"
+import { bindService, linkViews, registry, type Factory } from "./registry.js"
 import type {
   CallEvent,
   Context,
@@ -83,6 +83,10 @@ type AppConfig<A extends unknown[], B, S> = {
  * on `ctx.services` is built the first time it's read, once per context.
  * Factories only touch `ctx.services` inside method bodies, so services may
  * call each other in any order.
+ *
+ * Factories get a copy of the context whose `services` bind the same methods
+ * as trusted: a call one operation makes to another skips the permission, which
+ * the call that entered the app has passed. `app.context` returns the checked one.
  */
 export function createApp<A extends unknown[], B, S extends Record<string, Factory>>(
   config: AppConfig<A, B, S> & ContractCheck<S> & OwnFieldsCheck<B>,
@@ -95,10 +99,15 @@ export function createApp<A extends unknown[], B, S extends Record<string, Facto
       const actor = principal?.actor?.id ?? principal?.id ?? null
       const base = await config.context({ principal, tenantId, caller, actor }, ...args)
       const ctx: any = { ...base, caller, tenantId, actor, services: {} }
-      for (const [name, factory] of Object.entries(config.services))
-        lazyService(ctx.services, name, () =>
-          buildService(factory, ctx, name, config.onCall as OnCall | undefined),
-        )
+      // What factories close over: the same values, with trusted services.
+      const inner: any = { ...ctx, services: {} }
+      linkViews(inner.services, ctx.services)
+      const onCall = config.onCall as OnCall | undefined
+      for (const [name, factory] of Object.entries(config.services)) {
+        const built = once(name, () => factory(inner))
+        lazyService(ctx.services, name, () => bindService(built(), ctx, name, onCall, false))
+        lazyService(inner.services, name, () => bindService(built(), ctx, name, onCall, true))
+      }
       return ctx
     },
     handle: (request, ctx) => handle(app, request, ctx),
@@ -108,30 +117,39 @@ export function createApp<A extends unknown[], B, S extends Record<string, Facto
   return app
 }
 
+/** A service's factory, run on first call and kept; both views of a context share it. */
+function once(name: string, build: () => object) {
+  let built: object | undefined
+  let building = false
+  return () => {
+    if (built) return built
+    if (building)
+      throw new Error(
+        `kit: service "${name}" was read while it builds; use ctx.services only inside method bodies`,
+      )
+    building = true
+    try {
+      return (built = build())
+    } finally {
+      building = false
+    }
+  }
+}
+
 /** `services[name]`, built on first read and kept; enumerable, so `Object.keys` lists it. */
 function lazyService(services: object, name: string, build: () => object) {
-  let building = false
   Object.defineProperty(services, name, {
     enumerable: true,
     configurable: true,
     get() {
-      if (building)
-        throw new Error(
-          `kit: service "${name}" was read while it builds; use ctx.services only inside method bodies`,
-        )
-      building = true
-      try {
-        const service = build()
-        Object.defineProperty(services, name, {
-          value: service,
-          enumerable: true,
-          configurable: true,
-          writable: true,
-        })
-        return service
-      } finally {
-        building = false
-      }
+      const service = build()
+      Object.defineProperty(services, name, {
+        value: service,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      })
+      return service
     },
   })
 }

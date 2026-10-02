@@ -161,6 +161,11 @@ export type CallEvent<C = Context> = {
   ctx: C
   /** The parsed input, or the raw one when it failed to parse. */
   input: unknown
+  /**
+   * Made by another operation through the `ctx.services` its service closes
+   * over (the permission wasn't checked); false for a call that entered the app.
+   */
+  internal: boolean
   ok: boolean
   /** What the call threw: a 403/400/404 `Response`, an `Error`, … */
   error?: unknown

@@ -3,13 +3,14 @@ import { llmsTxt, openapi, visibleTo } from "./discovery.js"
 import { locked, lockedLlmsTxt, lockedOpenapi, unauthenticated } from "./locked.js"
 import { available, invoke, permitted, unknownMethod } from "./method.js"
 import type { PermissionChecker } from "./permissions.js"
-import { registry } from "./registry.js"
+import { checkedServices, registry } from "./registry.js"
 
 /**
  * What `handle` needs from a context: the caller, and the services built on it.
  * `kind: "anonymous"` (no credentials at all) makes discovery list every method
  * as documentation (see `discovery.anonymous`); any other caller sees only what
- * it may call.
+ * it may call. Calls always run the checked services, even when handed the
+ * context a factory closes over.
  */
 export type HandlerContext = {
   caller: PermissionChecker<any> & { kind?: string }
@@ -67,9 +68,7 @@ export async function handle(
 
   const { input, output } = entry.contract
   try {
-    const bound = (ctx.services as Record<string, Record<string, unknown>>)[entry.service][
-      entry.method
-    ]
+    const bound = checkedServices(ctx.services)[entry.service][entry.method]
     // A denied caller gets its 403 (and onCall fires) whatever the body.
     const body =
       input && permitted(ctx.caller, entry.contract.permission)
