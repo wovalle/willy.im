@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, expectTypeOf, it } from "vitest"
 
 import { createUserKeys, readApiKey } from "../src/user-keys.js"
 import { IdpError } from "../src/index.js"
@@ -32,6 +32,7 @@ function keysFor(handler: (request: Request) => Response | Promise<Response>) {
 
 const validKey = {
   valid: true,
+  kind: "user",
   keyId: "k_1",
   userId: "u_1",
   workspaceId: "w_1",
@@ -185,6 +186,49 @@ describe("createUserKeys", () => {
       reason: "insufficient_scope",
       missing: ["analytics:write"],
     })
+  })
+
+  it('covers a required scope with a wildcard: "*" covers everything, "ns:*" its namespace', async () => {
+    const { keys } = keysFor(() => json({ ...validKey, scopes: ["analytics:*"] }))
+    const request = new Request("https://api.luchy.test/v1/q", {
+      headers: { authorization: "Bearer wak_secret" },
+    })
+
+    await expect(
+      keys.authenticate(request, { scopes: ["analytics:read", "analytics:write"] }),
+    ).resolves.toMatchObject({ ok: true })
+    await expect(
+      keys.authenticate(request, { scopes: ["analytics:read", "billing:read"] }),
+    ).resolves.toEqual({
+      ok: false,
+      status: 403,
+      reason: "insufficient_scope",
+      missing: ["billing:read"],
+    })
+  })
+
+  it('authenticates an app token as kind app, its ["*"] covering any required scope', async () => {
+    const appToken = {
+      valid: true,
+      kind: "app",
+      keyId: "t_1",
+      issuedBy: "adminkey:k_9",
+      workspaceId: null,
+      scopes: ["*"],
+      name: "claude-code",
+    }
+    const { keys } = keysFor(() => json(appToken))
+    const request = new Request("https://api.luchy.test/v1/q", {
+      headers: { authorization: "Bearer wat_secret" },
+    })
+
+    const result = await keys.authenticate(request, { scopes: ["analytics:write"] })
+    expect(result).toEqual({ ok: true, key: appToken })
+    // `kind` discriminates: only an app token has an issuer, only a user key an owner.
+    if (result.ok && result.key.kind === "app") {
+      expectTypeOf(result.key.issuedBy).toEqualTypeOf<string>()
+      expectTypeOf(result.key).not.toHaveProperty("userId")
+    }
   })
 
   it("separates a missing credential from a rejected one", async () => {

@@ -92,6 +92,14 @@ export {
 } from "./user-keys.js"
 
 export {
+  createAppTokens,
+  type AppToken,
+  type AppTokens,
+  type AppTokensOptions,
+  type GetAppTokenOptions,
+} from "./app-tokens.js"
+
+export {
   createIdentities,
   type Identities,
   type IdentitiesOptions,

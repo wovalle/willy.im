@@ -184,6 +184,51 @@ export const userApiKey = sqliteTable(
 export type UserApiKey = typeof userApiKey.$inferSelect
 
 /**
+ * App token: a short-lived credential for ONE app's API, minted by an IdP
+ * superadmin. GitHub-App style — an admin key (`wim_`) is the private key and
+ * never goes to an app; this (`wat_`) is the installation token that does. The
+ * app validates it through the same endpoint as a `wak_` user key and treats it
+ * as the issuer acting in the app, with `scopes` (`["*"]` unless narrowed).
+ *
+ * Exactly one issuer column is set: the admin key that minted it, or the
+ * allowlisted admin who did from a session. A token is only as good as its
+ * issuer — once that key is revoked or expired, or that email leaves
+ * ADMIN_EMAILS, the token stops validating. No revoke of its own: it expires
+ * within the hour.
+ */
+export const appToken = sqliteTable(
+  "app_token",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    // The app whose API this token calls — oauth_client.metadata.app.
+    applicationId: text("application_id").notNull(),
+    // First chars of the token (e.g. "wat_a1b2c3d4") for identification. Not secret.
+    prefix: text("prefix").notNull(),
+    // SHA-256 (hex) of the full token — the lookup key on validation.
+    keyHash: text("key_hash").notNull(),
+    // `["*"]`, or scopes resolved against the app's catalog at mint.
+    scopes: text("scopes", { mode: "json" }).$type<string[]>().notNull(),
+    // Optional tenant binding (organization.id). Null = any workspace.
+    workspaceId: text("workspace_id"),
+    issuedByKeyId: text("issued_by_key_id").references(() => apiKey.id, {
+      onDelete: "set null",
+    }),
+    issuedByUserId: text("issued_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .$defaultFn(() => new Date())
+      .notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [uniqueIndex("app_token_key_hash_unique").on(t.keyHash)],
+)
+
+export type AppToken = typeof appToken.$inferSelect
+
+/**
  * A user's identity on some OTHER system — their Slack user id, their WhatsApp
  * number, a Telegram id — pinned to their IdP user, so an app that hears from
  * them on that system can ask "who is this, and what may they do here?" and

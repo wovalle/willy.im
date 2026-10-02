@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm"
 import * as schema from "../db/schema"
 import { catalogOf, getApplicationByApp } from "./admin.server"
 import { generateToken, hashToken } from "./api-keys.server"
+import { APP_TOKEN_PREFIX, validateAppToken, type AppTokenValidation } from "./app-tokens.server"
 import { recordAudit } from "./audit.server"
 import { assertCan, type Caller } from "./caller.server"
 import { memberProductPermissions } from "./claims.server"
@@ -188,36 +189,40 @@ export async function revokeUserApiKey(
   return { ok: true }
 }
 
-export type UserApiKeyValidation =
+export type KeyValidation =
   | {
       valid: true
+      kind: "user"
       keyId: string
       userId: string
       workspaceId: string | null
       scopes: string[]
       name: string
     }
-  | { valid: false; reason: "not_found" | "revoked" | "expired" }
+  | AppTokenValidation
 
 /**
- * Validates a presented token for `app`. The lookup is by SHA-256 hash and
- * scoped to the calling app, so a key minted for app A never validates for app
- * B. A hit bumps lastUsedAt (best effort).
+ * Validates a key presented to `app`'s own API: an end-user key (`wak_`), or an
+ * app token (`wat_`, see app-tokens.server.ts). A hit says which in `kind`. The
+ * lookup is by SHA-256 hash and scoped to the calling app, so a key minted for
+ * app A never validates for app B. A user-key hit bumps lastUsedAt (best effort).
  *
- * A key is only as good as its owner: if they have left the app, or no longer
- * hold every scope, it is refused rather than silently shrunk. The response
- * reads `revoked` (the SDK's schema has no closer reason); the log says why.
+ * A user key is only as good as its owner: if they have left the app, or no
+ * longer hold every scope, it is refused rather than silently shrunk. The
+ * response reads `revoked` (the SDK's schema has no closer reason); the log
+ * says why.
  *
  * Requires `userkey:validate`, so leaked keys can't be probed by a caller that
  * only holds read access. Not audited: validation is a hot read path, and a row
  * per API call would drown the trail it shares with the write operations.
  */
-export async function validateUserApiKey(
+export async function validateKey(
   ctx: BaseServiceContext,
   caller: Caller,
   input: { app: string; token: string },
-): Promise<UserApiKeyValidation> {
+): Promise<KeyValidation> {
   await assertCan(caller, input.app, "userkey:validate")
+  if (input.token.startsWith(APP_TOKEN_PREFIX)) return validateAppToken(ctx, input)
   if (!input.token.startsWith(USER_TOKEN_PREFIX)) return { valid: false, reason: "not_found" }
 
   const keyHash = await hashToken(input.token)
@@ -261,6 +266,7 @@ export async function validateUserApiKey(
 
   return {
     valid: true,
+    kind: "user",
     keyId: row.id,
     userId: row.userId,
     workspaceId: row.workspaceId ?? null,
