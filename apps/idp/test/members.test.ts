@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import * as schema from "../app/db/schema"
 import { listAuditForApp } from "../app/lib/audit.server"
 import type { Caller } from "../app/lib/caller.server"
+import { APP_PERMISSIONS } from "../app/lib/permissions"
 import {
   addOrInviteAppMember,
   claimInvitationsForUser,
@@ -19,6 +20,7 @@ import {
   createMember,
   createUser,
   fakeUserCaller,
+  signedInCaller,
 } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
@@ -43,21 +45,25 @@ describe("invitations", () => {
   })
   afterEach(() => h.close())
 
-  const invite = (overrides: Partial<Parameters<typeof addOrInviteAppMember>[2]> = {}) =>
-    addOrInviteAppMember(
-      h.ctx,
-      fakeUserCaller({ userId: inviter.id, app: "acme", permissions: ["member:invite"] }),
-      {
-        app: "acme",
-        email: "newcomer@acme.test",
-        role: "member",
-        permissions: ["member:read"],
-        productPermissions: ["invoices:read"],
-        catalog: { permissions: CATALOG, resourceTypes: [] },
-        origin: "https://idp.willy.im",
-        ...overrides,
-      },
-    )
+  const invite = (
+    overrides: Partial<Parameters<typeof addOrInviteAppMember>[2]> = {},
+    // Holds what the default invite hands out (member:read) and nothing more.
+    as: Caller = fakeUserCaller({
+      userId: inviter.id,
+      app: "acme",
+      permissions: ["member:invite", "member:read"],
+    }),
+  ) =>
+    addOrInviteAppMember(h.ctx, as, {
+      app: "acme",
+      email: "newcomer@acme.test",
+      role: "member",
+      permissions: ["member:read"],
+      productPermissions: ["invoices:read"],
+      catalog: { permissions: CATALOG, resourceTypes: [] },
+      origin: "https://idp.willy.im",
+      ...overrides,
+    })
 
   const memberRow = async (app: string, userId: string) => {
     const [row] = await h.ctx.db
@@ -190,12 +196,15 @@ describe("invitations", () => {
 
   it("stores no explicit grants for an admin (they resolve to everything)", async () => {
     const existing = await createUser(h.ctx, { email: "boss@acme.test" })
-    await invite({
-      email: "boss@acme.test",
-      role: "admin",
-      permissions: ["member:read"],
-      productPermissions: ["invoices:read"],
-    })
+    await invite(
+      {
+        email: "boss@acme.test",
+        role: "admin",
+        permissions: ["member:read"],
+        productPermissions: ["invoices:read"],
+      },
+      fakeUserCaller({ userId: inviter.id, app: "acme", permissions: [...APP_PERMISSIONS] }),
+    )
 
     const member = await memberRow("acme", existing.id)
     expect(member!.role).toBe("admin")
@@ -307,9 +316,7 @@ describe("member management", () => {
     const boss = await createUser(h.ctx, { email: "boss@acme.test" })
     await createMember(h.ctx, { app: "acme", userId: boss.id, role: "admin" })
 
-    expect(
-      await removeAppMember(h.ctx, root, { app: "acme", userId: boss.id }),
-    ).toEqual({
+    expect(await removeAppMember(h.ctx, root, { app: "acme", userId: boss.id })).toEqual({
       error: "Can't remove the last admin — promote someone else first.",
     })
   })
@@ -347,7 +354,7 @@ describe("member management", () => {
       label: "WhatsApp conversation",
       list: "https://bender.test/idp/resources/kirby-thread",
     }
-    const edit = (resourceTypes: typeof thread[]) =>
+    const edit = (resourceTypes: (typeof thread)[]) =>
       updateAppMember(h.ctx, root, {
         app: "acme",
         userId: deputy.id,
@@ -411,10 +418,165 @@ describe("member management", () => {
   })
 
   it("reports a missing member rather than silently succeeding", async () => {
-    expect(
-      await removeAppMember(h.ctx, root, { app: "acme", userId: "ghost" }),
-    ).toEqual({
+    expect(await removeAppMember(h.ctx, root, { app: "acme", userId: "ghost" })).toEqual({
       error: "Member not found.",
     })
+  })
+})
+
+/**
+ * Whoever hands out management grants must hold them: `member:invite` and
+ * `member:manage` are the authority to invite and edit, not to mint
+ * permissions the caller doesn't have. Product permissions are the app's, so
+ * they stay out of this check.
+ */
+describe("handing out management grants", () => {
+  let h: TestHarness
+  let root: Caller
+  let manager: { id: string; email: string }
+  let deputy: { id: string; email: string }
+  beforeEach(async () => {
+    h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
+    root = (await bootstrapAdminKey(h.ctx)).caller
+    await createApplication(h.ctx, { app: "acme", permissions: ["invoices:read"] })
+    manager = await createUser(h.ctx, { email: "manager@acme.test" })
+    deputy = await createUser(h.ctx, { email: "deputy@acme.test" })
+    await createMember(h.ctx, {
+      app: "acme",
+      userId: manager.id,
+      role: "member",
+      permissions: ["member:invite", "member:manage", "member:read"],
+    })
+    await createMember(h.ctx, { app: "acme", userId: deputy.id, role: "member" })
+  })
+  afterEach(() => h.close())
+
+  const roleOf = async (userId: string) => {
+    const [row] = await h.ctx.db
+      .select({
+        role: schema.applicationMember.role,
+        permissions: schema.applicationMember.permissions,
+      })
+      .from(schema.applicationMember)
+      .where(
+        and(
+          eq(schema.applicationMember.applicationId, "acme"),
+          eq(schema.applicationMember.userId, userId),
+        ),
+      )
+    return row
+  }
+
+  it("refuses a member:manage holder promoting someone to admin", async () => {
+    const caller = await signedInCaller(h.ctx, manager)
+    await expect(
+      updateAppMember(h.ctx, caller, {
+        app: "acme",
+        userId: deputy.id,
+        role: "admin",
+        permissions: [],
+      }),
+    ).rejects.toMatchObject({ status: 403 })
+    expect((await roleOf(deputy.id)).role).toBe("member")
+  })
+
+  it("refuses a member:manage holder promoting themselves to admin", async () => {
+    const caller = await signedInCaller(h.ctx, manager)
+    const res = await updateAppMember(h.ctx, caller, {
+      app: "acme",
+      userId: manager.id,
+      role: "admin",
+      permissions: [],
+    }).catch((err: Response) => err)
+    expect(res).toBeInstanceOf(Response)
+    expect((res as Response).status).toBe(403)
+    expect(await (res as Response).json()).toEqual({ error: "forbidden" })
+    expect((await roleOf(manager.id)).role).toBe("member")
+  })
+
+  it("refuses a member:manage holder granting a permission they lack", async () => {
+    const caller = await signedInCaller(h.ctx, manager)
+    await expect(
+      updateAppMember(h.ctx, caller, {
+        app: "acme",
+        userId: deputy.id,
+        role: "member",
+        permissions: ["member:read", "apikey:create"],
+      }),
+    ).rejects.toMatchObject({ status: 403 })
+    expect((await roleOf(deputy.id)).permissions).toEqual([])
+  })
+
+  it("lets a member:manage holder grant what they hold", async () => {
+    const caller = await signedInCaller(h.ctx, manager)
+    expect(
+      await updateAppMember(h.ctx, caller, {
+        app: "acme",
+        userId: deputy.id,
+        role: "member",
+        permissions: ["member:read"],
+      }),
+    ).toEqual({ ok: true })
+    expect((await roleOf(deputy.id)).permissions).toEqual(["member:read"])
+  })
+
+  it("refuses an inviter handing out admin or a permission they lack", async () => {
+    const caller = await signedInCaller(h.ctx, manager)
+    const base = { app: "acme", email: "newcomer@acme.test", origin: "https://idp.willy.im" }
+    await expect(
+      addOrInviteAppMember(h.ctx, caller, { ...base, role: "admin", permissions: [] }),
+    ).rejects.toMatchObject({ status: 403 })
+    await expect(
+      addOrInviteAppMember(h.ctx, caller, { ...base, role: "member", permissions: ["audit:read"] }),
+    ).rejects.toMatchObject({ status: 403 })
+    expect(await listAppInvitations(h.ctx, "acme")).toHaveLength(0)
+  })
+
+  it("lets an app admin promote someone to admin and invite one", async () => {
+    const boss = await createUser(h.ctx, { email: "boss@acme.test" })
+    await createMember(h.ctx, { app: "acme", userId: boss.id, role: "admin" })
+    const caller = await signedInCaller(h.ctx, boss)
+
+    expect(
+      await updateAppMember(h.ctx, caller, {
+        app: "acme",
+        userId: deputy.id,
+        role: "admin",
+        permissions: [],
+      }),
+    ).toEqual({ ok: true })
+    expect((await roleOf(deputy.id)).role).toBe("admin")
+    expect(
+      await addOrInviteAppMember(h.ctx, caller, {
+        app: "acme",
+        email: "newcomer@acme.test",
+        role: "admin",
+        permissions: [],
+        origin: "https://idp.willy.im",
+      }),
+    ).toEqual({ kind: "invited" })
+  })
+
+  it("lets a superadmin promote someone to admin, by key or by session", async () => {
+    expect(
+      await updateAppMember(h.ctx, root, {
+        app: "acme",
+        userId: deputy.id,
+        role: "admin",
+        permissions: [],
+      }),
+    ).toEqual({ ok: true })
+
+    const superadmin = await createUser(h.ctx, { email: "super@willy.im" })
+    const bySession = await signedInCaller(h.ctx, superadmin)
+    expect(
+      await updateAppMember(h.ctx, bySession, {
+        app: "acme",
+        userId: manager.id,
+        role: "admin",
+        permissions: [],
+      }),
+    ).toEqual({ ok: true })
+    expect((await roleOf(manager.id)).role).toBe("admin")
   })
 })

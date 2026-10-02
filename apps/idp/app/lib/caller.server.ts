@@ -1,16 +1,11 @@
-import { and, eq } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { redirect } from "react-router"
 
 import * as schema from "../db/schema"
 import { hashToken } from "./api-keys.server"
 import type { Actor } from "./audit.server"
 import type { AuthService } from "./auth.server"
-import {
-  APP_PERMISSIONS,
-  isAppPermission,
-  resolvePermissions,
-  type AppPermission,
-} from "./permissions"
+import { appRbac, isAppPermission, resolvePermissions, type AppPermission } from "./permissions"
 import type { BaseServiceContext } from "./services"
 
 /**
@@ -18,9 +13,16 @@ import type { BaseServiceContext } from "./services"
  * and the management API (bearer token) resolve to the same {@link Caller}, so
  * every gate downstream asks the same question — "can this caller do X to app
  * Y?" — and nothing outside this file has to know how the caller arrived.
+ *
+ * Underneath, every caller is a kit `Principal`: global grants (`["*"]` for a
+ * superadmin) plus one membership per app, with the app key as the tenant id.
+ * What a caller may do on an app is `appRbac.callerFor(principal, app)`.
  */
 
 const TOKEN_PREFIX = "wim_"
+
+/** A kit principal over the IdP's management catalog. */
+export type IdpPrincipal = NonNullable<Parameters<typeof appRbac.callerFor>[0]>
 
 export type Caller = {
   kind: "superadmin" | "user" | "key"
@@ -33,16 +35,19 @@ export type Caller = {
   keyId: string | null
   /** The app a scoped key is bound to. Null means not app-bound. */
   applicationId: string | null
-  /** May this caller perform `permission` against `app`? Memoized per app. */
+  /** Who is calling, as grants: the source of every answer below. */
+  principal: IdpPrincipal
+  /** May this caller perform `permission` against `app`? */
   can(app: string, permission: AppPermission): Promise<boolean>
   /** Effective management permissions on `app` — for the UI to decide what to render. */
   permissionsFor(app: string): Promise<AppPermission[]>
   /**
-   * Audit identity. Labels: "user:<id>" | "adminkey:<id>" | "apikey:<id>".
-   * A superadmin via session is "user:<id>" (they're a real person); an
-   * IdP-level key is "adminkey:<id>". Every superadmin action is therefore
-   * attributable to one named, revocable credential — there is no anonymous
-   * superadmin left.
+   * Audit identity. Labels: "user:<id>" | "adminkey:<id>" | "apikey:<id>", the
+   * principal id. A superadmin via session is "user:<id>" (they're a real
+   * person); an IdP-level key is "adminkey:<id>". Every superadmin action is
+   * therefore attributable to one named, revocable credential — there is no
+   * anonymous superadmin left. An impersonated session reads
+   * "user:<impersonator> as user:<target>", with the impersonator as `userId`.
    */
   actor: Actor
 }
@@ -67,84 +72,83 @@ function extractBearer(request: Request): string | null {
   return match ? match[1].trim() : null
 }
 
-/** Keep only catalog permissions (the catalog may have shrunk since the grant). */
-function sanitizePermissions(permissions: string[]): AppPermission[] {
-  return permissions.filter(isAppPermission)
-}
+const forbidden = () => Response.json({ error: "forbidden" }, { status: 403 })
 
 /**
- * Where a superadmin came from. A union rather than nullable fields because
- * every superadmin now *has* an identity — an allowlisted human or a named
- * admin key — and the type is what guarantees the audit label can be built.
+ * The principal's caller on `app`, or null when it holds nothing there. kit
+ * answers a tenant the principal has no membership in (and no global grants)
+ * with a 404 so tenants don't leak; here that just means "no permissions".
  */
-type SuperadminOrigin =
-  | { via: "session"; userId: string; email: string }
-  | { via: "token"; keyId: string }
-
-/** Every permission, every app. Used by both superadmin flavours. */
-function superadminCaller(origin: SuperadminOrigin): Caller {
-  return {
-    kind: "superadmin",
-    via: origin.via,
-    userId: origin.via === "session" ? origin.userId : null,
-    email: origin.via === "session" ? origin.email : null,
-    keyId: origin.via === "token" ? origin.keyId : null,
-    applicationId: null,
-    can: async () => true,
-    permissionsFor: async () => [...APP_PERMISSIONS],
-    actor:
-      origin.via === "session"
-        ? { userId: origin.userId, label: `user:${origin.userId}` }
-        : { userId: null, label: `adminkey:${origin.keyId}` },
+function inApp(principal: IdpPrincipal, app: string) {
+  try {
+    return appRbac.callerFor(principal, app)
+  } catch (err) {
+    if (err instanceof Response && err.status === 404) return null
+    throw err
   }
 }
 
 /**
- * A signed-in human with no IdP-level superpowers. Permissions come from their
- * `application_member` row, resolved per app and memoized in the closure — a
- * route that checks several permissions on one app pays a single query.
+ * Wraps a principal in the {@link Caller} the gates and services read. `kind`
+ * follows the grants: a principal holding `"*"` is a superadmin however it
+ * arrived. Exported so tests build callers the way the resolver does.
  */
-function memberCaller(
+export function callerFromPrincipal(
+  principal: IdpPrincipal,
+  identity: Pick<Caller, "via" | "userId" | "email" | "keyId" | "applicationId" | "actor">,
+): Caller {
+  const superadmin = appRbac.callerFor(principal, null).isSuperadmin
+  return {
+    ...identity,
+    kind: superadmin ? "superadmin" : identity.keyId ? "key" : "user",
+    principal,
+    can: async (app, permission) => inApp(principal, app)?.has(permission) ?? false,
+    permissionsFor: async (app) => inApp(principal, app)?.granted ?? [],
+  }
+}
+
+/**
+ * A signed-in human. An allowlisted email is a superadmin (`grants: ["*"]`, no
+ * memberships needed); anyone else gets one membership per `application_member`
+ * row — the role's bag ∪ the row's explicit grants — loaded in one query.
+ *
+ * An impersonated session keeps the target's grants, but names the impersonator
+ * as the principal's `actor`, and the audit trail records both.
+ */
+async function sessionCaller(
   ctx: BaseServiceContext,
   user: { id: string; email: string },
-): Caller {
-  const cache = new Map<string, Promise<AppPermission[]>>()
-
-  const load = (app: string): Promise<AppPermission[]> => {
-    const hit = cache.get(app)
-    if (hit) return hit
-    const pending = (async () => {
-      const [member] = await ctx.db
-        .select({
-          role: schema.applicationMember.role,
-          permissions: schema.applicationMember.permissions,
-        })
-        .from(schema.applicationMember)
-        .where(
-          and(
-            eq(schema.applicationMember.applicationId, app),
-            eq(schema.applicationMember.userId, user.id),
-          ),
-        )
-        .limit(1)
-      if (!member) return []
-      return resolvePermissions(member.role, member.permissions ?? [])
-    })()
-    cache.set(app, pending)
-    return pending
-  }
-
-  return {
-    kind: "user",
-    via: "session",
+  impersonatorId: string | null,
+): Promise<Caller> {
+  const id = `user:${user.id}`
+  const actor = impersonatorId ? { id: `user:${impersonatorId}` } : undefined
+  const identity = {
+    via: "session" as const,
     userId: user.id,
     email: user.email,
     keyId: null,
     applicationId: null,
-    can: async (app, permission) => (await load(app)).includes(permission),
-    permissionsFor: load,
-    actor: { userId: user.id, label: `user:${user.id}` },
+    actor: impersonatorId
+      ? { userId: impersonatorId, label: `user:${impersonatorId} as ${id}` }
+      : { userId: user.id, label: id },
   }
+
+  if (isAdminEmail(ctx, user.email))
+    return callerFromPrincipal({ id, grants: ["*"], memberships: [], actor }, identity)
+
+  const rows = await ctx.db
+    .select({
+      applicationId: schema.applicationMember.applicationId,
+      role: schema.applicationMember.role,
+      permissions: schema.applicationMember.permissions,
+    })
+    .from(schema.applicationMember)
+    .where(eq(schema.applicationMember.userId, user.id))
+  const memberships = rows.map((row) => ({
+    tenantId: row.applicationId,
+    grants: resolvePermissions(row.role, row.permissions ?? []),
+  }))
+  return callerFromPrincipal({ id, grants: [], memberships, actor }, identity)
 }
 
 /**
@@ -183,25 +187,31 @@ async function keyCaller(ctx: BaseServiceContext, token: string): Promise<Caller
       }),
     )
 
+  const identity = { via: "token" as const, userId: null, email: null, keyId: row.id }
+
   // No app scope ⇒ IdP-level admin key: full superadmin authority, carrying an
   // identity the audit log can name and an admin can revoke.
   if (row.applicationId === null) {
-    return superadminCaller({ via: "token", keyId: row.id })
+    const id = `adminkey:${row.id}`
+    return callerFromPrincipal(
+      { id, grants: ["*"], memberships: [] },
+      { ...identity, applicationId: null, actor: { userId: null, label: id } },
+    )
   }
 
-  const granted = sanitizePermissions(row.permissions ?? [])
-
-  return {
-    kind: "key",
-    via: "token",
-    userId: null,
-    email: null,
-    keyId: row.id,
-    applicationId: row.applicationId,
-    can: async (app, permission) => app === row.applicationId && granted.includes(permission),
-    permissionsFor: async (app) => (app === row.applicationId ? granted : []),
-    actor: { userId: null, label: `apikey:${row.id}` },
-  }
+  // App-bound: one membership holding the key's permissions (filtered to the
+  // catalog, in case it shrank since the key was minted).
+  const id = `apikey:${row.id}`
+  return callerFromPrincipal(
+    {
+      id,
+      grants: [],
+      memberships: [
+        { tenantId: row.applicationId, grants: (row.permissions ?? []).filter(isAppPermission) },
+      ],
+    },
+    { ...identity, applicationId: row.applicationId, actor: { userId: null, label: id } },
+  )
 }
 
 /**
@@ -227,10 +237,11 @@ export async function resolveCaller(
 
   const session = await auth.api.getSession({ headers: request.headers })
   if (!session) return null
-  const user = { id: session.user.id, email: session.user.email }
-  return isAdminEmail(ctx, user.email)
-    ? superadminCaller({ via: "session", userId: user.id, email: user.email })
-    : memberCaller(ctx, user)
+  return sessionCaller(
+    ctx,
+    { id: session.user.id, email: session.user.email },
+    session.session.impersonatedBy ?? null,
+  )
 }
 
 /** What a gate demands: IdP-level superadmin, or a permission on one app. */
@@ -262,7 +273,7 @@ export async function requireApiCaller(
   const caller = await resolveCaller(request, ctx, auth)
   const verdict = await authorize(caller, need)
   if (verdict === "unauthenticated") throw Response.json({ error: "unauthorized" }, { status: 401 })
-  if (verdict === "forbidden") throw Response.json({ error: "forbidden" }, { status: 403 })
+  if (verdict === "forbidden") throw forbidden()
   return caller as Caller
 }
 
@@ -301,7 +312,13 @@ export async function assertCan(
   app: string,
   permission: AppPermission,
 ): Promise<void> {
-  if (!(await caller.can(app, permission))) {
-    throw Response.json({ error: "forbidden" }, { status: 403 })
-  }
+  if (!(await caller.can(app, permission))) throw forbidden()
+}
+
+/**
+ * Throws the same 403 unless the caller covers every grant in `wanted` on `app`:
+ * whoever hands out grants (an invite, a role change) must hold them first.
+ */
+export function assertCovers(caller: Caller, app: string, wanted: readonly string[]): void {
+  if (!appRbac.covers(inApp(caller.principal, app)?.grants ?? [], wanted)) throw forbidden()
 }

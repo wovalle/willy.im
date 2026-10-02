@@ -6,7 +6,7 @@ import {
   hashToken,
 } from "../../app/lib/api-keys.server"
 import type { AuthService } from "../../app/lib/auth.server"
-import { resolveCaller, type Caller } from "../../app/lib/caller.server"
+import { callerFromPrincipal, resolveCaller, type Caller } from "../../app/lib/caller.server"
 import type { ResourceTypeDecl } from "../../app/lib/metadata"
 import type { AppPermission } from "../../app/lib/permissions"
 import {
@@ -181,24 +181,54 @@ export async function bootstrapAdminKey(
   return { id, name, token, request, caller }
 }
 
-/** A signed-in human caller with an explicit permission set on one app. */
+/**
+ * A signed-in human caller with an explicit permission set on one app: one
+ * membership, built into a Caller the way the resolver builds one.
+ */
 export function fakeUserCaller(input: {
   userId: string
   email?: string
   app: string
   permissions: AppPermission[]
 }): Caller {
-  return {
-    kind: "user",
-    via: "session",
-    userId: input.userId,
-    email: input.email ?? `${input.userId}@test`,
-    keyId: null,
-    applicationId: null,
-    can: async (app, permission) => app === input.app && input.permissions.includes(permission),
-    permissionsFor: async (app) => (app === input.app ? [...input.permissions] : []),
-    actor: { userId: input.userId, label: `user:${input.userId}` },
-  }
+  return callerFromPrincipal(
+    {
+      id: `user:${input.userId}`,
+      grants: [],
+      memberships: [{ tenantId: input.app, grants: input.permissions }],
+    },
+    {
+      via: "session",
+      userId: input.userId,
+      email: input.email ?? `${input.userId}@test`,
+      keyId: null,
+      applicationId: null,
+      actor: { userId: input.userId, label: `user:${input.userId}` },
+    },
+  )
+}
+
+/**
+ * A signed-in human as the real resolver sees them: their grants come from the
+ * `application_member` rows in the database, not from the test. `impersonatedBy`
+ * makes it an impersonation session, as Better Auth's admin plugin marks one.
+ */
+export async function signedInCaller(
+  ctx: BaseServiceContext,
+  user: { id: string; email: string },
+  input: { impersonatedBy?: string } = {},
+): Promise<Caller> {
+  const auth = {
+    api: {
+      getSession: async () => ({
+        user,
+        session: { impersonatedBy: input.impersonatedBy ?? null },
+      }),
+    },
+  } as unknown as AuthService
+  const caller = await resolveCaller(new Request("https://idp.willy.im/"), ctx, auth)
+  if (!caller) throw new Error("signedInCaller: the resolver rejected the session")
+  return caller
 }
 
 /** Mints a scoped key as `caller`, unwrapping the error union. */

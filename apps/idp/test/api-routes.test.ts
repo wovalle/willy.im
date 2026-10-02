@@ -615,6 +615,37 @@ describe("management API routes", () => {
         body: { error: "resource_lookup_failed", detail: ["kirby:thread"] },
       })
     })
+
+    it("422s scopes the user doesn't hold in the app, naming them", async () => {
+      await call(appPermissions.action, {
+        request: request("/api/v1/apps/acme/permissions", {
+          method: "PUT",
+          token: adminToken,
+          body: { permissions: ["invoices:read", "invoices:write"], resourceTypes: [] },
+        }),
+        params: { app: "acme" },
+      })
+      const user = await createUser(h.ctx, { email: "clerk@acme.test" })
+      await createMember(h.ctx, {
+        app: "acme",
+        userId: user.id,
+        role: "member",
+        productPermissions: ["invoices:read"],
+      })
+
+      const res = await call(appUserKeys.action, {
+        request: request("/api/v1/apps/acme/user-keys", {
+          method: "POST",
+          token: adminToken,
+          body: { userId: user.id, name: "CLI", scopes: ["invoices:read", "invoices:write"] },
+        }),
+        params: { app: "acme" },
+      })
+      expect(res).toEqual({
+        status: 422,
+        body: { error: "scopes_not_held", detail: ["invoices:write"] },
+      })
+    })
   })
 
   describe("/api/v1/apps/{app}/keys/{id}", () => {

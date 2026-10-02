@@ -114,6 +114,11 @@ describe("resolveCaller", () => {
     expect(caller!.userId).toBe(superadmin.id)
     expect(caller!.email).toBe("super@willy.im")
     expect(caller!.actor).toEqual({ userId: superadmin.id, label: `user:${superadmin.id}` })
+    expect(caller!.principal).toEqual({
+      id: `user:${superadmin.id}`,
+      grants: ["*"],
+      memberships: [],
+    })
     expect(await caller!.can("acme", "app:delete")).toBe(true)
     expect(await caller!.permissionsFor("acme")).toEqual([...APP_PERMISSIONS])
     // No membership needed, on any app.
@@ -173,27 +178,79 @@ describe("resolveCaller", () => {
     expect(await caller!.can("acme", "app:read")).toBe(false)
   })
 
-  it("looks a member's row up once per app, however many permissions are checked", async () => {
+  it("loads all of a member's rows in one query, and none per check", async () => {
     const user = await createUser(h.ctx, { email: "member@acme.test" })
+    await createApplication(h.ctx, { app: "other" })
     await createMember(h.ctx, {
       app: "acme",
       userId: user.id,
       role: "member",
       permissions: ["member:read"],
     })
-    await createApplication(h.ctx, { app: "other" })
+    await createMember(h.ctx, { app: "other", userId: user.id, role: "admin" })
 
-    const caller = (await resolveCaller(consoleRequest, h.ctx, authStub(user))) as Caller
     const select = vi.spyOn(h.ctx.db, "select")
-
-    await caller.can("acme", "member:read")
-    await caller.can("acme", "member:manage")
-    await caller.permissionsFor("acme")
+    const caller = (await resolveCaller(consoleRequest, h.ctx, authStub(user))) as Caller
     expect(select).toHaveBeenCalledTimes(1)
 
-    await caller.can("other", "member:read")
-    expect(select).toHaveBeenCalledTimes(2)
+    expect(await caller.can("acme", "member:read")).toBe(true)
+    expect(await caller.can("acme", "member:manage")).toBe(false)
+    expect(await caller.can("other", "app:delete")).toBe(true)
+    expect(await caller.permissionsFor("never-heard-of-it")).toEqual([])
+    expect(select).toHaveBeenCalledTimes(1)
     select.mockRestore()
+  })
+
+  it("builds a principal with one membership per app, the role expanded", async () => {
+    const user = await createUser(h.ctx, { email: "member@acme.test" })
+    await createApplication(h.ctx, { app: "other" })
+    await createMember(h.ctx, {
+      app: "acme",
+      userId: user.id,
+      role: "member",
+      permissions: ["member:read"],
+    })
+    await createMember(h.ctx, { app: "other", userId: user.id, role: "admin" })
+
+    const caller = await resolveCaller(consoleRequest, h.ctx, authStub(user))
+    expect(caller!.principal).toEqual({
+      id: `user:${user.id}`,
+      grants: [],
+      memberships: expect.arrayContaining([
+        { tenantId: "acme", grants: ["member:read"] },
+        { tenantId: "other", grants: [...APP_PERMISSIONS] },
+      ]),
+    })
+  })
+
+  it("records the impersonator as the actor, with the target's grants", async () => {
+    const admin = await createUser(h.ctx, { email: "super@willy.im" })
+    const target = await createUser(h.ctx, { email: "member@acme.test" })
+    await createMember(h.ctx, {
+      app: "acme",
+      userId: target.id,
+      role: "member",
+      permissions: ["member:read"],
+    })
+    const auth = {
+      api: {
+        getSession: async () => ({ user: target, session: { impersonatedBy: admin.id } }),
+      },
+    } as unknown as AuthService
+
+    const caller = await resolveCaller(consoleRequest, h.ctx, auth)
+    expect(caller!.kind).toBe("user")
+    expect(caller!.userId).toBe(target.id)
+    expect(caller!.principal.id).toBe(`user:${target.id}`)
+    expect(caller!.principal.actor).toEqual({ id: `user:${admin.id}` })
+    // Both people land in the trail: who acted, and as whom.
+    expect(caller!.actor).toEqual({
+      userId: admin.id,
+      label: `user:${admin.id} as user:${target.id}`,
+    })
+    // The impersonator's superadmin email buys nothing: these are the target's grants.
+    expect(await caller!.permissionsFor("acme")).toEqual(["member:read"])
+    expect(await caller!.can("acme", "app:delete")).toBe(false)
   })
 
   it("resolves a scoped key to an app-bound caller", async () => {
@@ -206,6 +263,11 @@ describe("resolveCaller", () => {
     expect(caller!.applicationId).toBe("acme")
     expect(caller!.userId).toBeNull()
     expect(caller!.actor).toEqual({ userId: null, label: `apikey:${id}` })
+    expect(caller!.principal).toEqual({
+      id: `apikey:${id}`,
+      grants: [],
+      memberships: [{ tenantId: "acme", grants: ["member:read", "member:invite"] }],
+    })
     expect(await caller!.can("acme", "member:read")).toBe(true)
     expect(await caller!.can("acme", "app:delete")).toBe(false)
     // App-bound: the same permission against another app is a no.
@@ -237,6 +299,7 @@ describe("resolveCaller", () => {
     expect(caller!.email).toBeNull()
     // The point of an admin key: a name in the trail.
     expect(caller!.actor).toEqual({ userId: null, label: `adminkey:${id}` })
+    expect(caller!.principal).toEqual({ id: `adminkey:${id}`, grants: ["*"], memberships: [] })
     expect(await caller!.can("literally-anything", "app:delete")).toBe(true)
     expect(await caller!.permissionsFor("literally-anything")).toEqual([...APP_PERMISSIONS])
   })
