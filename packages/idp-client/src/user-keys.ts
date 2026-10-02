@@ -17,6 +17,11 @@
  *    and checks required scopes, returning a discriminated result rather than
  *    throwing, so the caller decides what a 401 looks like.
  *
+ * The same validation answers for app tokens (`wat_…`, see `./app-tokens.ts`):
+ * an IdP superadmin acting in this app. `kind` says which arrived, and the
+ * scope check is wildcard-aware, because an app token carries `["*"]` unless
+ * it was narrowed.
+ *
  * Only for *secret* credentials. A public write key embedded in a page (an
  * analytics ingest token, say) identifies a site rather than a user, cannot be
  * kept secret, and must not pay a round trip per hit — keep those in the app's
@@ -26,6 +31,7 @@
 import type { z } from "zod"
 
 import { createManagementApi, type ManagementApiOptions } from "./api.js"
+import { grants } from "./claims.js"
 import { sha256Base64url } from "./crypto.js"
 import type {
   CreateUserApiKeyInput,
@@ -45,7 +51,7 @@ export type MintedUserApiKey = z.output<typeof UserApiKeyCreatedSchema>
 /** A validation verdict. A miss is data, not an error — hence `valid: false`. */
 export type UserKeyValidation = z.output<typeof UserApiKeyValidationSchema>
 
-/** The `valid: true` half, i.e. an authenticated key. */
+/** The `valid: true` half: an end-user key (`kind: "user"`) or an app token (`kind: "app"`). */
 export type AuthenticatedKey = Extract<UserKeyValidation, { valid: true }>
 
 export type UserKeyCacheOptions = {
@@ -75,7 +81,7 @@ export type ListFilter = {
 export type CreateUserApiKeyInput = CreateBody & { signal?: AbortSignal }
 
 export type AuthenticateOptions = {
-  /** Every scope listed must be present on the key. */
+  /** Every scope listed must be covered by the key's: exactly, or by `"*"` / `"ns:*"`. */
   scopes?: string[]
   signal?: AbortSignal
 }
@@ -238,7 +244,7 @@ export function createUserKeys(options: UserKeysOptions) {
       if (!verdict.valid) return { ok: false, status: 401, reason: verdict.reason }
 
       const required = init.scopes ?? []
-      const missing = required.filter((scope) => !verdict.scopes.includes(scope))
+      const missing = required.filter((scope) => !grants(verdict.scopes, scope))
       if (missing.length) {
         return { ok: false, status: 403, reason: "insufficient_scope", missing }
       }

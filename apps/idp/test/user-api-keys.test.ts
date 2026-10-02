@@ -6,7 +6,7 @@ import {
   createUserApiKey,
   listUserApiKeys,
   revokeUserApiKey,
-  validateUserApiKey,
+  validateKey,
 } from "../app/lib/user-api-keys.server"
 import { listAuditForApp } from "../app/lib/audit.server"
 import type { Caller } from "../app/lib/caller.server"
@@ -115,16 +115,17 @@ describe("end-user API keys", () => {
     expect(await mint({ scopes: CATALOG })).toMatchObject({ token: expect.any(String) })
   })
 
-  it("validates a live key and returns its owner and scopes", async () => {
+  it("validates a live key as kind user and returns its owner and scopes", async () => {
     const minted = await mint({ scopes: ["invoices:read", "invoices:write"] })
     if (!("token" in minted)) throw new Error("mint failed")
 
-    const result = await validateUserApiKey(h.ctx, root, {
+    const result = await validateKey(h.ctx, root, {
       app: "acme",
       token: minted.token,
     })
     expect(result).toMatchObject({
       valid: true,
+      kind: "user",
       keyId: minted.id,
       userId: user.id,
       workspaceId: null,
@@ -138,7 +139,7 @@ describe("end-user API keys", () => {
     if (!("token" in minted)) throw new Error("mint failed")
 
     expect(
-      await validateUserApiKey(h.ctx, root, { app: "other", token: minted.token }),
+      await validateKey(h.ctx, root, { app: "other", token: minted.token }),
     ).toEqual({
       valid: false,
       reason: "not_found",
@@ -147,14 +148,14 @@ describe("end-user API keys", () => {
 
   it("reports not_found for a garbage token", async () => {
     expect(
-      await validateUserApiKey(h.ctx, root, { app: "acme", token: "wak_nonsense" }),
+      await validateKey(h.ctx, root, { app: "acme", token: "wak_nonsense" }),
     ).toEqual({
       valid: false,
       reason: "not_found",
     })
     // A token that isn't even ours is rejected without a database round-trip.
     expect(
-      await validateUserApiKey(h.ctx, root, { app: "acme", token: "bearer-ish" }),
+      await validateKey(h.ctx, root, { app: "acme", token: "bearer-ish" }),
     ).toEqual({
       valid: false,
       reason: "not_found",
@@ -167,7 +168,7 @@ describe("end-user API keys", () => {
 
     await revokeUserApiKey(h.ctx, root, { app: "acme", id: minted.id })
     expect(
-      await validateUserApiKey(h.ctx, root, { app: "acme", token: minted.token }),
+      await validateKey(h.ctx, root, { app: "acme", token: minted.token }),
     ).toEqual({
       valid: false,
       reason: "revoked",
@@ -179,7 +180,7 @@ describe("end-user API keys", () => {
     if (!("token" in minted)) throw new Error("mint failed")
 
     expect(
-      await validateUserApiKey(h.ctx, root, { app: "acme", token: minted.token }),
+      await validateKey(h.ctx, root, { app: "acme", token: minted.token }),
     ).toEqual({
       valid: false,
       reason: "expired",
@@ -192,7 +193,7 @@ describe("end-user API keys", () => {
     await setMembership("removed")
 
     // The SDK's schema has no reason for this; `revoked` is the closest it reads.
-    expect(await validateUserApiKey(h.ctx, root, { app: "acme", token: minted.token })).toEqual({
+    expect(await validateKey(h.ctx, root, { app: "acme", token: minted.token })).toEqual({
       valid: false,
       reason: "revoked",
     })
@@ -207,7 +208,7 @@ describe("end-user API keys", () => {
     if (!("token" in minted)) throw new Error("mint failed")
     await setMembership({ productPermissions: ["invoices:read"] })
 
-    expect(await validateUserApiKey(h.ctx, root, { app: "acme", token: minted.token })).toEqual({
+    expect(await validateKey(h.ctx, root, { app: "acme", token: minted.token })).toEqual({
       valid: false,
       reason: "revoked",
     })
@@ -251,7 +252,7 @@ describe("end-user API keys", () => {
       revokeUserApiKey(h.ctx, reader, { app: "acme", id: minted.id }),
     ).rejects.toMatchObject({ status: 403 })
     await expect(
-      validateUserApiKey(h.ctx, reader, { app: "acme", token: minted.token }),
+      validateKey(h.ctx, reader, { app: "acme", token: minted.token }),
     ).rejects.toMatchObject({ status: 403 })
     // The one it does hold still works.
     expect(await listUserApiKeys(h.ctx, reader, { app: "acme" })).toHaveLength(1)
@@ -287,7 +288,7 @@ describe("end-user API keys", () => {
       error: "Key not found.",
     })
     expect(
-      await validateUserApiKey(h.ctx, root, { app: "acme", token: minted.token }),
+      await validateKey(h.ctx, root, { app: "acme", token: minted.token }),
     ).toMatchObject({
       valid: true,
     })
@@ -341,7 +342,7 @@ describe("end-user API keys scoped to a resource instance", () => {
     // The composed string is what lands on the key — nothing downstream has to
     // learn a new shape, `grants()` already covers it with `kirby:*`.
     expect(
-      await validateUserApiKey(h.ctx, root, { app: "bender", token: minted.token }),
+      await validateKey(h.ctx, root, { app: "bender", token: minted.token }),
     ).toMatchObject({ valid: true, scopes: ["kirby:thread:t_14f451b6"] })
   })
 

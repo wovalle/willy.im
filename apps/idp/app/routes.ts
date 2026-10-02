@@ -73,6 +73,9 @@ export default [
   route("api/v1/apps/:app/user-keys", "routes/api/apps.$app.user-keys.ts"),
   route("api/v1/apps/:app/user-keys/validate", "routes/api/apps.$app.user-keys.validate.ts"),
   route("api/v1/apps/:app/user-keys/:id", "routes/api/apps.$app.user-keys.$id.ts"),
+  // App tokens: superadmin authority exchanged for a short-lived token bound to
+  // one app, GitHub-App style. The app validates them at user-keys/validate.
+  route("api/v1/apps/:app/tokens", "routes/api/apps.$app.tokens.ts"),
   // "Who is <slack id>, and what may they do in this app?" (identity:resolve)
   route(
     "api/v1/apps/:app/identities/:provider/:externalId",

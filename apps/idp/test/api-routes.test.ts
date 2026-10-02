@@ -11,9 +11,18 @@ import * as appKey from "../app/routes/api/apps.$app.keys.$id"
 import * as appMembers from "../app/routes/api/apps.$app.members"
 import * as appMember from "../app/routes/api/apps.$app.members.$userId"
 import * as appPermissions from "../app/routes/api/apps.$app.permissions"
+import * as appTokens from "../app/routes/api/apps.$app.tokens"
 import * as appUserKeys from "../app/routes/api/apps.$app.user-keys"
+import * as appUserKeysValidate from "../app/routes/api/apps.$app.user-keys.validate"
+import { APP_PERMISSIONS } from "../app/lib/permissions"
 import type { ResourceLister } from "../app/lib/resources.server"
-import { bootstrapAdminKey, createMember, createUser, stubResources } from "./helpers/fixtures"
+import {
+  bootstrapAdminKey,
+  createMember,
+  createUser,
+  mintApiKey,
+  stubResources,
+} from "./helpers/fixtures"
 import { createTestHarness, routerContext, type TestHarness } from "./helpers/harness"
 
 /**
@@ -644,6 +653,124 @@ describe("management API routes", () => {
       expect(res).toEqual({
         status: 422,
         body: { error: "scopes_not_held", detail: ["invoices:write"] },
+      })
+    })
+  })
+
+  describe("/api/v1/apps/{app}/tokens", () => {
+    /** POSTs `body` as `token`: the admin key unless given, null for the session alone. */
+    const mint = (body: unknown, token: string | null = adminToken, app = "acme") =>
+      call(appTokens.action, {
+        request: request(`/api/v1/apps/${app}/tokens`, {
+          method: "POST",
+          token: token ?? undefined,
+          body,
+        }),
+        params: { app },
+      })
+
+    /** The token's lifetime as the response states it, in seconds from `since`. */
+    const lifetime = (body: unknown, since: number) =>
+      Math.round((Date.parse((body as { expiresAt: string }).expiresAt) - since) / 1000)
+
+    it("201s an admin key a wat_ token holding [\"*\"] for an hour", async () => {
+      const since = Date.now()
+      const res = await mint({})
+      expect(res.status).toBe(201)
+      expect(res.body).toMatchObject({ scopes: ["*"], workspaceId: null })
+      expect((res.body as { token: string }).token.startsWith("wat_")).toBe(true)
+      expect(lifetime(res.body, since)).toBe(3600)
+    })
+
+    it("403s an app-scoped key, however privileged on the app", async () => {
+      const scoped = await mintApiKey(
+        h.ctx,
+        { app: "acme", permissions: [...APP_PERMISSIONS] },
+        root,
+      )
+      expect(await mint({}, scoped.token)).toEqual({ status: 403, body: { error: "forbidden" } })
+    })
+
+    it("403s a signed-in member who isn't a superadmin", async () => {
+      await asMember([...APP_PERMISSIONS])
+      expect(await mint({}, null)).toEqual({ status: 403, body: { error: "forbidden" } })
+    })
+
+    it("404s an app that isn't registered", async () => {
+      expect(await mint({}, adminToken, "ghost")).toEqual({
+        status: 404,
+        body: { error: "not_found" },
+      })
+    })
+
+    it("201s scopes resolved against the catalog and 422s undeclared ones, naming them", async () => {
+      await call(appPermissions.action, {
+        request: request("/api/v1/apps/acme/permissions", {
+          method: "PUT",
+          token: adminToken,
+          body: { permissions: ["invoices:read", "invoices:write"], resourceTypes: [] },
+        }),
+        params: { app: "acme" },
+      })
+
+      const narrowed = await mint({ scopes: ["invoices:read"], workspaceId: "ws_1" })
+      expect(narrowed.status).toBe(201)
+      expect(narrowed.body).toMatchObject({ scopes: ["invoices:read"], workspaceId: "ws_1" })
+
+      expect(await mint({ scopes: ["invoices:read", "nope:read"] })).toEqual({
+        status: 422,
+        body: { error: "unknown_scopes", detail: ["nope:read"] },
+      })
+    })
+
+    it("422s an expiresIn outside 60–3600 seconds, and honours one inside", async () => {
+      for (const expiresIn of [59, 3601, 90.5]) {
+        const res = await mint({ expiresIn })
+        expect(res.status).toBe(422)
+        expect(res.body).toMatchObject({ error: "validation_error" })
+      }
+
+      const since = Date.now()
+      const res = await mint({ expiresIn: 60 })
+      expect(res.status).toBe(201)
+      expect(lifetime(res.body, since)).toBe(60)
+    })
+
+    it("405s a method the resource doesn't serve", async () => {
+      const res = await call(appTokens.action, {
+        request: request("/api/v1/apps/acme/tokens", { method: "PUT", token: adminToken }),
+        params: { app: "acme" },
+      })
+      expect(res).toEqual({ status: 405, body: { error: "method_not_allowed" } })
+    })
+
+    it("validates as kind app at the app's own validate endpoint, and nowhere else", async () => {
+      const { token, id } = (await mint({})).body as { token: string; id: string }
+      const validate = (app: string) =>
+        call(appUserKeysValidate.action, {
+          request: request(`/api/v1/apps/${app}/user-keys/validate`, {
+            method: "POST",
+            token: adminToken,
+            body: { token },
+          }),
+          params: { app },
+        })
+
+      expect(await validate("acme")).toEqual({
+        status: 200,
+        body: {
+          valid: true,
+          kind: "app",
+          keyId: id,
+          issuedBy: `adminkey:${root.keyId}`,
+          workspaceId: null,
+          scopes: ["*"],
+          name: "Bootstrap key",
+        },
+      })
+      expect(await validate("other")).toEqual({
+        status: 200,
+        body: { valid: false, reason: "not_found" },
       })
     })
   })

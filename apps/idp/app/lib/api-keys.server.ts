@@ -2,7 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm"
 
 import * as schema from "../db/schema"
 import { IDP_AUDIT_SCOPE, recordAudit } from "./audit.server"
-import { assertCan, type Caller } from "./caller.server"
+import { assertCan, assertSuperadmin, type Caller } from "./caller.server"
 import { isAppPermission, type AppPermission } from "./permissions"
 import type { BaseServiceContext } from "./services"
 
@@ -198,11 +198,6 @@ export async function revokeApiKey(
  * anonymous secret — each agent gets its own named, expiring, revocable key
  * that shows up in the audit log as `adminkey:<id>`.
  */
-
-/** Superadmin-only gate, throwing the same 403 shape `assertCan` does. */
-function assertSuperadmin(caller: Caller): void {
-  if (caller.kind !== "superadmin") throw Response.json({ error: "forbidden" }, { status: 403 })
-}
 
 /** Every IdP-level admin key, newest first. Never returns the hash. Superadmin only. */
 export async function listAdminKeys(

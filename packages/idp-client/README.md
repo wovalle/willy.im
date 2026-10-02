@@ -332,11 +332,13 @@ const minted = await keys.create({
 // Check, on the request path.
 const auth = await keys.authenticate(request, { scopes: ["analytics:read"] })
 if (!auth.ok) return new Response(auth.reason, { status: auth.status })
-auth.key // { keyId, userId, workspaceId, scopes, name }
+auth.key // { kind: "user", keyId, userId, workspaceId, scopes, name }, or an app token's
 ```
 
 `authenticate` reads `Authorization: Bearer …`, then `X-API-Key`, and returns a
-result rather than throwing so the caller owns the response shape. Underneath,
+result rather than throwing so the caller owns the response shape. Required
+scopes match the way `grants()` does: `*` covers everything, `ns:*` covers
+`ns:…`. The same call accepts [app tokens](#app-tokens), as `kind: "app"`. Underneath,
 `validate` caches verdicts by digest of the token (60s for a hit, 10s for a
 miss, never for a failed round trip) and collapses concurrent checks of the same
 token into one request. Revoking through some other channel is visible only once
@@ -350,6 +352,60 @@ Only for **secret** credentials. A key embedded in a web page — an analytics
 ingest token, say — identifies a site rather than a user, cannot be kept secret,
 and must not pay a round trip per hit. Keep those in the app's own table and
 gate them on `Origin` plus rate limiting.
+
+## App tokens
+
+An IdP [admin key](#admin-keys) holds every permission on every app, so it never
+goes to one. Like a GitHub App's private key, it is exchanged at the IdP for an
+installation token: a `wat_…` **app token**, bound to one app and living an hour
+at most. Whoever holds the admin key — an agent, a script, a cron job — calls
+apps with app tokens only. An app that logs or leaks one gives away at most an
+hour of itself; the token opens no other app and is worthless against the IdP.
+
+```ts
+import { createAppTokens } from "@willyim/idp"
+
+const tokens = createAppTokens({
+  baseUrl: "https://idp.willy.im",
+  token: env.IDP_ADMIN_KEY, // an IdP-level admin key: the IdP mints for no one else
+})
+
+// ["*"]: everything the admin may do in that app.
+const { token, expiresAt } = await tokens.get("invoices")
+await fetch("https://invoices.willy.im/api/clients.list", {
+  method: "POST",
+  headers: { authorization: `Bearer ${token}` },
+})
+
+// Narrowed to declared permissions or `<type>:<id>` grants, and to one workspace.
+await tokens.get("invoices", { scopes: ["clients:read"], workspaceId: "ws_1" })
+```
+
+`get` mints through `POST /api/v1/apps/{app}/tokens` (superadmin only; scopes
+resolve like an end-user key's, `"*"` allowed) and keeps the token per (app,
+scopes, workspace) until a minute before it expires. Concurrent callers share
+one mint, and a failed mint is never cached. Every mint is audited against the
+app as `app_token` / `issue`, naming the admin key.
+
+The app wires nothing new: the token arrives like any key, and the same
+`createUserKeys().authenticate` call validates it as `kind: "app"`:
+
+```ts
+const auth = await keys.authenticate(request, { scopes: ["clients:read"] })
+if (!auth.ok) return new Response(auth.reason, { status: auth.status })
+if (auth.key.kind === "app") {
+  auth.key.issuedBy // "adminkey:<id>" | "user:<id>": who minted it — act and audit as them
+  auth.key.name // the admin key's name, or the admin's email
+}
+```
+
+Treat an app token as its issuer acting in the app. Its `scopes` are grants —
+`["*"]` makes the issuer a superadmin in every workspace, or only in
+`workspaceId` when the token is bound to one — so never filter `"*"` out of an
+app token. Keep refusing `"*"` on a user key, where the IdP never issues it. A
+token is only as good as its issuer: once the admin key that minted it is
+revoked or expires, or its admin leaves the IdP's allowlist, it validates as
+`revoked`.
 
 ## Resource-scoped grants
 

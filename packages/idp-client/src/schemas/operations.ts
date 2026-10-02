@@ -19,11 +19,13 @@ import {
   ApplicationListSchema,
   ApplicationSchema,
   AppPermissionsSchema,
+  AppTokenCreatedSchema,
   AuditListSchema,
   ClientSecretSchema,
   CreateAdminKeyInput,
   CreateApiKeyInput,
   CreateApplicationInput,
+  CreateAppTokenInput,
   CreateUserApiKeyInput,
   CreateWorkspaceInput,
   SetWorkspaceMemberInput,
@@ -286,7 +288,9 @@ export const operations = {
     success: UserApiKeyCreatedSchema,
   },
   "post /api/v1/apps/{app}/user-keys/validate": {
-    summary: "Validate a presented end-user key (200 + valid discriminator)",
+    summary: "Validate a presented end-user key or app token (200 + valid discriminator)",
+    description:
+      "Requires `userkey:validate` on the path app (or an admin key). Answers for both credentials an app's API accepts: an end-user key (`wak_`, `kind: \"user\"`) and an app token (`wat_`, `kind: \"app\"`: an IdP superadmin acting in this app, named by `issuedBy`). An app token is `revoked` once the admin key that minted it is revoked or expired, or its admin leaves the allowlist. A miss is data, not an error: 200 with `valid: false` and a reason.",
     permission: "userkey:validate",
     params: APP_PARAM,
     input: ValidateUserApiKeyInput,
@@ -299,6 +303,16 @@ export const operations = {
     params: APP_PARAM,
     successCode: "200",
     success: OkSchema,
+  },
+  "post /api/v1/apps/{app}/tokens": {
+    summary: "Mint an app token (plaintext returned once)",
+    description:
+      "Requires an admin key. GitHub-App style: the admin key is the private key and never goes to an app; this exchanges it for a short-lived `wat_` token bound to the path app, which the app validates like an end-user key (`kind: \"app\"`). `scopes` default to `[\"*\"]`, everything the issuer may do in the app; given ones resolve like end-user key scopes — 422 `unknown_scopes` / `unknown_resource`, 502 `resource_lookup_failed`. `expiresIn` is seconds, 60 to 3600 (the default).",
+    params: APP_PARAM,
+    notFound: "No application with that app key",
+    input: CreateAppTokenInput,
+    successCode: "201",
+    success: AppTokenCreatedSchema,
   },
 
   "get /api/v1/users/{userId}/identities": {

@@ -315,6 +315,11 @@ export async function assertCan(
   if (!(await caller.can(app, permission))) throw forbidden()
 }
 
+/** Superadmin-only gate, throwing the same 403 shape `assertCan` does. */
+export function assertSuperadmin(caller: Caller): void {
+  if (caller.kind !== "superadmin") throw forbidden()
+}
+
 /**
  * Throws the same 403 unless the caller covers every grant in `wanted` on `app`:
  * whoever hands out grants (an invite, a role change) must hold them first.

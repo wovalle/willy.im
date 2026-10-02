@@ -272,17 +272,66 @@ export const UserApiKeyCreatedSchema = z.object({
 })
 
 export const ValidateUserApiKeyInput = z.object({ token: z.string().min(1) })
-export const UserApiKeyValidationSchema = z.union([
-  z.object({
-    valid: z.literal(true),
-    keyId: z.string(),
-    userId: z.string(),
-    workspaceId: z.string().nullable(),
-    scopes: z.array(z.string()),
-    name: z.string(),
-  }),
+/**
+ * What a key presented to an app turned out to be. A hit names its `kind`: an
+ * end-user key (`wak_`), or an app token (`wat_`) — an IdP superadmin acting in
+ * this app, with `["*"]` unless the token was narrowed at mint.
+ */
+export const UserApiKeyValidationSchema = z.discriminatedUnion("valid", [
+  z.discriminatedUnion("kind", [
+    z.object({
+      valid: z.literal(true),
+      kind: z.literal("user"),
+      keyId: z.string(),
+      userId: z.string(),
+      workspaceId: z.string().nullable(),
+      scopes: z.array(z.string()),
+      name: z.string(),
+    }),
+    z.object({
+      valid: z.literal(true),
+      kind: z.literal("app"),
+      keyId: z.string().describe("The app token's id"),
+      issuedBy: z
+        .string()
+        .describe("Who minted it, as a principal id: `adminkey:<id>` or `user:<id>`"),
+      workspaceId: z.string().nullable().describe("The one workspace it is bound to; null for any"),
+      scopes: z.array(z.string()),
+      name: z.string().describe("The issuing admin key's name, or the issuing admin's email"),
+    }),
+  ]),
   z.object({ valid: z.literal(false), reason: z.enum(["not_found", "revoked", "expired"]) }),
 ])
+
+// --- App tokens (an IdP admin key, exchanged for one app's short-lived token) ---
+
+/** An app token's lifetime, at most and by default: an hour, like a GitHub installation token. */
+export const APP_TOKEN_TTL_S = 3600
+
+export const CreateAppTokenInput = z.object({
+  scopes: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Omit for `["*"]`, everything the issuer may do in the app. Otherwise `"*"`, declared permissions, or `<type>:<id>` grants over a declared resource type whose instance the app currently lists',
+    ),
+  workspaceId: z.string().optional().describe("Bind the token to one workspace; omit for any"),
+  expiresIn: z
+    .number()
+    .int()
+    .min(60)
+    .max(APP_TOKEN_TTL_S)
+    .default(APP_TOKEN_TTL_S)
+    .describe("Lifetime in seconds, 60 to 3600"),
+})
+export const AppTokenCreatedSchema = z.object({
+  id: z.string(),
+  token: z.string().describe("Plaintext token (wat_…) — shown exactly once, never stored"),
+  prefix: z.string(),
+  scopes: z.array(z.string()),
+  workspaceId: z.string().nullable(),
+  expiresAt: z.string().describe("ISO 8601"),
+})
 
 // --- Linked identities (a user's ids on other systems) ---
 

@@ -344,8 +344,13 @@ come from a trusted source: never let a user hand out grants they don't cover.
 
 `@willyim/kit/idp` re-exports [`@willyim/idp`](https://github.com/wovalle/willy.im/tree/main/packages/idp-client#readme) at the version kit
 pins: OIDC login with server sessions (`createIdp`, `/idp/react-router`, `/idp/drizzle`), user
-API keys (`createUserKeys`), bearer tokens for MCP (`createResourceServer`), `grants()`, and
-the management API (`createManagementApi`) to sync the permission catalog.
+API keys (`createUserKeys`), app tokens (`createAppTokens`), bearer tokens for MCP
+(`createResourceServer`), `grants()`, and the management API (`createManagementApi`) to sync
+the permission catalog.
+
+A presented key validates as one of two kinds, and both become the same principal: an end-user
+key (`kind: "user"`) acts as its owner, an app token (`kind: "app"`, minted with an IdP admin
+key) as whoever minted it.
 
 ```ts
 import { createUserKeys } from "@willyim/kit/idp"
@@ -356,21 +361,23 @@ const keys = createUserKeys({
   app: "notes",
 })
 const result = await keys.authenticate(request)
-// A key is one membership with its scopes, in the key's workspace.
-const principal: Principal | null = result.ok
-  ? {
-      id: `apikey:${result.key.keyId}`,
-      grants: [],
-      memberships: [
-        {
-          tenantId: result.key.workspaceId ?? "",
-          grants: auth.parseGrants(result.key.scopes).grants,
-        },
-      ],
-    }
-  : null
-const ctx = await app.context(principal, result.ok ? result.key.workspaceId : null)
+if (!result.ok) return new Response(result.reason, { status: result.status })
+const { key } = result
+// "*" is what an app token is for; a user key never carries it, so refuse it there.
+const scopes = key.kind === "app" ? key.scopes : key.scopes.filter((s) => s !== "*")
+const grants = auth.parseGrants(scopes).grants
+const principal: Principal = {
+  id: key.kind === "app" ? key.issuedBy : `user:${key.userId}`, // issuedBy: "adminkey:<id>"…
+  grants: key.workspaceId ? [] : grants,
+  memberships: key.workspaceId ? [{ tenantId: key.workspaceId, grants }] : [],
+}
+const ctx = await app.context(principal, tenantId) // the request's tenant: host, path…
 ```
+
+A key bound to a workspace is a membership there, so any other tenant is a 404; an unbound key
+holds its scopes in every tenant. An app token's default `["*"]` therefore makes its issuer a
+superadmin in every tenant, or only in `workspaceId` when the token is bound to one. Never filter
+`"*"` out of an app token; keep refusing it on a user key, where the IdP never issues it.
 
 ## For agents
 

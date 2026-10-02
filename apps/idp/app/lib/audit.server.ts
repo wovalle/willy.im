@@ -35,6 +35,7 @@ export type AuditOperation =
   | "revoke"
   | "invite"
   | "impersonate"
+  | "issue"
 
 export async function recordAudit(
   ctx: BaseServiceContext,
