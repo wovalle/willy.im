@@ -33,8 +33,8 @@ export type KitTool = {
   hints?: Hints
   /**
    * Runs the method through the context's services (so `when`, the permission,
-   * the input and `onCall` all apply) and never throws: data stripped to the
-   * contract with images pulled out, or a failure. Only errors meant for callers
+   * the input, the output check and `onCall` all apply) and never throws: data
+   * stripped to the contract with images pulled out, or a failure. Only errors meant for callers
    * (a thrown `Response`: `fail()`, 400, 403, 404) carry their message; anything
    * else is "internal error" with an id, and the error itself is logged.
    */
@@ -113,7 +113,7 @@ function toTool(e: RegistryEntry, ctx: ToolContext): KitTool {
     call: async (args) => {
       try {
         const value = (args ?? {}) as Record<string, unknown>
-        const { parsed } = await invoke(bound, input ? (wrapped ? value.input : value) : undefined)
+        const parsed = await invoke(bound, input ? (wrapped ? value.input : value) : undefined)
         if (!output) return { ok: true, data: undefined, images: [] }
         const { data, images } = splitImages(parsed)
         return { ok: true, data: toJson(data), images }

@@ -16,7 +16,7 @@ export type OnCall = (event: CallEvent<any>) => void | Promise<void>
 
 const INVALID: unique symbol = Symbol.for("kit.invalid-input")
 const PUBLIC: unique symbol = Symbol.for("kit.public-error")
-/** The internal entry of a bound method: the result, and the output parsed to the contract. */
+/** The edge entry of a bound method: the output parsed (stripped) to the contract. */
 export const INVOKE: unique symbol = Symbol.for("kit.invoke")
 
 /**
@@ -99,11 +99,10 @@ export const describeAccess = (access: Access) =>
 export const unknownMethod = (name: string) =>
   publicError(Response.json({ error: `no method ${name}; see /openapi.json` }, { status: 404 }))
 
-export type Invocation = { result: unknown; parsed: unknown }
-type Invoke = (raw?: unknown) => Promise<Invocation>
+type Invoke = (raw?: unknown) => Promise<unknown>
 
-/** Calls a bound method for an edge: the output comes back already parsed (stripped). */
-export const invoke = (bound: unknown, raw?: unknown): Promise<Invocation> =>
+/** Calls a bound method for an edge: the output comes back checked and stripped to the contract. */
+export const invoke = (bound: unknown, raw?: unknown): Promise<unknown> =>
   (bound as { [INVOKE]: Invoke })[INVOKE](raw)
 
 // Awaited, so an audit write finishes before the response (Workers drop late work);
@@ -119,8 +118,9 @@ const report = async (onCall: OnCall | undefined, event: CallEvent<any>) => {
 
 /**
  * Binds a method to one context. A call runs, in order: `when`, the permission,
- * the input, the implementation, the output check, then `onCall` with the outcome.
- * Internal callers get the implementation's full value; the edges strip it.
+ * the input, the implementation, then `onCall` with the outcome. Only the edges
+ * check the output, between the implementation and `onCall`, and strip it to the
+ * contract; internal callers get the implementation's value as is.
  */
 export function bind(
   m: Unbound,
@@ -132,7 +132,16 @@ export function bind(
   const { contract } = m[META]
   const input = contract.input && toSchema(contract.input)
   const output = contract.output && toSchema(contract.output)
-  const run: Invoke = async (raw?: unknown) => {
+  const checkOutput = (schema: z.ZodType, result: unknown) => {
+    const checked = schema.safeParse(result)
+    if (!checked.success)
+      throw new Error(
+        `kit: ${service}.${name} returned a value its output schema rejects: ${checked.error.message}`,
+      )
+    return checked.data
+  }
+  // Edge calls (`/api`, `tools()`, MCP) return the output checked and stripped; internal ones, the raw value.
+  const run = async (raw: unknown, edge: boolean) => {
     if (!available(contract, ctx)) throw unknownMethod(`${service}.${name}`)
     const started = performance.now()
     let value = raw
@@ -165,27 +174,17 @@ export function bind(
         value = parsed.data
       }
       const result = await (input ? m.fn(value) : m.fn())
-      let parsed: unknown
-      if (output) {
-        const checked = output.safeParse(result)
-        if (!checked.success)
-          throw new Error(
-            `kit: ${service}.${name} returned a value its output schema rejects: ${checked.error.message}`,
-          )
-        parsed = checked.data
-      }
+      const out = edge && output ? checkOutput(output, result) : result
       await done(true)
-      return { result, parsed }
+      return out
     } catch (error) {
       await done(false, error)
       throw error
     }
   }
-  // Internal callers get the full value; the edges call [INVOKE] for the parsed one.
-  const call = async (raw?: unknown) => (await run(raw)).result
-  return Object.assign(call, {
+  return Object.assign((raw?: unknown) => run(raw, false), {
     [META]: { contract, service, method: name },
-    [INVOKE]: run,
+    [INVOKE]: (raw?: unknown) => run(raw, true),
   }) as never
 }
 

@@ -127,28 +127,24 @@ describe("a call", () => {
     expect(await status(ctx.services.notes.create({ title: "x", pages: "0" }))).toBe(400)
   })
 
-  test("an output the contract rejects is an error", async () => {
-    const ctx = await ctxFor(["notes:read"])
-    await expect(ctx.services.notes.broken()).rejects.toThrow(
-      "notes.broken returned a value its output schema rejects",
-    )
-  })
-
-  test("internal callers get the full value", async () => {
+  test("internal callers get the method's value as is: the output isn't checked or stripped", async () => {
     const ctx = await ctxFor(["notes:read"])
     expect(await ctx.services.notes.get({ id: "1" })).toHaveProperty("secret", "s")
+    expect(await ctx.services.notes.broken()).toEqual({ id: "1", title: 7 })
   })
 
   test("onCall fires once per call with the parsed input and the outcome", async () => {
     const ctx = await ctxFor(["notes:read"])
     await ctx.services.notes.create({ title: "x", pages: "2" }).catch(() => {})
     await ctx.services.notes.get({ id: "1" })
-    await ctx.services.notes.broken().catch(() => {})
+    await ctx.services.notes.broken()
+    await app.handle(post("/api/notes.broken"), ctx).catch(() => {})
     expect(
       events.map(({ service, method, ok, input }) => ({ service, method, ok, input })),
     ).toEqual([
       { service: "notes", method: "create", ok: false, input: { title: "x", pages: "2" } },
       { service: "notes", method: "get", ok: true, input: { id: "1" } },
+      { service: "notes", method: "broken", ok: true, input: undefined },
       { service: "notes", method: "broken", ok: false, input: undefined },
     ])
     expect((events[0].error as Response).status).toBe(403)
@@ -245,6 +241,13 @@ describe("HTTP", () => {
     expect(await res?.json()).toEqual({ id: "1", title: "First" }) // no secret, no workspaceId
   })
 
+  test("an output the contract rejects is an error", async () => {
+    const ctx = await ctxFor(["notes:read"])
+    await expect(app.handle(post("/api/notes.broken"), ctx)).rejects.toThrow(
+      "notes.broken returned a value its output schema rejects",
+    )
+  })
+
   test("each method's output is stripped to its own contract, even for a shared object", async () => {
     const shared = { id: "1", title: "t", secret: "s" }
     const two = createApp({
@@ -330,6 +333,88 @@ const paths = async (ctx: Parameters<typeof app.handle>[1], a = app) =>
   Object.keys(
     (await (await a.handle(new Request("https://x.test/openapi.json"), ctx))!.json()).paths,
   )
+
+describe("services", () => {
+  // Two services that call each other, counting how often each factory runs.
+  const pair = () => {
+    const built = { a: 0, b: 0 }
+    const two = createApp({
+      auth,
+      context,
+      services: {
+        a: declareService((ctx) => {
+          built.a++
+          return {
+            ping: method({ summary: "a", permission: "notes:read", output: z.string() }, () =>
+              (ctx.services as any).b.pong(),
+            ),
+          }
+        }),
+        b: declareService((ctx) => {
+          built.b++
+          return {
+            pong: method({ summary: "b", permission: "notes:read", output: z.string() }, () =>
+              typeof (ctx.services as any).a.ping === "function" ? "pong" : "?",
+            ),
+          }
+        }),
+      },
+    })
+    built.a = built.b = 0 // createApp built both against an empty context for the registry
+    const ctx = async () => (await two.context(member("w1", ["notes:read"]), "w1")) as any
+    return { two, built, ctx }
+  }
+
+  test("a service is built the first time it's read, once per context", async () => {
+    const { built, ctx } = pair()
+    const one = await ctx()
+    expect(built).toEqual({ a: 0, b: 0 })
+    expect(one.services.a).toBe(one.services.a)
+    expect(built).toEqual({ a: 1, b: 0 })
+    ;(await ctx()).services.a
+    expect(built).toEqual({ a: 2, b: 0 })
+  })
+
+  test("every service is listed before it's built", async () => {
+    const { built, ctx } = pair()
+    const one = await ctx()
+    expect(Object.keys(one.services)).toEqual(["a", "b"])
+    const names: string[] = []
+    for (const name in one.services) names.push(name)
+    expect(names).toEqual(["a", "b"])
+    expect(built).toEqual({ a: 0, b: 0 })
+  })
+
+  test("services call each other both ways through ctx.services", async () => {
+    const { built, ctx } = pair()
+    expect(await (await ctx()).services.a.ping()).toBe("pong")
+    expect(built).toEqual({ a: 1, b: 1 })
+  })
+
+  test("HTTP and tools reach lazily built services", async () => {
+    const { two, ctx } = pair()
+    expect(await (await two.handle(post("/api/b.pong"), await ctx()))?.json()).toBe("pong")
+    const ping = tools(two, await ctx()).find((t) => t.name === "a_ping")!
+    expect(await ping.call({})).toEqual({ ok: true, data: "pong", images: [] })
+  })
+
+  test("a factory that reads its own service while it builds throws, naming it", async () => {
+    let read = false
+    const loop = createApp({
+      auth,
+      context,
+      services: {
+        self: declareService((ctx) => {
+          if (read) void (ctx.services as any).self
+          return {}
+        }),
+      },
+    })
+    read = true
+    const ctx = (await loop.context(member("w1", []), "w1")) as any
+    expect(() => ctx.services.self).toThrow('service "self" was read while it builds')
+  })
+})
 
 describe("discovery", () => {
   test("lists what the caller may call and what exists in its context", async () => {
