@@ -1,5 +1,13 @@
 # @willyim/kit
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [01d9a27]
+- Updated dependencies [7d335b2]
+  - @willyim/idp@0.8.0
+
 ## 0.5.0
 
 ### Minor Changes
