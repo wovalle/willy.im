@@ -1,3 +1,4 @@
+import { d1AuditLogTable } from "@willyim/kit/audit/d1"
 import { sql } from "drizzle-orm"
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 
@@ -230,38 +231,13 @@ export type LinkedIdentity = typeof linkedIdentity.$inferSelect
 
 /**
  * Audit trail for privileged actions (member/key/workspace/app writes,
- * impersonation). Mirrors the D1 `audit_logs` shape from @willyim/drizzle-audit
- * (so it can be swapped to that package once it's a workspace dependency — same
- * way permissions.ts mirrors @willyim/kit permissions), with two added columns we always
- * want: application_id (scope — lets an app read only its own trail) and actor
- * (a human-readable principal descriptor, since machine callers have no user_id).
+ * impersonation): kit's audit table, with two context columns. application_id
+ * scopes a row to one app (an app reads only its own trail); actor names the
+ * principal ("user:<id>", "adminkey:<id>", "apikey:<id>"), since machine
+ * callers have no user_id. Written through `recordAudit` (lib/audit.server.ts).
  */
-export const auditLog = sqliteTable(
-  "audit_logs",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    // The entity type touched, e.g. "api_key", "application_member", "organization".
-    tableName: text("table_name").notNull(),
-    // "create" | "update" | "delete" | "revoke" | "invite" | "impersonate" | …
-    operation: text("operation").notNull(),
-    // The affected entity's id (key id, user id, workspace id, …).
-    rowId: text("row_id"),
-    applicationId: text("application_id"),
-    // The human actor's user id when there is one; null for machine callers.
-    userId: text("user_id"),
-    // Principal descriptor: "user:<id>" | "adminkey:<id>" | "apikey:<id>".
-    actor: text("actor"),
-    oldData: text("old_data", { mode: "json" }),
-    newData: text("new_data", { mode: "json" }),
-    createdAt: text("created_at")
-      .notNull()
-      .default(sql`(datetime('now'))`),
-  },
-  (t) => [
-    index("audit_logs_application_id_idx").on(t.applicationId),
-    index("audit_logs_table_name_idx").on(t.tableName),
-    index("audit_logs_created_at_idx").on(t.createdAt),
-  ],
-)
+export const auditLog = d1AuditLogTable({
+  contextColumns: [{ column: "application_id" }, { column: "actor", index: false }],
+})
 
 export type AuditLog = typeof auditLog.$inferSelect

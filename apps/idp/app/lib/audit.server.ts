@@ -1,12 +1,15 @@
+import { withAudit } from "@willyim/kit/audit/d1-runtime"
 import { and, desc, eq } from "drizzle-orm"
 
 import * as schema from "../db/schema"
 import type { BaseServiceContext } from "./services"
 
 /**
- * Audit trail for privileged actions. Writes are best-effort: a failure to log
- * must never break the action being audited. Mirrors the @willyim/drizzle-audit
- * D1 schema (see schema.ts) so it can be swapped to the package later.
+ * Audit trail for privileged actions, on `@willyim/kit/audit`. These are events
+ * (invite, revoke, impersonate…) with a curated before/after, not row diffs:
+ * several of the writes happen inside Better Auth, out of a wrapper's sight.
+ * Writes are best-effort: a failure to log must never break the action being
+ * audited.
  */
 
 /**
@@ -42,20 +45,20 @@ export async function recordAudit(
     operation: AuditOperation
     applicationId: string
     rowId?: string | null
-    before?: unknown
-    after?: unknown
+    before?: Record<string, unknown>
+    after?: Record<string, unknown>
   },
 ): Promise<void> {
   try {
-    await ctx.db.insert(schema.auditLog).values({
-      tableName: entry.table,
-      operation: entry.operation,
-      rowId: entry.rowId ?? null,
-      applicationId: entry.applicationId,
+    await withAudit(ctx.db, schema.auditLog, {
       userId: entry.actor.userId,
-      actor: entry.actor.label,
-      oldData: entry.before ?? null,
-      newData: entry.after ?? null,
+      context: { application_id: entry.applicationId, actor: entry.actor.label },
+    }).record({
+      table: entry.table,
+      operation: entry.operation,
+      rowId: entry.rowId,
+      oldData: entry.before,
+      newData: entry.after,
     })
   } catch (err) {
     ctx.logger.warn("audit.record_failed", {
@@ -77,26 +80,29 @@ export type AuditEntry = {
   createdAt: string
 }
 
+const toEntry = (row: typeof schema.auditLog.$inferSelect): AuditEntry => ({
+  id: row.id,
+  tableName: row.table_name,
+  operation: row.operation,
+  rowId: row.row_id,
+  userId: row.user_id,
+  actor: row.actor,
+  createdAt: row.created_at,
+})
+
 /** Recent audit entries for one app, newest first. */
 export async function listAuditForApp(
   ctx: BaseServiceContext,
   app: string,
   limit = 50,
 ): Promise<AuditEntry[]> {
-  return ctx.db
-    .select({
-      id: schema.auditLog.id,
-      tableName: schema.auditLog.tableName,
-      operation: schema.auditLog.operation,
-      rowId: schema.auditLog.rowId,
-      userId: schema.auditLog.userId,
-      actor: schema.auditLog.actor,
-      createdAt: schema.auditLog.createdAt,
-    })
+  const rows = await ctx.db
+    .select()
     .from(schema.auditLog)
-    .where(eq(schema.auditLog.applicationId, app))
+    .where(eq(schema.auditLog.application_id, app))
     .orderBy(desc(schema.auditLog.id))
     .limit(limit)
+  return rows.map(toEntry)
 }
 
 /** A single entity's history (e.g. one API key), newest first. */
@@ -106,23 +112,16 @@ export async function listAuditForRow(
   table: string,
   rowId: string,
 ): Promise<AuditEntry[]> {
-  return ctx.db
-    .select({
-      id: schema.auditLog.id,
-      tableName: schema.auditLog.tableName,
-      operation: schema.auditLog.operation,
-      rowId: schema.auditLog.rowId,
-      userId: schema.auditLog.userId,
-      actor: schema.auditLog.actor,
-      createdAt: schema.auditLog.createdAt,
-    })
+  const rows = await ctx.db
+    .select()
     .from(schema.auditLog)
     .where(
       and(
-        eq(schema.auditLog.applicationId, app),
-        eq(schema.auditLog.tableName, table),
-        eq(schema.auditLog.rowId, rowId),
+        eq(schema.auditLog.application_id, app),
+        eq(schema.auditLog.table_name, table),
+        eq(schema.auditLog.row_id, rowId),
       ),
     )
     .orderBy(desc(schema.auditLog.id))
+  return rows.map(toEntry)
 }
