@@ -1,41 +1,19 @@
-import { createRequestHandler } from "react-router"
+import { createRequestHandler, RouterContextProvider } from "react-router"
 
-import type { DrizzleClient } from "../app/db/drizzle"
+import { appContext } from "../app/context"
 import { getAppEnv } from "../app/lib/env"
-import { createAuthService, type AuthService } from "../app/lib/auth.server"
-import { createBaseContext, type BaseServiceContext, type ILogger } from "../app/lib/services"
-import { createGithubService, type GithubService } from "../app/modules/github/github.server"
-import {
-  createGoodreadsService,
-  type GoodreadsService,
-} from "../app/modules/goodreads/goodreads.server"
-import { createSpotifyService, type SpotifyService } from "../app/modules/spotify/spotify.server"
-import { createYoutubeService, type YoutubeService } from "../app/modules/youtube/youtube.server"
+import { createAuthService } from "../app/lib/auth.server"
+import { createBaseContext, type BaseServiceContext } from "../app/lib/services"
+import { createGithubService } from "../app/modules/github/github.server"
+import { createGoodreadsService } from "../app/modules/goodreads/goodreads.server"
+import { createSpotifyService } from "../app/modules/spotify/spotify.server"
+import { createYoutubeService } from "../app/modules/youtube/youtube.server"
 
 import { updateGithub } from "./tasks/github"
 import { updateYoutube } from "./tasks/youtube"
 import { updateSpotify } from "./tasks/spotify"
 import { updateGoodreads } from "./tasks/goodreads"
 import { runTasks } from "./tasks/runner"
-
-declare module "react-router" {
-  export interface AppLoadContext {
-    cloudflare: {
-      env: Env
-      ctx: ExecutionContext
-    }
-    db: DrizzleClient
-    logger: ILogger
-    getAppEnv: typeof getAppEnv
-    services: {
-      auth: AuthService
-      github: GithubService
-      youtube: YoutubeService
-      spotify: SpotifyService
-      goodreads: GoodreadsService
-    }
-  }
-}
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
@@ -46,7 +24,8 @@ export default {
   async fetch(request, env, ctx) {
     const baseCtx = createBaseContext(env.db)
 
-    return requestHandler(request, {
+    const context = new RouterContextProvider()
+    context.set(appContext, {
       cloudflare: { env, ctx },
       ...baseCtx,
       services: {
@@ -57,6 +36,7 @@ export default {
         goodreads: createGoodreadsService(baseCtx),
       },
     })
+    return requestHandler(request, context)
   },
 
   async scheduled(event, env, ctx) {

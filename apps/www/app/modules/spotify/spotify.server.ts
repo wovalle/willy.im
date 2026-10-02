@@ -145,7 +145,7 @@ export const createSpotifyService = declareService("spotify", (context: BaseServ
     }
     try {
       const kvData = await context.db.query.kv.findFirst({
-        where: (kv, { eq }) => eq(kv.id, "spotify.data"),
+        where: { id: "spotify.data" },
       })
 
       if (!kvData?.value) {

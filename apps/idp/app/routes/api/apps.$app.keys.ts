@@ -3,9 +3,11 @@ import { createApiKey, listApiKeys } from "~/lib/api-keys.server"
 import { methodNotAllowed, readJson } from "~/lib/api.server"
 import { requireApiCaller } from "~/lib/caller.server"
 import { CreateApiKeyInput } from "@willyim/idp/schemas"
+import { appContext } from "~/context"
 
 /** GET — this app's scoped management keys. Requires `apikey:read`. Never hashes. */
-export async function loader({ request, context, params }: Route.LoaderArgs) {
+export async function loader({ request, context: router, params }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   const caller = await requireApiCaller(request, context, context.services.auth)
   const keys = await listApiKeys(context, caller, params.app)
   return Response.json({
@@ -24,7 +26,8 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
  * `apikey:create` and that the requested permissions are a subset of the
  * caller's own (both enforced by the service).
  */
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   if (request.method !== "POST") return methodNotAllowed(["POST"])
   const caller = await requireApiCaller(request, context, context.services.auth)
   const body = await readJson(request, CreateApiKeyInput)

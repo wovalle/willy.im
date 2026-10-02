@@ -5,6 +5,7 @@ import { readJson } from "~/lib/api.server"
 import { UpdateMemberInput } from "@willyim/idp/schemas"
 import { removeAppMember, updateAppMember } from "~/lib/members.server"
 import { describeScopeError, resolveScopes } from "~/lib/scopes.server"
+import { appContext } from "~/context"
 
 /**
  * PATCH — update a member's role + permissions (member:manage).
@@ -12,7 +13,8 @@ import { describeScopeError, resolveScopes } from "~/lib/scopes.server"
  * Both the permission check and the last-admin guard live in members.server;
  * this route only authenticates.
  */
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   const { app, userId } = params
 
   if (request.method === "PATCH" || request.method === "PUT") {

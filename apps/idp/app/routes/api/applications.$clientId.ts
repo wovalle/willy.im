@@ -8,6 +8,7 @@ import {
 import { methodNotAllowed, readJson } from "~/lib/api.server"
 import { requireApiCaller } from "~/lib/caller.server"
 import { UpdateApplicationInput } from "@willyim/idp/schemas"
+import { appContext } from "~/context"
 
 /** The wire shape — `createdAt` as ISO, matching the list endpoint's items. */
 function serialize(application: ApplicationSummary) {
@@ -19,7 +20,8 @@ function serialize(application: ApplicationSummary) {
  * resolved from the client id before the caller can be judged; an unknown
  * client id is a 404 for everyone, authenticated or not.
  */
-export async function loader({ request, context, params }: Route.LoaderArgs) {
+export async function loader({ request, context: router, params }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   const application = await getApplication(context, params.clientId)
   if (!application) {
     // Authenticate first, so an anonymous prober can't map client ids.
@@ -34,7 +36,8 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 }
 
 /** PATCH — update name / redirect URIs / signup. DELETE — deregister. */
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   if (request.method !== "PATCH" && request.method !== "DELETE")
     return methodNotAllowed(["PATCH", "DELETE"])
 

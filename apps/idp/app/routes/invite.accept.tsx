@@ -5,12 +5,14 @@ import { claimInvitationsForUser, getInvitationByToken } from "~/lib/members.ser
 import { trackServerEvent } from "~/lib/luchy.server"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
+import { appContext } from "~/context"
 
 export function meta() {
   return [{ title: "Accept invitation · willy.im" }]
 }
 
-export async function loader({ request, context }: Route.LoaderArgs) {
+export async function loader({ request, context: router }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   const token = new URL(request.url).searchParams.get("token") ?? ""
   const invite = token ? await getInvitationByToken(context, token) : null
 

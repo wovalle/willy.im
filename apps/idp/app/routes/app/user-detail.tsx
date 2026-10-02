@@ -34,13 +34,15 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table"
+import { appContext } from "~/context"
 
 // The systems we know how to talk to. Free text would work — the service just
 // lowercases whatever it's given — but a fixed set keeps the console honest
 // about which providers actually resolve elsewhere in the IdP.
 const PROVIDERS = ["slack", "whatsapp", "telegram"] as const
 
-export async function loader({ request, context, params }: Route.LoaderArgs) {
+export async function loader({ request, context: router, params }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   // Linking is superadmin-only in the service; gate the page the same way so a
   // non-admin never sees controls that would only 403.
   const caller = await requireConsoleCaller(request, context, context.services.auth, {
@@ -52,7 +54,8 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
   return { user, identities }
 }
 
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   const caller = await requireConsoleCaller(request, context, context.services.auth, {
     superadmin: true,
   })

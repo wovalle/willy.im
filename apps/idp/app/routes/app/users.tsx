@@ -13,8 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table"
+import { appContext } from "~/context"
 
-export async function loader({ request, context }: Route.LoaderArgs) {
+export async function loader({ request, context: router }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   await requireConsoleCaller(request, context, context.services.auth, { superadmin: true })
   return { users: await listUsers(context) }
 }

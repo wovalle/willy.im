@@ -2,6 +2,7 @@ import type { Route } from "./+types/app-resources"
 import { getApplication } from "~/lib/admin.server"
 import { requireConsoleCaller } from "~/lib/caller.server"
 import { ResourceListError } from "~/lib/resources.server"
+import { appContext } from "~/context"
 
 /**
  * GET `?type=<declared resource type>` — the instances the app currently holds
@@ -17,7 +18,8 @@ import { ResourceListError } from "~/lib/resources.server"
  * A listing failure answers 502 with the reason rather than an empty array: an
  * empty list reads as "nothing to pick", which is a different and wrong answer.
  */
-export async function loader({ request, context, params }: Route.LoaderArgs) {
+export async function loader({ request, context: router, params }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   const type = new URL(request.url).searchParams.get("type")
   if (!type) return Response.json({ error: "type_required" }, { status: 400 })
 

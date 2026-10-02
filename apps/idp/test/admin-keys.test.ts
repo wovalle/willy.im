@@ -22,7 +22,7 @@ import {
   mintAdminKey,
   mintApiKey,
 } from "./helpers/fixtures"
-import { createTestHarness, type TestHarness } from "./helpers/harness"
+import { createTestHarness, routerContext, type TestHarness } from "./helpers/harness"
 
 /**
  * IdP-level admin keys. The interesting claim is not "the row is written" but
@@ -245,7 +245,7 @@ describe("admin keys", () => {
       args: Record<string, unknown>,
     ): Promise<{ status: number; body: unknown; headers: Headers }> => {
       try {
-        const res = (await handler({ context, ...args } as never)) as Response
+        const res = (await handler({ context: routerContext(context), ...args } as never)) as Response
         return { status: res.status, body: await res.json(), headers: res.headers }
       } catch (err) {
         if (!(err instanceof Response)) throw err

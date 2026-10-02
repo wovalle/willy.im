@@ -5,6 +5,7 @@ import { createPageMeta, siteConfig } from "~/static"
 import { BooksSection } from "./about/books-section"
 import { TopTracksAndArtistsSection } from "./about/top-tracks-and-artists-section"
 import { VideosSection } from "./about/videos-section"
+import { appContext } from "~/context"
 
 export const meta: Route.MetaFunction = () =>
   createPageMeta({
@@ -13,7 +14,8 @@ export const meta: Route.MetaFunction = () =>
     path: "/about",
   })
 
-export const loader = async ({ context }: Route.LoaderArgs) => {
+export const loader = async ({ context: router }: Route.LoaderArgs) => {
+  const context = router.get(appContext)
   const bio = allSingletons.find((singleton) => singleton.name === "bio")
   invariant(bio, "Bio markdown not found")
 

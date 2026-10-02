@@ -2,8 +2,10 @@ import { Link } from "react-router"
 import { benderArtifacts } from "~/lib/bender.server"
 import { requireAdmin } from "~/lib/admin"
 import type { Route } from "./+types/list"
+import { appContext } from "~/context"
 
-export const loader = async ({ request, context }: Route.LoaderArgs) => {
+export const loader = async ({ request, context: router }: Route.LoaderArgs) => {
+  const context = router.get(appContext)
   await requireAdmin(request, context.services.auth)
   return { artifacts: await benderArtifacts.list() }
 }

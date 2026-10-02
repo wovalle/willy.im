@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth"
-import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
 import { declareService, type BaseServiceContext } from "./services"
 
 export const createAuthService = declareService("auth", (context: BaseServiceContext) => {
@@ -30,3 +30,14 @@ export const createAuthService = declareService("auth", (context: BaseServiceCon
 })
 
 export type AuthService = ReturnType<typeof createAuthService>
+
+/**
+ * A valid (refreshed if needed) access token for the user's linked Google
+ * account. Better Auth picks the account by its row id, so resolve that first.
+ */
+export async function getGoogleAccessToken(auth: AuthService, userId: string) {
+  const { internalAdapter } = await auth.$context
+  const account = (await internalAdapter.findAccounts(userId)).find((a) => a.providerId === "google")
+  if (!account) return { accessToken: undefined }
+  return auth.api.getAccessToken({ body: { accountId: account.id, userId } })
+}

@@ -8,6 +8,7 @@ import type { SimpleRepository } from "~/modules/github/github.types"
 import { createPageMeta, siteConfig } from "~/static"
 import { PostCard } from "./post-card"
 import { RepositoryCard } from "./repository-card"
+import { appContext } from "~/context"
 
 export const meta: Route.MetaFunction = () => {
   return [
@@ -32,7 +33,8 @@ export const meta: Route.MetaFunction = () => {
   ]
 }
 
-export const loader = async ({ context }: Route.LoaderArgs) => {
+export const loader = async ({ context: router }: Route.LoaderArgs) => {
+  const context = router.get(appContext)
   const posts = allPosts.slice(0, 2)
 
   const githubData = await context.services.github.getFromCache()

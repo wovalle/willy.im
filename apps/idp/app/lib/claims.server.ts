@@ -1,4 +1,4 @@
-import { and, eq, gt, isNotNull } from "drizzle-orm"
+import { and, eq, gt, isNotNull, notInArray } from "drizzle-orm"
 
 import * as schema from "../db/schema"
 import { avatarUrl } from "./avatar"
@@ -152,7 +152,7 @@ export const APP_CLAIM = "https://willy.im/app"
 /**
  * Which application owns `resource` — the app whose metadata lists that URI.
  * Null when nobody does, which the token endpoint has already refused by then
- * (validAudiences), so this is a lookup, not a gate. Exact match, because an
+ * (no enabled `oauth_resource` row), so this is a lookup, not a gate. Exact match, because an
  * audience is compared exactly on the other side.
  */
 export async function appForResource(
@@ -173,6 +173,22 @@ export async function appForResource(
 export async function allResources(db: BaseServiceContext["db"]): Promise<string[]> {
   const rows = await db.select({ metadata: schema.oauthClient.metadata }).from(schema.oauthClient)
   return [...new Set(rows.flatMap((row) => parseAppMetadata(row.metadata).resources))]
+}
+
+/**
+ * Keeps the `oauth_resource` registry in step with the live audience list.
+ * Better Auth seeds rows insert-only and never removes them, so a resource an
+ * app stopped declaring would stay mintable forever. Disabling (not deleting)
+ * blocks new tokens for it while already-issued ones still introspect; a
+ * re-declared resource is re-enabled.
+ */
+export async function syncResourceRegistry(
+  db: BaseServiceContext["db"],
+  live: string[],
+): Promise<void> {
+  await db
+    .update(schema.oauthResource)
+    .set({ disabled: notInArray(schema.oauthResource.identifier, live) })
 }
 
 /**

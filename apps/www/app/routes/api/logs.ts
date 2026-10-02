@@ -18,6 +18,7 @@ import { z } from "zod"
 import { kv, logs } from "~/db/schema"
 import type { DrizzleClient } from "~/db/drizzle"
 import type { Route } from "./+types/logs"
+import { appContext } from "~/context"
 
 const MAX_SIZE = 25 * 1024 * 1024 // 25MB
 
@@ -36,7 +37,8 @@ async function isAllowedKey(db: DrizzleClient, request: Request): Promise<boolea
   return parsed.success && parsed.data.includes(key)
 }
 
-export const action = async ({ request, context }: Route.ActionArgs) => {
+export const action = async ({ request, context: router }: Route.ActionArgs) => {
+  const context = router.get(appContext)
   if (request.method !== "POST") {
     return data({ error: "Method not allowed" }, { status: 405 })
   }

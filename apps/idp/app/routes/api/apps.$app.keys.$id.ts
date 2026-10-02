@@ -2,9 +2,11 @@ import type { Route } from "./+types/apps.$app.keys.$id"
 import { revokeApiKey } from "~/lib/api-keys.server"
 import { methodNotAllowed } from "~/lib/api.server"
 import { requireApiCaller } from "~/lib/caller.server"
+import { appContext } from "~/context"
 
 /** DELETE — revoke a scoped management key (idempotent). Requires `apikey:revoke`. */
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   if (request.method !== "DELETE") return methodNotAllowed(["DELETE"])
   const caller = await requireApiCaller(request, context, context.services.auth)
   const res = await revokeApiKey(context, caller, { app: params.app, id: params.id })

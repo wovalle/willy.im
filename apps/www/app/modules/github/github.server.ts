@@ -52,7 +52,7 @@ export const createGithubService = declareService("github", (context: BaseServic
     }
     try {
       const kvData = await context.db.query.kv.findFirst({
-        where: (kv, { eq }) => eq(kv.id, "github.data"),
+        where: { id: "github.data" },
       })
 
       if (!kvData?.value) {

@@ -3,9 +3,11 @@ import { createWorkspaceForApp, listWorkspacesForApp } from "~/lib/admin.server"
 import { requireApiCaller } from "~/lib/caller.server"
 import { readJson } from "~/lib/api.server"
 import { CreateWorkspaceInput } from "@willyim/idp/schemas"
+import { appContext } from "~/context"
 
 /** GET — list this app's workspaces. Requires workspace:read. */
-export async function loader({ request, context, params }: Route.LoaderArgs) {
+export async function loader({ request, context: router, params }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   await requireApiCaller(request, context, context.services.auth, {
     app: params.app,
     permission: "workspace:read",
@@ -20,7 +22,8 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 }
 
 /** POST — create a workspace (tenant) in this app. Requires workspace:create. */
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   if (request.method !== "POST") {
     return Response.json({ error: "method_not_allowed" }, { status: 405, headers: { Allow: "POST" } })
   }

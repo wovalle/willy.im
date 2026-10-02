@@ -62,7 +62,7 @@ export const applicationInvitation = sqliteTable(
     productPermissions: text("product_permissions", { mode: "json" }).$type<string[]>().default([]),
     // Unguessable token for the branded accept link. Not the security boundary;
     // conversion is by verified-email match, the token only picks the landing UX.
-    token: text("token").notNull().unique(),
+    token: text("token").notNull(),
     invitedByUserId: text("invited_by_user_id").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -72,7 +72,10 @@ export const applicationInvitation = sqliteTable(
       .notNull(),
   },
   // At most one live invite per app + email.
-  (t) => [uniqueIndex("application_invitation_app_email_uidx").on(t.applicationId, t.email)],
+  (t) => [
+    uniqueIndex("application_invitation_token_unique").on(t.token),
+    uniqueIndex("application_invitation_app_email_uidx").on(t.applicationId, t.email),
+  ],
 )
 
 export type ApplicationInvitation = typeof applicationInvitation.$inferSelect
@@ -107,7 +110,7 @@ export const apiKey = sqliteTable(
     // identifiable in the UI. Not a secret.
     prefix: text("prefix").notNull(),
     // SHA-256 (hex) of the full token. The lookup key on every request.
-    keyHash: text("key_hash").notNull().unique(),
+    keyHash: text("key_hash").notNull(),
     // Granted IdP-management permissions (subset of APP_PERMISSIONS).
     permissions: text("permissions", { mode: "json" }).$type<string[]>().default([]),
     createdByUserId: text("created_by_user_id").references(() => user.id, {
@@ -123,7 +126,10 @@ export const apiKey = sqliteTable(
       .$defaultFn(() => new Date())
       .notNull(),
   },
-  (t) => [index("api_key_app_idx").on(t.applicationId)],
+  (t) => [
+    uniqueIndex("api_key_key_hash_unique").on(t.keyHash),
+    index("api_key_app_idx").on(t.applicationId),
+  ],
 )
 
 export type ApiKey = typeof apiKey.$inferSelect
@@ -155,7 +161,7 @@ export const userApiKey = sqliteTable(
     // First chars of the token (e.g. "wak_a1b2c3d4") for identification. Not secret.
     prefix: text("prefix").notNull(),
     // SHA-256 (hex) of the full token — the lookup key on validation.
-    keyHash: text("key_hash").notNull().unique(),
+    keyHash: text("key_hash").notNull(),
     // Granted scopes, a subset of the app's product permission catalog.
     scopes: text("scopes", { mode: "json" }).$type<string[]>().default([]),
     lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
@@ -168,6 +174,7 @@ export const userApiKey = sqliteTable(
       .notNull(),
   },
   (t) => [
+    uniqueIndex("user_api_key_key_hash_unique").on(t.keyHash),
     index("user_api_key_app_idx").on(t.applicationId),
     index("user_api_key_app_user_idx").on(t.applicationId, t.userId),
   ],

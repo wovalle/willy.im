@@ -5,8 +5,10 @@ import type { Route } from "./+types/layout"
 import { requireConsoleCaller } from "~/lib/caller.server"
 import { Avatar } from "~/components/avatar"
 import { cn } from "~/lib/utils"
+import { appContext } from "~/context"
 
-export async function loader({ request, context }: Route.LoaderArgs) {
+export async function loader({ request, context: router }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   const caller = await requireConsoleCaller(request, context, context.services.auth)
   // The impersonation banner reads the session directly — it's a property of the
   // cookie, not of the caller's authority. The display name and picture are

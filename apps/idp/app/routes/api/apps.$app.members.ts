@@ -5,9 +5,11 @@ import { readJson } from "~/lib/api.server"
 import { InviteMemberInput } from "@willyim/idp/schemas"
 import { addOrInviteAppMember } from "~/lib/members.server"
 import { describeScopeError, resolveScopes } from "~/lib/scopes.server"
+import { appContext } from "~/context"
 
 /** GET — list this app's members. Requires member:read. */
-export async function loader({ request, context, params }: Route.LoaderArgs) {
+export async function loader({ request, context: router, params }: Route.LoaderArgs) {
+  const context = router.get(appContext)
   await requireApiCaller(request, context, context.services.auth, {
     app: params.app,
     permission: "member:read",
@@ -19,7 +21,8 @@ export async function loader({ request, context, params }: Route.LoaderArgs) {
 }
 
 /** POST — add (existing user) or invite (new email) a member. Requires member:invite. */
-export async function action({ request, context, params }: Route.ActionArgs) {
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
   if (request.method !== "POST") {
     return Response.json({ error: "method_not_allowed" }, { status: 405, headers: { Allow: "POST" } })
   }

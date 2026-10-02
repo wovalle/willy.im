@@ -1,20 +1,34 @@
-import { createRequestHandler } from "react-router"
+import { createRequestHandler, RouterContextProvider } from "react-router"
 
-import type { DrizzleClient } from "../app/db/drizzle"
+import { appContext } from "../app/context"
 import { getAppEnv } from "../app/lib/env"
-import { createAuthService, type AuthService } from "../app/lib/auth.server"
-import { allResources } from "../app/lib/claims.server"
+import { createAuthService, idpAudience } from "../app/lib/auth.server"
+import { allResources, syncResourceRegistry } from "../app/lib/claims.server"
 import type { BaseServiceContext } from "../app/lib/services"
 
 const AUDIENCE_TTL_MS = 60_000
 let audienceCache: { at: number; value: string[] } | null = null
 
-/** Resource URIs from every application, memoised per isolate for a minute. */
+/** Every host the IdP answers on, as its own audience (`<origin>/auth`). */
+function idpAudiences() {
+  const extra = getAppEnv("IDP_EXTRA_DOMAINS")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean)
+    .map((h) => `https://${h}`)
+  return [new URL(getAppEnv("BETTER_AUTH_URL")).origin, ...extra].map(idpAudience)
+}
+
+/**
+ * Resource URIs from every application, memoised per isolate for a minute.
+ * Each refresh also disables `oauth_resource` rows no app declares any more.
+ */
 async function cachedAudiences(ctx: Pick<BaseServiceContext, "db">) {
   const now = Date.now()
   if (audienceCache && now - audienceCache.at < AUDIENCE_TTL_MS) return audienceCache.value
   try {
     const value = await allResources(ctx.db)
+    await syncResourceRegistry(ctx.db, [...idpAudiences(), ...value])
     audienceCache = { at: now, value }
     return value
   } catch {
@@ -23,26 +37,9 @@ async function cachedAudiences(ctx: Pick<BaseServiceContext, "db">) {
     return audienceCache?.value ?? []
   }
 }
-import { createBaseContext, type ILogger } from "../app/lib/services"
+import { createBaseContext } from "../app/lib/services"
 import { createIdpRequestTracker } from "../app/lib/luchy.server"
-import { createResourceLister, type ResourceLister } from "../app/lib/resources.server"
-
-declare module "react-router" {
-  export interface AppLoadContext {
-    cloudflare: {
-      env: Env
-      ctx: ExecutionContext
-    }
-    db: DrizzleClient
-    logger: ILogger
-    getAppEnv: typeof getAppEnv
-    services: {
-      auth: AuthService
-      /** Asks an app which instances of a declared resource type it holds. */
-      resources: ResourceLister
-    }
-  }
-}
+import { createResourceLister } from "../app/lib/resources.server"
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
@@ -86,11 +83,9 @@ export default {
     const finishTracking = createIdpRequestTracker(baseCtx, auth).begin(request)
 
     try {
-      const response = await requestHandler(request, {
-        cloudflare: { env, ctx },
-        ...baseCtx,
-        services: { auth, resources },
-      })
+      const context = new RouterContextProvider()
+      context.set(appContext, { cloudflare: { env, ctx }, ...baseCtx, services: { auth, resources } })
+      const response = await requestHandler(request, context)
       baseCtx.logger.debug("request.end", {
         method: request.method,
         path: url.pathname,
