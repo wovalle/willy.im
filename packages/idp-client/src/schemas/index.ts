@@ -216,6 +216,25 @@ export const WorkspaceCreatedSchema = z.object({
   slug: z.string(),
 })
 
+/**
+ * What a person is in one workspace. It travels in the workspaces claim
+ * (`https://willy.im/workspaces[].role`); each app maps it to its own grants.
+ */
+export const WorkspaceRoleSchema = z.enum(["owner", "admin", "member"])
+
+/** Put an existing IdP user in a workspace with a role, or change their role there. */
+export const SetWorkspaceMemberInput = z.object({
+  email: z.string().email(),
+  role: WorkspaceRoleSchema.default("member"),
+})
+export const WorkspaceMemberSchema = z.object({
+  userId: z.string(),
+  email: z.string(),
+  name: z.string().nullable(),
+  role: z.string(),
+})
+export const WorkspaceMemberListSchema = z.object({ members: z.array(WorkspaceMemberSchema) })
+
 export const OkSchema = z.object({ ok: z.literal(true) })
 
 // --- End-user API keys (the app's own API credentials, stored in the IdP) ---

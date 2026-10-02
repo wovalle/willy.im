@@ -58,6 +58,12 @@ export default [
   route("api/v1/apps/:app/members", "routes/api/apps.$app.members.ts"),
   route("api/v1/apps/:app/members/:userId", "routes/api/apps.$app.members.$userId.ts"),
   route("api/v1/apps/:app/workspaces", "routes/api/apps.$app.workspaces.ts"),
+  // Who is in a workspace, and as what: the rows the workspaces claim carries.
+  route("api/v1/apps/:app/workspaces/:workspaceId/members", "routes/api/apps.$app.workspaces.$workspaceId.members.ts"),
+  route(
+    "api/v1/apps/:app/workspaces/:workspaceId/members/:userId",
+    "routes/api/apps.$app.workspaces.$workspaceId.members.$userId.ts",
+  ),
   route("api/v1/apps/:app/audit", "routes/api/apps.$app.audit.ts"),
   route("api/v1/apps/:app/permissions", "routes/api/apps.$app.permissions.ts"),
   // Scoped management keys for this app:
