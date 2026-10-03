@@ -1,5 +1,12 @@
 # @willyim/kit
 
+## 0.5.2
+
+### Patch Changes
+
+- 07fa409: `@willyim/kit/audit/context`: `runWithAuditContext` releases its lazy actor resolver once `fn` settles. On workerd the AsyncLocalStorage store stays reachable from native code after a request ends, so a resolver closing over the request (db client, sockets, auth) kept the whole request alive. An actor already resolved stays available to work that outlives `fn` (a `waitUntil` write); a write that would still need to resolve one now fails with "audit actor unavailable: the scope has ended".
+- 361e9c6: A context binds each method the first time it's read, not every method of a service up front, and builds a contract's schemas once for every context. Same behaviour, far less memory and CPU per request.
+
 ## 0.5.1
 
 ### Patch Changes
