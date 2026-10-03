@@ -25,6 +25,10 @@ const appEnvSchema = z.object({
   // nobody in this deployment uses.
   DISCORD_CLIENT_ID: z.string().optional(),
   DISCORD_CLIENT_SECRET: z.string().optional(),
+
+  // GlitchTip (bugs.romo.fyi, project `idp`) DSN — a Worker secret. Unset or
+  // empty ⇒ nothing is reported (local dev, tests). See error-reporting.server.ts.
+  GLITCHTIP_DSN: z.string().optional(),
 })
 
 export type AppEnv = z.infer<typeof appEnvSchema>
