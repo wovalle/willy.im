@@ -102,12 +102,16 @@ export function createApp<A extends unknown[], B, S extends Record<string, Facto
       // What factories close over: the same values, with trusted services.
       const inner: any = { ...ctx, services: {} }
       linkViews(inner.services, ctx.services)
-      const onCall = config.onCall as OnCall | undefined
-      for (const [name, factory] of Object.entries(config.services)) {
-        const built = once(name, () => factory(inner))
-        lazyService(ctx.services, name, () => bindService(built(), ctx, name, onCall, false))
-        lazyService(inner.services, name, () => bindService(built(), ctx, name, onCall, true))
+      const shared: Shared = {
+        factories: config.services,
+        inner,
+        ctx,
+        onCall: config.onCall as OnCall | undefined,
+        built: new Map(),
+        building: new Set(),
       }
+      servicesView(ctx.services, shared, false)
+      servicesView(inner.services, shared, true)
       return ctx
     },
     handle: (request, ctx) => handle(app, request, ctx),
@@ -117,41 +121,78 @@ export function createApp<A extends unknown[], B, S extends Record<string, Facto
   return app
 }
 
-/** A service's factory, run on first call and kept; both views of a context share it. */
-function once(name: string, build: () => object) {
-  let built: object | undefined
-  let building = false
-  return () => {
-    if (built) return built
-    if (building)
-      throw new Error(
-        `kit: service "${name}" was read while it builds; use ctx.services only inside method bodies`,
-      )
-    building = true
-    try {
-      return (built = build())
-    } finally {
-      building = false
-    }
+/** What both views of a context's services share: one built instance per factory. */
+type Shared = {
+  factories: Record<string, Factory>
+  inner: object
+  ctx: unknown
+  onCall: OnCall | undefined
+  built: Map<string, object>
+  building: Set<string>
+}
+
+/** A service's factory, run on first read and kept; both views of a context share it. */
+function built(shared: Shared, name: string) {
+  const hit = shared.built.get(name)
+  if (hit) return hit
+  if (shared.building.has(name))
+    throw new Error(
+      `kit: service "${name}" was read while it builds; use ctx.services only inside method bodies`,
+    )
+  shared.building.add(name)
+  try {
+    const service = shared.factories[name](shared.inner)
+    shared.built.set(name, service)
+    return service
+  } finally {
+    shared.building.delete(name)
   }
 }
 
-/** `services[name]`, built on first read and kept; enumerable, so `Object.keys` lists it. */
-function lazyService(services: object, name: string, build: () => object) {
+const views = new WeakMap<object, { shared: Shared; internal: boolean }>()
+
+const setService = (services: object, name: string, value: unknown) =>
   Object.defineProperty(services, name, {
+    value,
     enumerable: true,
     configurable: true,
-    get() {
-      const service = build()
-      Object.defineProperty(services, name, {
-        value: service,
-        enumerable: true,
-        configurable: true,
-        writable: true,
-      })
-      return service
-    },
+    writable: true,
   })
+
+// One accessor pair per service name, shared by every context.
+const accessors = new Map<string, PropertyDescriptor>()
+function lazyService(name: string): PropertyDescriptor {
+  let accessor = accessors.get(name)
+  if (!accessor) {
+    accessor = {
+      enumerable: true,
+      configurable: true,
+      get(this: object) {
+        const services = viewOf(this)
+        const { shared, internal } = views.get(services)!
+        const service = bindService(built(shared, name), shared.ctx, name, shared.onCall, internal)
+        setService(services, name, service)
+        return service
+      },
+      set(this: object, value: unknown) {
+        setService(viewOf(this), name, value)
+      },
+    }
+    accessors.set(name, accessor)
+  }
+  return accessor
+}
+
+function viewOf(target: object) {
+  for (let o: object | null = target; o; o = Object.getPrototypeOf(o)) if (views.has(o)) return o
+  throw new Error("kit: a service was read outside ctx.services")
+}
+
+/** `services[name]` for every service, built on first read and kept; enumerable, so `Object.keys` lists it. */
+function servicesView(services: object, shared: Shared, internal: boolean) {
+  views.set(services, { shared, internal })
+  for (const name of Object.keys(shared.factories))
+    Object.defineProperty(services, name, lazyService(name))
 }
 
 function validateDiscovery(discovery: DiscoveryOptions | undefined) {
