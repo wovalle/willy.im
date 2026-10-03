@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/cloudflare"
 import { createRequestHandler, RouterContextProvider } from "react-router"
 
 import { appContext } from "../app/context"
@@ -38,6 +39,7 @@ async function cachedAudiences(ctx: Pick<BaseServiceContext, "db">) {
   }
 }
 import { createBaseContext } from "../app/lib/services"
+import { sentryOptions } from "../app/lib/error-reporting.server"
 import { createIdpRequestTracker } from "../app/lib/luchy.server"
 import { createResourceLister } from "../app/lib/resources.server"
 
@@ -46,7 +48,7 @@ const requestHandler = createRequestHandler(
   import.meta.env.MODE,
 )
 
-export default {
+const handler = {
   async fetch(request, env, ctx) {
     const started = Date.now()
     const url = new URL(request.url)
@@ -107,3 +109,10 @@ export default {
     }
   },
 } satisfies ExportedHandler<Env>
+
+// GlitchTip (app/lib/error-reporting.server.ts). withSentry reports whatever
+// escapes `fetch` and holds the per-request scope that Better Auth's and React
+// Router's error hooks report into. The release is the Worker version
+// (CF_VERSION_METADATA in wrangler.jsonc), so an issue names the deploy that
+// introduced it.
+export default Sentry.withSentry(() => sentryOptions(getAppEnv()), handler)

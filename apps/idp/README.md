@@ -149,6 +149,17 @@ Later: centralized profile editing · MFA · Organizations tier · SAML / SCIM.
 
 See the [epic](https://github.com/wovalle/willy.im/issues/33).
 
+## Errors
+
+Server errors go to GlitchTip — <https://bugs.romo.fyi>, org `kasso`, project
+`idp` — which posts new issues and spikes to `#errors` on bender's Discord.
+Reported: anything escaping the Worker, every 5xx Better Auth answers (it
+catches endpoint errors itself, so its `onAPIError` hook is the only place to
+see them), and loader/action/render errors React Router catches. The DSN is the
+Worker secret `GLITCHTIP_DSN`; unset means nothing is sent. Cookies, request
+bodies and sensitive query values (`code`, `email`, `state`, …) are not sent
+(`app/lib/error-reporting.server.ts`).
+
 ## Develop
 
 ```bash

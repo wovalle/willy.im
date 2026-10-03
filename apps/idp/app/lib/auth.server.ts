@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm"
 import { betterAuth } from "better-auth"
-import { APIError } from "better-auth/api"
+import { APIError, isAPIError } from "better-auth/api"
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
 import { admin } from "better-auth/plugins/admin"
 import { emailOTP } from "better-auth/plugins/email-otp"
@@ -13,6 +13,7 @@ import { Resend } from "resend"
 import * as schema from "../db/schema"
 import { accessTokenClaimsFor, customClaimsFor, pictureClaimFor } from "./claims.server"
 import { hashClientSecret } from "./client-secret.server"
+import { reportError } from "./error-reporting.server"
 import { linkVerifiedIdentity } from "./identities.server"
 import { claimInvitationsForUser } from "./members.server"
 import type { BaseServiceContext } from "./services"
@@ -142,6 +143,22 @@ export function createAuthService(
     },
     rateLimit: {
       storage: "database",
+    },
+    // Better Auth catches whatever an endpoint throws and answers with it: an
+    // APIError's own status, or a bare 500 for anything else. Those errors never
+    // escape `auth.handler`, so neither React Router nor the worker sees them —
+    // this hook is the only place they can be reported. 4xx are answers (bad
+    // OTP, expired code), not failures. Setting it replaces Better Auth's own
+    // "ERROR [Better Auth]" line, hence the log below.
+    onAPIError: {
+      onError: (error) => {
+        if (isAPIError(error) && error.statusCode < 500) return
+        context.logger.error("auth.api.error", {
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        })
+        reportError(error, "better-auth")
+      },
     },
     databaseHooks: {
       // The `allow_signup` gate. This is the only place a willy.im account comes
