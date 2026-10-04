@@ -13,6 +13,7 @@ import { identities } from "./services/identities"
 import { admin_keys, management_keys } from "./services/keys"
 import { invitations, members } from "./services/members"
 import { user_keys } from "./services/user-keys"
+import { users } from "./services/users"
 import { workspace_members, workspaces } from "./services/workspaces"
 
 /**
@@ -67,6 +68,7 @@ const services = {
   identities,
   applications,
   catalog,
+  users,
 }
 
 export const app = createApp({

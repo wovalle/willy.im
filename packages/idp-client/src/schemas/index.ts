@@ -484,6 +484,16 @@ export const ResolveIdentityInput = z.object({
 export const LinkIdentityMethodInput = LinkIdentityInput.extend({ userId: z.string().min(1) })
 export const UnlinkIdentityInput = z.object({ userId: z.string().min(1), id: z.string().min(1) })
 
+export const FindUserInput = z
+  .object({ id: z.string().min(1).optional(), email: z.string().trim().email().optional() })
+  .refine((v) => !!v.id !== !!v.email, "give exactly one of id or email")
+export const FoundUserSchema = z.object({ user: UserSchema.nullable() })
+export const ImpersonationSchema = z.object({
+  setCookies: z
+    .array(z.string())
+    .describe("The impersonation session's Set-Cookie headers, for the admin's own browser"),
+})
+
 export type MethodDef = {
   scope: "app" | "idp"
   input: z.ZodType | undefined
@@ -558,6 +568,10 @@ export const methods = {
   "applications.delete": { scope: "app", input: undefined, output: OkSchema },
   "applications.rotate_secret": { scope: "app", input: undefined, output: ClientSecretSchema },
   "catalog.declare": { scope: "app", input: SetAppPermissionsInput, output: AppPermissionsSchema },
+
+  "users.list": { scope: "idp", input: undefined, output: UserListSchema },
+  "users.find": { scope: "idp", input: FindUserInput, output: FoundUserSchema },
+  "users.impersonate": { scope: "app", input: UserIdInput, output: ImpersonationSchema },
 } as const satisfies Record<string, MethodDef>
 
 export type Methods = typeof methods

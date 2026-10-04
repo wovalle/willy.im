@@ -26,7 +26,7 @@ import {
 } from "lucide-react"
 
 import type { Route } from "./+types/app-detail"
-import { appKeyOf, impersonateAppMember } from "~/lib/admin.server"
+import { appKeyOf } from "~/lib/admin.server"
 import type { ResourceTypeDecl } from "~/lib/metadata"
 import type { ResourceInstance } from "~/lib/resources.server"
 import { listAuditForApp } from "~/lib/audit.server"
@@ -116,7 +116,6 @@ export async function action({ request, context: router, params }: Route.ActionA
   // Authenticate only — every intent below is gated (and audited) by the service
   // it calls, so the console and the management API can't drift apart.
   const caller = await requireConsoleCaller(request, context, context.services.auth)
-  const auth = context.services.auth
   const clientId = params.clientId
   const app = await appKeyOf(context, clientId)
   if (!app) return { error: "This application has no app key yet." }
@@ -143,13 +142,10 @@ export async function action({ request, context: router, params }: Route.ActionA
   }
 
   if (intent === "impersonate") {
-    const res = await impersonateAppMember(context, caller, {
-      app,
-      userId: String(form.get("userId") ?? ""),
-      auth,
-      headers: request.headers,
-    })
-    if ("error" in res) return { error: res.error }
+    const res = await attempt(() =>
+      ctx.services.users.impersonate({ userId: String(form.get("userId") ?? "") }),
+    )
+    if (refused(res)) return res
     const headers = new Headers()
     for (const cookie of res.setCookies) headers.append("set-cookie", cookie)
     // Land on the impersonated user's account; a banner offers "stop".

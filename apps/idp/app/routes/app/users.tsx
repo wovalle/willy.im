@@ -1,8 +1,8 @@
 import { Link } from "react-router"
 
 import type { Route } from "./+types/users"
-import { listUsers } from "~/lib/admin.server"
 import { requireConsoleCaller } from "~/lib/caller.server"
+import { requestContext } from "~/kit.server"
 import { Avatar } from "~/components/avatar"
 import { Badge } from "~/components/ui/badge"
 import {
@@ -18,7 +18,8 @@ import { appContext } from "~/context"
 export async function loader({ request, context: router }: Route.LoaderArgs) {
   const context = router.get(appContext)
   await requireConsoleCaller(request, context, context.services.auth, { superadmin: true })
-  return { users: await listUsers(context) }
+  const ctx = await requestContext(context, request, null)
+  return { users: (await ctx.services.users.list()).users }
 }
 
 export default function AdminUsers({ loaderData }: Route.ComponentProps) {

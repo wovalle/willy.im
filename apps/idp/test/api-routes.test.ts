@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { listAppMembers } from "../app/lib/admin.server"
 import type { AuthService } from "../app/lib/auth.server"
 import type { Caller } from "../app/lib/caller.server"
 import * as applications from "../app/routes/api/applications"
@@ -502,7 +501,7 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({ status: 201, body: { result: "added" } })
 
-      const members = await listAppMembers(h.ctx, "acme")
+      const members = (await (await kitContext(h.ctx, root.principal, "acme")).services.members.list()).members
       expect(members.find((m) => m.userId === user.id)?.productPermissions).toEqual(["chat:respond"])
     })
 
@@ -549,7 +548,7 @@ describe("management API routes", () => {
       })
       expect(granted).toEqual({ status: 200, body: { ok: true } })
       expect(
-        (await listAppMembers(h.ctx, "acme")).find((m) => m.userId === user.id)?.productPermissions,
+        ((await (await kitContext(h.ctx, root.principal, "acme")).services.members.list()).members).find((m) => m.userId === user.id)?.productPermissions,
       ).toEqual(["chat:respond"])
 
       // No productPermissions in the body: an unrelated edit must not wipe them.
@@ -562,7 +561,7 @@ describe("management API routes", () => {
         params: { app: "acme", userId: user.id },
       })
       expect(
-        (await listAppMembers(h.ctx, "acme")).find((m) => m.userId === user.id)?.productPermissions,
+        ((await (await kitContext(h.ctx, root.principal, "acme")).services.members.list()).members).find((m) => m.userId === user.id)?.productPermissions,
       ).toEqual(["chat:respond"])
     })
   })
