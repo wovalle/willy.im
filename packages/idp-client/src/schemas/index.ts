@@ -477,6 +477,13 @@ export const WorkspacePeopleSchema = z.object({
   ),
 })
 
+export const ResolveIdentityInput = z.object({
+  provider: z.string().min(1).describe("The other system, e.g. slack — case-insensitive"),
+  externalId: z.string().min(1).describe("The id exactly as that system spells it"),
+})
+export const LinkIdentityMethodInput = LinkIdentityInput.extend({ userId: z.string().min(1) })
+export const UnlinkIdentityInput = z.object({ userId: z.string().min(1), id: z.string().min(1) })
+
 export type MethodDef = {
   scope: "app" | "idp"
   input: z.ZodType | undefined
@@ -526,6 +533,19 @@ export const methods = {
   "admin_keys.revoke": { scope: "idp", input: IdInput, output: OkSchema },
 
   "app_tokens.mint": { scope: "app", input: CreateAppTokenInput, output: AppTokenCreatedSchema },
+
+  "identities.resolve": {
+    scope: "app",
+    input: ResolveIdentityInput,
+    output: IdentityResolutionSchema,
+  },
+  "identities.list": { scope: "idp", input: UserIdInput, output: LinkedIdentityListSchema },
+  "identities.link": {
+    scope: "idp",
+    input: LinkIdentityMethodInput,
+    output: LinkedIdentityCreatedSchema,
+  },
+  "identities.unlink": { scope: "idp", input: UnlinkIdentityInput, output: OkSchema },
 } as const satisfies Record<string, MethodDef>
 
 export type Methods = typeof methods

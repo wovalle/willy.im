@@ -21,7 +21,8 @@ export async function v1(
   // The body is validated by the method's contract.
   // biome-ignore lint/suspicious/noExplicitAny: kit parses it
   call: (ctx: Context, body: any) => Promise<unknown>,
-  status = 200,
+  // biome-ignore lint/suspicious/noExplicitAny: the method's output
+  status: number | ((value: any) => number) = 200,
 ): Promise<Response> {
   const { request } = args
   const c = args.context.get(appContext)
@@ -41,7 +42,8 @@ export async function v1(
         return Response.json({ error: "invalid_json" }, { status: 400 })
       }
     }
-    return Response.json(await call(ctx, body), { status })
+    const value = await call(ctx, body)
+    return Response.json(value, { status: typeof status === "number" ? status : status(value) })
   } catch (e) {
     if (!(e instanceof Response)) throw e
     // kit's own denial is plain text; a method's fail(403, …) keeps its message.

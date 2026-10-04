@@ -1,116 +1,19 @@
-import { and, asc, eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 
 import * as schema from "../db/schema"
-import { catalogOf, getApplicationByApp } from "./admin.server"
-import { IDP_AUDIT_SCOPE, recordAudit, type Actor } from "./audit.server"
-import { assertCan, type Caller } from "./caller.server"
-import { productPermissionsFor } from "./claims.server"
+import { auditTrail } from "./audit.server"
 import type { BaseServiceContext } from "./services"
 
 /**
- * Linked identities — a user's ids on other systems (Slack, WhatsApp,
- * Telegram), pinned to their IdP user so every surface gets the same answer
- * to "who is this, and what may they do here?".
- *
- * Two halves with deliberately different gates:
- *
- *   link / list / unlink   superadmin only. A link asserts "this external
- *                          account IS this person" with nothing to prove it,
- *                          so no app and no member may do it — an app that
- *                          could link identities could grant itself anyone.
- *   resolve                app-scoped, `identity:resolve`. The hot path: an
- *                          app hears from a Slack id and asks. Answers with
- *                          the user AND their product permissions for THAT
- *                          app, computed exactly the way the claims hook
- *                          computes them at token mint — so a Slack message
- *                          and a browser session from the same person carry
- *                          the same grants.
+ * Pinning an external id (a Slack member id, a Discord snowflake) to an IdP
+ * user. Two doors reach it: `identities.link` (services/identities.ts), where
+ * a superadmin ASSERTS the link, and {@link linkVerifiedIdentity}, where the
+ * user PROVED it through the provider's OAuth round trip.
  */
-
-export type LinkedIdentitySummary = {
-  id: string
-  userId: string
-  provider: string
-  externalId: string
-  label: string | null
-  createdAt: Date
-}
 
 /** Lowercase, trimmed. "Slack" and "slack" are the same system. */
-function normaliseProvider(provider: string): string {
+export function normaliseProvider(provider: string): string {
   return provider.trim().toLowerCase()
-}
-
-function summarise(row: schema.LinkedIdentity): LinkedIdentitySummary {
-  return {
-    id: row.id,
-    userId: row.userId,
-    provider: row.provider,
-    externalId: row.externalId,
-    label: row.label ?? null,
-    createdAt: row.createdAt,
-  }
-}
-
-function requireSuperadmin(caller: Caller) {
-  if (caller.kind !== "superadmin") {
-    throw Response.json({ error: "forbidden" }, { status: 403 })
-  }
-}
-
-/** Every identity pinned to one user, oldest first. Superadmin only. */
-export async function listLinkedIdentities(
-  ctx: BaseServiceContext,
-  caller: Caller,
-  input: { userId: string },
-): Promise<LinkedIdentitySummary[]> {
-  requireSuperadmin(caller)
-  const rows = await ctx.db
-    .select()
-    .from(schema.linkedIdentity)
-    .where(eq(schema.linkedIdentity.userId, input.userId))
-    .orderBy(asc(schema.linkedIdentity.createdAt))
-  return rows.map(summarise)
-}
-
-/**
- * Pins an external id to a user. The (provider, externalId) pair is unique:
- * linking one that already belongs to SOMEONE ELSE is refused rather than
- * moved, because silently re-pointing an identity is how one person starts
- * receiving another's grants. Re-linking to the same user is idempotent.
- *
- * Superadmin only.
- */
-export async function linkIdentity(
-  ctx: BaseServiceContext,
-  caller: Caller,
-  input: { userId: string; provider: string; externalId: string; label?: string | null },
-): Promise<LinkOutcome> {
-  requireSuperadmin(caller)
-  return performLink(ctx, caller.actor, input)
-}
-
-/**
- * A link the USER proved, rather than one a superadmin asserted.
- *
- * The superadmin gate on {@link linkIdentity} exists because a link asserts
- * identity with nothing to prove it. An OAuth round trip through the provider
- * IS that proof: Discord told us, on a channel the user authenticated on, which
- * snowflake belongs to the account that just consented. So this path skips the
- * gate — and ONLY this path may, which is why it lives here as a named function
- * rather than as a flag on the one above. Its caller is the `account.create`
- * hook in auth.server.ts and nothing else.
- *
- * Every other rule is unchanged, deliberately: an external id already pinned to
- * SOMEONE ELSE is still refused rather than moved. Proving you control a Discord
- * account does not entitle you to take it off the person it is already pinned
- * to — that is an admin's call, with the audit entry to match.
- */
-export async function linkVerifiedIdentity(
-  ctx: BaseServiceContext,
-  input: { userId: string; provider: string; externalId: string; label?: string | null },
-): Promise<LinkOutcome> {
-  return performLink(ctx, { userId: input.userId, label: `user:${input.userId}` }, input)
 }
 
 export type LinkOutcome =
@@ -118,10 +21,18 @@ export type LinkOutcome =
   | { error: "unknown_user" }
   | { error: "already_linked"; toUserId: string }
 
-/** The shared body: the uniqueness rules and the audit entry, in one place. */
-async function performLink(
+type Audit = ReturnType<typeof auditTrail>
+
+/**
+ * The shared body: the uniqueness rules and the audit entry, in one place. The
+ * (provider, externalId) pair is unique: linking one that already belongs to
+ * SOMEONE ELSE is refused rather than moved, because silently re-pointing an
+ * identity is how one person starts receiving another's grants. Re-linking to
+ * the same user is idempotent.
+ */
+export async function performLink(
   ctx: BaseServiceContext,
-  actor: Actor,
+  audit: Audit,
   input: { userId: string; provider: string; externalId: string; label?: string | null },
 ): Promise<LinkOutcome> {
   const provider = normaliseProvider(input.provider)
@@ -157,110 +68,35 @@ async function performLink(
     externalId,
     label: input.label?.trim() || null,
   })
-
-  await recordAudit(ctx, {
-    actor,
+  // Global to the user, not to any app: the IdP-level audit scope.
+  await audit.record({
     table: "linked_identity",
     operation: "create",
-    // Global to the user, not to any app — same scope the admin keys use.
-    applicationId: IDP_AUDIT_SCOPE,
     rowId: id,
     after: { userId: input.userId, provider, externalId },
   })
-
   return { id, created: true }
 }
 
-/** Removes one link (idempotent). Scoped to the user so the id alone is not enough. Superadmin only. */
-export async function unlinkIdentity(
-  ctx: BaseServiceContext,
-  caller: Caller,
-  input: { userId: string; id: string },
-): Promise<{ ok: true }> {
-  requireSuperadmin(caller)
-  const [row] = await ctx.db
-    .select({ id: schema.linkedIdentity.id, provider: schema.linkedIdentity.provider, externalId: schema.linkedIdentity.externalId })
-    .from(schema.linkedIdentity)
-    .where(and(eq(schema.linkedIdentity.id, input.id), eq(schema.linkedIdentity.userId, input.userId)))
-    .limit(1)
-  if (row) {
-    await ctx.db.delete(schema.linkedIdentity).where(eq(schema.linkedIdentity.id, row.id))
-    await recordAudit(ctx, {
-      actor: caller.actor,
-      table: "linked_identity",
-      operation: "delete",
-      applicationId: IDP_AUDIT_SCOPE,
-      rowId: row.id,
-      before: { userId: input.userId, provider: row.provider, externalId: row.externalId },
-    })
-  }
-  return { ok: true }
-}
-
-export type IdentityResolution =
-  | {
-      found: true
-      userId: string
-      email: string
-      name: string | null
-      /** This user's product permissions for the asking app — admins get the whole catalog. */
-      permissions: string[]
-    }
-  | { found: false }
-
 /**
- * "Who is <provider>:<externalId>, and what may they do in <app>?"
+ * A link the USER proved, rather than one a superadmin asserted.
  *
- * The permissions are computed by the same function the claims hook uses at
- * token mint, against the app's current catalog, so the answer cannot drift
- * from what a browser session for the same person would carry. A user with no
- * membership in the app resolves as found with NO permissions — they exist,
- * the app just has not granted them anything — which is the correct signal
- * for "store the message, do not answer it".
+ * The superadmin gate on `identities.link` exists because a link asserts
+ * identity with nothing to prove it. An OAuth round trip through the provider
+ * IS that proof: Discord told us, on a channel the user authenticated on, which
+ * snowflake belongs to the account that just consented. So this path skips the
+ * gate — and ONLY this path may, which is why it is a named function rather
+ * than a flag on the method. Its caller is the `account.create` hook in
+ * auth.server.ts and nothing else.
  *
- * Requires `identity:resolve` on the app. Not audited: this is the hot read
- * path (every inbound chat message), and a row per call would drown the trail
- * the link/unlink writes share.
+ * Every other rule is unchanged, deliberately: an external id already pinned to
+ * SOMEONE ELSE is still refused rather than moved. Proving you control a Discord
+ * account does not entitle you to take it off the person it is already pinned
+ * to — that is an admin's call, with the audit entry to match.
  */
-export async function resolveIdentity(
+export async function linkVerifiedIdentity(
   ctx: BaseServiceContext,
-  caller: Caller,
-  input: { app: string; provider: string; externalId: string },
-): Promise<IdentityResolution> {
-  await assertCan(caller, input.app, "identity:resolve")
-  const provider = normaliseProvider(input.provider)
-  const externalId = input.externalId.trim()
-
-  const [row] = await ctx.db
-    .select({
-      userId: schema.linkedIdentity.userId,
-      email: schema.user.email,
-      name: schema.user.name,
-    })
-    .from(schema.linkedIdentity)
-    .innerJoin(schema.user, eq(schema.linkedIdentity.userId, schema.user.id))
-    .where(
-      and(
-        eq(schema.linkedIdentity.provider, provider),
-        eq(schema.linkedIdentity.externalId, externalId),
-      ),
-    )
-    .limit(1)
-  if (!row) return { found: false }
-
-  const application = await getApplicationByApp(ctx, input.app)
-  const permissions = await productPermissionsFor(
-    ctx.db,
-    row.userId,
-    input.app,
-    catalogOf(application),
-  )
-
-  return {
-    found: true,
-    userId: row.userId,
-    email: row.email,
-    name: row.name ?? null,
-    permissions,
-  }
+  input: { userId: string; provider: string; externalId: string; label?: string | null },
+): Promise<LinkOutcome> {
+  return performLink(ctx, auditTrail(ctx, { id: `user:${input.userId}` }, null), input)
 }
