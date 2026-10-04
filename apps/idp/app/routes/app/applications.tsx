@@ -3,10 +3,8 @@ import { Form, Link, useActionData, useNavigation } from "react-router"
 import { ChevronRight, Loader2, Plus } from "lucide-react"
 
 import type { Route } from "./+types/applications"
-import { requireConsoleCaller } from "~/lib/caller.server"
-import { attempt, refused } from "~/lib/console.server"
+import { attempt, consoleContext, refused } from "~/lib/console.server"
 import { parseUriList } from "~/lib/validate"
-import { requestContext } from "~/kit.server"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
@@ -24,15 +22,13 @@ import { appContext } from "~/context"
 
 export async function loader({ request, context: router }: Route.LoaderArgs) {
   const context = router.get(appContext)
-  await requireConsoleCaller(request, context, context.services.auth, { superadmin: true })
-  const ctx = await requestContext(context, request, null)
+  const ctx = await consoleContext(context, request, null, "*")
   return { applications: (await ctx.services.applications.list()).applications }
 }
 
 export async function action({ request, context: router }: Route.ActionArgs) {
   const context = router.get(appContext)
-  await requireConsoleCaller(request, context, context.services.auth, { superadmin: true })
-  const ctx = await requestContext(context, request, null)
+  const ctx = await consoleContext(context, request, null, "*")
   const form = await request.formData()
 
   const name = String(form.get("name") ?? "").trim()

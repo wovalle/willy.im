@@ -29,9 +29,8 @@ import type { Route } from "./+types/app-detail"
 import { appKeyOf } from "~/lib/admin.server"
 import type { ResourceTypeDecl } from "~/lib/metadata"
 import type { ResourceInstance } from "~/lib/resources.server"
-import { requireConsoleCaller } from "~/lib/caller.server"
-import { attempt, refused } from "~/lib/console.server"
-import { requestContext } from "~/kit.server"
+import type { Context } from "@willyim/kit"
+import { attempt, consoleContext, refused } from "~/lib/console.server"
 import { APP_PERMISSIONS, type AppPermission, type AppRole } from "~/lib/permissions"
 import { parseUriList } from "~/lib/validate"
 import {
@@ -70,24 +69,17 @@ import { appContext } from "~/context"
 
 export async function loader({ request, context: router, params }: Route.LoaderArgs) {
   const context = router.get(appContext)
-  // The gate is app-scoped, so the app has to be resolved before it can be
-  // applied: any member holding app:read may open this page, not just IdP
-  // superadmins.
+  // Any member holding app:read may open this page, not just IdP superadmins.
   const app = await appKeyOf(context, params.clientId)
   if (!app) throw new Response("Application not found", { status: 404 })
-  const caller = await requireConsoleCaller(request, context, context.services.auth, {
-    app,
-    permission: "app:read",
-  })
-  // What this caller may actually do here — the UI decides what to render, and
-  // the loader decides what it can even ask for.
-  const permissions = await caller.permissionsFor(app)
-  const ctx = await requestContext(context, request, app)
-  const may = (permission: AppPermission) => permissions.includes(permission)
-  const application = await ctx.services.applications.get()
-  // Each list is gated by its method's permission: asking without it would 403
-  // the page for a member otherwise entitled to read it.
-  const [workspaces, people, members, invitations, apiKeys, audit] = await Promise.all([
+  const ctx = await consoleContext(context, request, app, "app:read")
+  // What this caller may do here: the UI decides what to render, and the loader
+  // what it can even ask for — each list is gated by its method's permission,
+  // and asking without it would 403 a page the caller may otherwise read.
+  const permissions = ctx.caller.granted as AppPermission[]
+  const may = (permission: AppPermission) => ctx.caller.has(permission)
+  const [application, workspaces, people, members, invitations, apiKeys, audit] = await Promise.all([
+    ctx.services.applications.get(),
     may("workspace:read") ? ctx.services.workspaces.list().then((r) => r.workspaces) : [],
     may("workspace:read") ? ctx.services.workspaces.people().then((r) => r.people) : [],
     may("member:read") ? ctx.services.members.list().then((r) => r.members) : [],
@@ -104,174 +96,137 @@ export async function loader({ request, context: router, params }: Route.LoaderA
     apiKeys,
     audit,
     permissions,
-    // Impersonation needs superadmin *and* the permission (see admin.server), and
-    // the button should be honest about both.
-    isSuperadmin: caller.kind === "superadmin",
+    // Impersonation is superadmin-only (users.impersonate), and the button
+    // should be honest about it.
+    isSuperadmin: ctx.caller.isSuperadmin,
   }
 }
 
-export async function action({ request, context: router, params }: Route.ActionArgs) {
-  const context = router.get(appContext)
-  // Authenticate only — every intent below is gated (and audited) by the service
-  // it calls, so the console and the management API can't drift apart.
-  const caller = await requireConsoleCaller(request, context, context.services.auth)
-  const clientId = params.clientId
-  const app = await appKeyOf(context, clientId)
-  if (!app) return { error: "This application has no app key yet." }
-  const ctx = await requestContext(context, request, app)
-  const form = await request.formData()
-  const intent = form.get("intent")
+type ActionData = {
+  ok?: string
+  error?: string
+  field?: string
+  rotatedSecret?: string
+  createdApiKey?: { token: string; prefix: string; name: string }
+}
 
-  if (intent === "delete") {
+/** One form intent: read the form, call the method, say what happened. */
+type Intent = (ctx: Context, form: FormData) => Promise<ActionData | Response>
+
+const text = (form: FormData, name: string) => String(form.get(name) ?? "").trim()
+const list = (form: FormData, name: string) => form.getAll(name).map(String).filter(Boolean)
+const roleOf = (form: FormData) => (text(form, "role") === "admin" ? "admin" : "member")
+/** The method's refusal for the form to show, or `ok`. */
+const done = async (call: Promise<unknown>, ok: string, field?: string) => {
+  const res = await attempt(() => call, field)
+  return refused(res) ? res : { ok }
+}
+
+/**
+ * Every intent the page posts, as the method it calls. Permissions, validation
+ * and the audit entry are the method's, so the console and the API can't
+ * drift apart.
+ */
+const intents: Record<string, Intent> = {
+  delete: async (ctx) => {
     await ctx.services.applications.delete()
     return redirect("/")
-  }
-
-  if (intent === "rotate") {
-    const { clientSecret } = await ctx.services.applications.rotate_secret()
-    return { rotatedSecret: clientSecret }
-  }
-
-  if (intent === "update-redirects") {
-    const redirectUris = parseUriList(String(form.get("redirectUris") ?? ""))
-    if (redirectUris.length === 0)
-      return { error: "Add at least one redirect URI.", field: "redirectUris" }
-    const res = await attempt(() => ctx.services.applications.update({ redirectUris }), "redirectUris")
-    return refused(res) ? res : { ok: "redirects" }
-  }
-
-  if (intent === "impersonate") {
-    const res = await attempt(() =>
-      ctx.services.users.impersonate({ userId: String(form.get("userId") ?? "") }),
-    )
+  },
+  rotate: async (ctx) => ({ rotatedSecret: (await ctx.services.applications.rotate_secret()).clientSecret }),
+  "update-redirects": async (ctx, form) => {
+    const redirectUris = parseUriList(text(form, "redirectUris"))
+    if (redirectUris.length === 0) return { error: "Add at least one redirect URI.", field: "redirectUris" }
+    return done(ctx.services.applications.update({ redirectUris }), "redirects", "redirectUris")
+  },
+  "update-app-metadata": (ctx, form) =>
+    done(ctx.services.applications.update({ allowSignup: form.get("allow_signup") === "on" }), "app-metadata"),
+  "add-permission": async (ctx, form) => {
+    const value = text(form, "permission")
+    const { permissions, resourceTypes } = await ctx.services.applications.get()
+    if (!value) return { error: "Enter a permission.", field: "add-permission" }
+    if (/\s/.test(value)) return { error: "Permissions can't contain spaces.", field: "add-permission" }
+    if (permissions.includes(value)) return { error: `"${value}" is already declared.`, field: "add-permission" }
+    // The console edits only the FLAT half of the catalog; resource types are
+    // declared by the app itself over the API, so they ride through untouched.
+    const next = { permissions: [...permissions, value], resourceTypes }
+    return done(ctx.services.catalog.declare(next), "permission-added", "add-permission")
+  },
+  "remove-permission": async (ctx, form) => {
+    const { permissions, resourceTypes } = await ctx.services.applications.get()
+    const next = { permissions: permissions.filter((p) => p !== text(form, "permission")), resourceTypes }
+    return done(ctx.services.catalog.declare(next), "permission-removed", "add-permission")
+  },
+  impersonate: async (ctx, form) => {
+    const res = await attempt(() => ctx.services.users.impersonate({ userId: text(form, "userId") }))
     if (refused(res)) return res
     const headers = new Headers()
     for (const cookie of res.setCookies) headers.append("set-cookie", cookie)
     // Land on the impersonated user's account; a banner offers "stop".
     return redirect("/account", { headers })
-  }
-
-  if (intent === "create-api-key" || intent === "revoke-api-key") {
-
-    if (intent === "create-api-key") {
-      const name = String(form.get("name") ?? "").trim()
-      if (!name) return { error: "Give the key a name.", field: "key-name" }
-      const permissions = form.getAll("permissions").map(String).filter(Boolean)
-      if (permissions.length === 0)
-        return { error: "Select at least one permission.", field: "key-name" }
-      const days = Number(form.get("expiresInDays"))
-      const expiresAt =
-        Number.isFinite(days) && days > 0
-          ? new Date(Date.now() + days * 24 * 60 * 60 * 1000)
-          : null
-      const created = await attempt(
-        () =>
-          ctx.services.management_keys.mint({
-            name,
-            permissions,
-            expiresAt: expiresAt?.toISOString(),
-          }),
-        "key-name",
-      )
-      if (refused(created)) return created
-      return { createdApiKey: { token: created.token, prefix: created.prefix, name } }
-    }
-
-    // revoke-api-key
-    const keyId = String(form.get("keyId") ?? "")
-    const res = await attempt(() => ctx.services.management_keys.revoke({ id: keyId }))
-    return refused(res) ? res : { ok: "api-key-revoked" }
-  }
-
-  if (intent === "create-workspace") {
-    const name = String(form.get("name") ?? "").trim()
-    const slug = String(form.get("slug") ?? "").trim()
-    const res = await attempt(() => ctx.services.workspaces.create({ name, slug }), "ws-name")
-    return refused(res) ? res : { ok: "workspace" }
-  }
-
-  // Member-management intents. Resolved against the app's access catalog so
-  // app-admins (not just superadmin) can manage their own app once the route
-  // opens up; superadmin passes everything today.
-  if (
-    intent === "invite-member" ||
-    intent === "update-member" ||
-    intent === "remove-member" ||
-    intent === "revoke-invite" ||
-    intent === "resend-invite"
-  ) {
-    const role = String(form.get("role")) === "admin" ? "admin" : "member"
-    const permissions = form.getAll("permissions").map(String).filter(Boolean)
-    const productPermissions = form.getAll("productPermissions").map(String).filter(Boolean)
-    const userId = String(form.get("userId") ?? "")
-    const id = String(form.get("invitationId") ?? "")
-
-    if (intent === "invite-member") {
-      const email = String(form.get("email") ?? "").trim()
-      const res = await attempt(
-        () => ctx.services.members.invite({ email, role, permissions, productPermissions }),
-        "invite-email",
-      )
-      if (refused(res)) return res
-      return { ok: res.result === "added" ? "member-added" : "member-invited" }
-    }
-
-    if (intent === "update-member") {
-      const res = await attempt(() =>
-        ctx.services.members.set_access({ userId, role, permissions, productPermissions }),
-      )
-      return refused(res) ? res : { ok: "member-updated" }
-    }
-
-    if (intent === "remove-member") {
-      const res = await attempt(() => ctx.services.members.remove({ userId }))
-      return refused(res) ? res : { ok: "member-removed" }
-    }
-
-    if (intent === "revoke-invite") {
-      const res = await attempt(() => ctx.services.invitations.revoke({ id }))
-      return refused(res) ? res : { ok: "invite-revoked" }
-    }
-
-    if (intent === "resend-invite") {
-      const res = await attempt(() => ctx.services.invitations.resend({ id }))
-      return refused(res) ? res : { ok: "invite-resent" }
-    }
-  }
-
-  if (intent === "update-app-metadata") {
-    await ctx.services.applications.update({ allowSignup: form.get("allow_signup") === "on" })
-    return { ok: "app-metadata" }
-  }
-
-  if (intent === "add-permission" || intent === "remove-permission") {
-    // The console edits only the FLAT half of the catalog; resource types are
-    // declared by the app itself over the API, so they ride through untouched.
-    const { permissions, resourceTypes } = await ctx.services.applications.get()
-    const value = String(form.get("permission") ?? "").trim()
-    if (intent === "add-permission") {
-      if (!value) return { error: "Enter a permission.", field: "add-permission" }
-      if (/\s/.test(value))
-        return { error: "Permissions can't contain spaces.", field: "add-permission" }
-      if (permissions.includes(value))
-        return { error: `"${value}" is already declared.`, field: "add-permission" }
-    }
+  },
+  "create-api-key": async (ctx, form) => {
+    const name = text(form, "name")
+    const permissions = list(form, "permissions")
+    if (!name) return { error: "Give the key a name.", field: "key-name" }
+    if (permissions.length === 0) return { error: "Select at least one permission.", field: "key-name" }
+    const days = Number(form.get("expiresInDays"))
+    const expiresAt =
+      Number.isFinite(days) && days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : undefined
+    const created = await attempt(
+      () => ctx.services.management_keys.mint({ name, permissions, expiresAt }),
+      "key-name",
+    )
+    if (refused(created)) return created
+    return { createdApiKey: { token: created.token, prefix: created.prefix, name } }
+  },
+  "revoke-api-key": (ctx, form) =>
+    done(ctx.services.management_keys.revoke({ id: text(form, "keyId") }), "api-key-revoked"),
+  "create-workspace": (ctx, form) =>
+    done(
+      ctx.services.workspaces.create({ name: text(form, "name"), slug: text(form, "slug") }),
+      "workspace",
+      "ws-name",
+    ),
+  "invite-member": async (ctx, form) => {
     const res = await attempt(
       () =>
-        ctx.services.catalog.declare({
-          permissions:
-            intent === "add-permission"
-              ? [...permissions, value]
-              : permissions.filter((p) => p !== value),
-          resourceTypes,
+        ctx.services.members.invite({
+          email: text(form, "email"),
+          role: roleOf(form),
+          permissions: list(form, "permissions"),
+          productPermissions: list(form, "productPermissions"),
         }),
-      "add-permission",
+      "invite-email",
     )
     if (refused(res)) return res
-    return { ok: intent === "add-permission" ? "permission-added" : "permission-removed" }
-  }
+    return { ok: res.result === "added" ? "member-added" : "member-invited" }
+  },
+  "update-member": (ctx, form) =>
+    done(
+      ctx.services.members.set_access({
+        userId: text(form, "userId"),
+        role: roleOf(form),
+        permissions: list(form, "permissions"),
+        productPermissions: list(form, "productPermissions"),
+      }),
+      "member-updated",
+    ),
+  "remove-member": (ctx, form) =>
+    done(ctx.services.members.remove({ userId: text(form, "userId") }), "member-removed"),
+  "revoke-invite": (ctx, form) =>
+    done(ctx.services.invitations.revoke({ id: text(form, "invitationId") }), "invite-revoked"),
+  "resend-invite": (ctx, form) =>
+    done(ctx.services.invitations.resend({ id: text(form, "invitationId") }), "invite-resent"),
+}
 
-  return { error: "Unknown action" }
+export async function action({ request, context: router, params }: Route.ActionArgs) {
+  const context = router.get(appContext)
+  const app = await appKeyOf(context, params.clientId)
+  if (!app) return { error: "This application has no app key yet." } as ActionData
+  const ctx = await consoleContext(context, request, app)
+  const form = await request.formData()
+  const intent = intents[String(form.get("intent"))]
+  return intent ? intent(ctx, form) : ({ error: "Unknown action" } as ActionData)
 }
 
 export default function AppDetail({ loaderData }: Route.ComponentProps) {

@@ -2,9 +2,7 @@ import { Form, Link, useActionData, useNavigation, useSubmit } from "react-route
 import { Link2, Loader2, Plus, Trash2 } from "lucide-react"
 
 import type { Route } from "./+types/user-detail"
-import { requireConsoleCaller } from "~/lib/caller.server"
-import { attempt, refused } from "~/lib/console.server"
-import { requestContext } from "~/kit.server"
+import { attempt, consoleContext, refused } from "~/lib/console.server"
 import { Avatar } from "~/components/avatar"
 import {
   AlertDialog,
@@ -41,8 +39,7 @@ export async function loader({ request, context: router, params }: Route.LoaderA
   const context = router.get(appContext)
   // Linking is superadmin-only in the service; gate the page the same way so a
   // non-admin never sees controls that would only 403.
-  await requireConsoleCaller(request, context, context.services.auth, { superadmin: true })
-  const ctx = await requestContext(context, request, null)
+  const ctx = await consoleContext(context, request, null, "*")
   const { user } = await ctx.services.users.find({ id: params.userId })
   if (!user) throw new Response("User not found", { status: 404 })
   const { identities } = await ctx.services.identities.list({ userId: params.userId })
@@ -51,8 +48,7 @@ export async function loader({ request, context: router, params }: Route.LoaderA
 
 export async function action({ request, context: router, params }: Route.ActionArgs) {
   const context = router.get(appContext)
-  await requireConsoleCaller(request, context, context.services.auth, { superadmin: true })
-  const ctx = await requestContext(context, request, null)
+  const ctx = await consoleContext(context, request, null, "*")
   const userId = params.userId
   const form = await request.formData()
   const intent = form.get("intent")
