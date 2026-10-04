@@ -1,6 +1,5 @@
 import type { Route } from "./+types/applications.$clientId"
-import { methodNotAllowed } from "~/lib/api.server"
-import { missing, tenantOf, v1 } from "~/lib/v1.server"
+import { methodNotAllowed, missing, tenantOf, v1 } from "~/lib/v1.server"
 
 /** GET — applications.get. */
 export async function loader(args: Route.LoaderArgs) {

@@ -2,7 +2,7 @@ import { createLuchyClient } from "luchy/api"
 import { createRequestTracker, type RequestTrackerOptions } from "luchy/react-router"
 
 import { LUCHY_API_KEY } from "./luchy"
-import { resolveCaller } from "./caller.server"
+import { principalFrom } from "./caller.server"
 import type { AuthService } from "./auth.server"
 import type { BaseServiceContext } from "./services"
 
@@ -38,11 +38,12 @@ export function createIdpRequestTracker(ctx: BaseServiceContext, auth: AuthServi
       if (request.headers.get("authorization")) {
         // Agentic traffic: name the key so machine usage is segmentable, not
         // just countable.
-        const caller = await resolveCaller(request, ctx, auth).catch(() => null)
-        if (caller) {
-          payload.actor = caller.actor.label
-          payload.kind = caller.kind
-          if (caller.applicationId) payload.app = caller.applicationId
+        const principal = await principalFrom(request, ctx, auth).catch(() => null)
+        if (principal) {
+          payload.actor = principal.id
+          payload.kind = principal.grants.includes("*") ? "superadmin" : "key"
+          const app = principal.memberships[0]?.tenantId
+          if (app) payload.app = app
         }
       } else if (request.headers.get("cookie")) {
         // Anonymous traffic carries neither header; it must not pay for a

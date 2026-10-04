@@ -47,7 +47,7 @@ User (global)
 
 A **linked identity** pins a user's id on another system — a Slack member id, a
 Discord snowflake — to their IdP user, so an app that hears from that system can
-ask one question (`GET /api/v1/apps/{app}/identities/{provider}/{externalId}`)
+ask one question (`identities.resolve`, `POST /apps/{app}/api/identities.resolve`)
 and get back the person *and their permissions for that app*. Bender is the
 caller that matters: a Discord message arrives carrying nothing but a snowflake.
 
@@ -61,8 +61,8 @@ the account that consented. Because the proof is the OAuth round trip and not a
 secret in the URL, the link is safe to post in a channel other people can read:
 whoever completes it links *their* account and nobody else's.
 
-That path calls `linkVerifiedIdentity` (identities.server.ts) rather than
-`linkIdentity`, which is the only code allowed to skip the superadmin gate. It
+That path calls `linkVerifiedIdentity` (identities.server.ts) rather than the
+`identities.link` method, and is the only code allowed to skip the superadmin gate. It
 skips *only* that gate — an external id already pinned to someone else is still
 refused rather than moved, because proving you control a Discord account does
 not entitle you to take it off whoever holds it.
@@ -109,7 +109,14 @@ request, and an OAuth callback carries none).
 - **API keys** with scoped permissions — machine-readable keys the IdP issues on
   behalf of a workspace or user. Carry the same `permissions[]` model as tokens,
   so they can fully replace app-managed key systems (e.g. tracker ingestion keys).
-- A management API (OpenAPI) so agents can provision users/workspaces on your behalf.
+- A management API so agents can provision users/workspaces on your behalf:
+  every capability is one [`@willyim/kit`](../../packages/kit/README.md) method,
+  served to the console in process, over HTTP (`POST /apps/<app>/api/<service>.<method>`
+  inside an app, `/api/<service>.<method>` at the IdP level, each with
+  `openapi.json` and `llms.txt` filtered per key) and to agents over MCP (`/mcp`,
+  `/mcp/<app>`). The methods live in `app/services/`, the app in `app/kit.server.ts`.
+  `/api/v1` (the previous REST API) is still served until every app is on
+  `@willyim/idp` 1.x.
 
 The client side of all this is [`@willyim/idp`](../../packages/idp-client/README.md) —
 OIDC client, server sessions, and react-router guards, with no runtime deps.

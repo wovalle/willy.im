@@ -1,6 +1,5 @@
 import type { Route } from "./+types/apps.$app.members.$userId"
-import { methodNotAllowed } from "~/lib/api.server"
-import { v1 } from "~/lib/v1.server"
+import { methodNotAllowed, v1 } from "~/lib/v1.server"
 
 /** PATCH (or PUT) — members.set_access. DELETE — members.remove. */
 export async function action(args: Route.ActionArgs) {

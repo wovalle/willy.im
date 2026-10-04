@@ -1,6 +1,5 @@
 import type { Route } from "./+types/apps.$app.permissions"
-import { methodNotAllowed } from "~/lib/api.server"
-import { v1 } from "~/lib/v1.server"
+import { methodNotAllowed, v1 } from "~/lib/v1.server"
 
 /** PUT — catalog.declare: replace the app's product-permission catalog wholesale. */
 export async function action(args: Route.ActionArgs) {

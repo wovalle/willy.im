@@ -24,8 +24,6 @@ export type AppCatalog = {
   resourceTypes: ResourceTypeDecl[]
 }
 
-export const EMPTY_CATALOG: AppCatalog = { permissions: [], resourceTypes: [] }
-
 export type ScopeClass =
   | { kind: "permission"; scope: string }
   | { kind: "instance"; scope: string; type: ResourceTypeDecl; id: string }

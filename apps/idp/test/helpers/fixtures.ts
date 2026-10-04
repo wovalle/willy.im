@@ -4,13 +4,7 @@ import * as schema from "../../app/db/schema"
 import { generateToken, hashToken } from "../../app/lib/api-keys.server"
 import type { AuthService } from "../../app/lib/auth.server"
 import { app } from "../../app/kit.server"
-import {
-  callerFromPrincipal,
-  principalFrom,
-  resolveCaller,
-  type Caller,
-  type IdpPrincipal,
-} from "../../app/lib/caller.server"
+import { principalFrom, type IdpPrincipal } from "../../app/lib/caller.server"
 import type { ResourceTypeDecl } from "../../app/lib/metadata"
 import type { AppPermission } from "../../app/lib/permissions"
 import {
@@ -160,7 +154,7 @@ const sessionlessAuth = {
  * recovery does: an unscoped row (`application_id` NULL) whose `key_hash` is
  * the SHA-256 of a token we generated. Everything a test needs to act as a
  * superadmin comes back — the plaintext bearer, a Request carrying it, and the
- * Caller the *real* resolver builds from it, so no test hand-rolls a superadmin
+ * principal the *real* resolver builds from it, so no test hand-rolls a superadmin
  * object that production could never produce.
  */
 export async function bootstrapAdminKey(
@@ -171,7 +165,6 @@ export async function bootstrapAdminKey(
   name: string
   token: string
   request: Request
-  caller: Caller
   principal: IdpPrincipal
 }> {
   const token = generateToken()
@@ -187,70 +180,17 @@ export async function bootstrapAdminKey(
     expiresAt: input.expiresAt ?? null,
   })
   const request = bearerRequest(token)
-  const caller = await resolveCaller(request, ctx, sessionlessAuth)
   const principal = await principalFrom(request, ctx, sessionlessAuth)
-  if (!caller || !principal)
-    throw new Error("bootstrapAdminKey: the resolver rejected the key it was handed")
-  return { id, name, token, request, caller, principal }
+  if (!principal) throw new Error("bootstrapAdminKey: the resolver rejected the key it was handed")
+  return { id, name, token, request, principal }
 }
 
-/**
- * A signed-in human caller with an explicit permission set on one app: one
- * membership, built into a Caller the way the resolver builds one.
- */
-export function fakeUserCaller(input: {
-  userId: string
-  email?: string
-  app: string
-  permissions: AppPermission[]
-}): Caller {
-  return callerFromPrincipal(
-    {
-      id: `user:${input.userId}`,
-      grants: [],
-      memberships: [{ tenantId: input.app, grants: input.permissions }],
-    },
-    {
-      via: "session",
-      userId: input.userId,
-      email: input.email ?? `${input.userId}@test`,
-      keyId: null,
-      applicationId: null,
-      actor: { userId: input.userId, label: `user:${input.userId}` },
-    },
-  )
-}
-
-/**
- * A signed-in human as the real resolver sees them: their grants come from the
- * `application_member` rows in the database, not from the test. `impersonatedBy`
- * makes it an impersonation session, as Better Auth's admin plugin marks one.
- */
-export async function signedInCaller(
-  ctx: BaseServiceContext,
-  user: { id: string; email: string },
-  input: { impersonatedBy?: string } = {},
-): Promise<Caller> {
-  const auth = {
-    api: {
-      getSession: async () => ({
-        user,
-        session: { impersonatedBy: input.impersonatedBy ?? null },
-      }),
-    },
-  } as unknown as AuthService
-  const caller = await resolveCaller(new Request("https://idp.willy.im/"), ctx, auth)
-  if (!caller) throw new Error("signedInCaller: the resolver rejected the session")
-  return caller
-}
-
-/** Mints a scoped key as `by` (a principal, or a Caller during the move to kit) through `management_keys.mint`. */
+/** Mints a scoped key as `by` through `management_keys.mint`. */
 export async function mintApiKey(
   ctx: BaseServiceContext,
   input: { app: string; name?: string; permissions?: string[]; expiresAt?: Date | null },
-  by: IdpPrincipal | { principal: IdpPrincipal },
+  principal: IdpPrincipal,
 ) {
-  const principal = "principal" in by ? by.principal : by
   return (await kitContext(ctx, principal, input.app)).services.management_keys.mint({
     name: input.name ?? "CI runner",
     permissions: input.permissions ?? ["member:read", "member:invite"],
@@ -262,9 +202,8 @@ export async function mintApiKey(
 export async function mintAdminKey(
   ctx: BaseServiceContext,
   input: { name?: string; expiresAt?: Date | null },
-  by: IdpPrincipal | { principal: IdpPrincipal },
+  principal: IdpPrincipal,
 ) {
-  const principal = "principal" in by ? by.principal : by
   return (await kitContext(ctx, principal, null)).services.admin_keys.mint({
     name: input.name ?? "Agent alpha",
     expiresAt: input.expiresAt?.toISOString(),

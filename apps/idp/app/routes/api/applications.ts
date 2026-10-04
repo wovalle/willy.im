@@ -1,6 +1,5 @@
 import type { Route } from "./+types/applications"
-import { methodNotAllowed } from "~/lib/api.server"
-import { v1 } from "~/lib/v1.server"
+import { methodNotAllowed, v1 } from "~/lib/v1.server"
 
 /** GET — applications.list (superadmin). */
 export async function loader(args: Route.LoaderArgs) {

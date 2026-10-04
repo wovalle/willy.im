@@ -1,6 +1,5 @@
 import type { Route } from "./+types/applications.$clientId.rotate-secret"
-import { methodNotAllowed } from "~/lib/api.server"
-import { missing, tenantOf, v1 } from "~/lib/v1.server"
+import { methodNotAllowed, missing, tenantOf, v1 } from "~/lib/v1.server"
 
 /** POST — applications.rotate_secret: the new secret comes back once. */
 export async function action(args: Route.ActionArgs) {

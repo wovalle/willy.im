@@ -279,7 +279,7 @@ export type LinkedIdentity = typeof linkedIdentity.$inferSelect
  * impersonation): kit's audit table, with two context columns. application_id
  * scopes a row to one app (an app reads only its own trail); actor names the
  * principal ("user:<id>", "adminkey:<id>", "apikey:<id>"), since machine
- * callers have no user_id. Written through `recordAudit` (lib/audit.server.ts).
+ * callers have no user_id. Written through `ctx.audit` (`auditTrail`, lib/audit.server.ts).
  */
 export const auditLog = d1AuditLogTable({
   contextColumns: [{ column: "application_id" }, { column: "actor", index: false }],

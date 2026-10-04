@@ -9,7 +9,8 @@ import type { BaseServiceContext } from "./services"
  * (invite, revoke, impersonate…) with a curated before/after, not row diffs:
  * several of the writes happen inside Better Auth, out of a wrapper's sight.
  * Writes are best-effort: a failure to log must never break the action being
- * audited.
+ * audited. Methods write through `ctx.audit` (auditTrail below), bound to the
+ * caller and the app once per context.
  */
 
 /**
@@ -37,7 +38,7 @@ export type AuditOperation =
   | "impersonate"
   | "issue"
 
-export async function recordAudit(
+async function recordAudit(
   ctx: BaseServiceContext,
   entry: {
     actor: Actor

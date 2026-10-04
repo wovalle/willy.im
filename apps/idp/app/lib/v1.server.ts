@@ -64,3 +64,11 @@ export const tenantOf = (args: {
 export const missing = async (): Promise<never> => {
   throw Response.json({ error: "not_found" }, { status: 404 })
 }
+
+/** 405 for a verb a resource doesn't serve, naming the ones it does. */
+export function methodNotAllowed(allow: string[]): Response {
+  return Response.json(
+    { error: "method_not_allowed" },
+    { status: 405, headers: { Allow: allow.join(", ") } },
+  )
+}

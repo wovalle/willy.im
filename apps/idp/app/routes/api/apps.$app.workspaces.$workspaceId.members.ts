@@ -1,6 +1,5 @@
 import type { Route } from "./+types/apps.$app.workspaces.$workspaceId.members"
-import { methodNotAllowed } from "~/lib/api.server"
-import { v1 } from "~/lib/v1.server"
+import { methodNotAllowed, v1 } from "~/lib/v1.server"
 
 /** GET — workspace_members.list. */
 export async function loader(args: Route.LoaderArgs) {

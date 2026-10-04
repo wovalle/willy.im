@@ -1,6 +1,5 @@
 import type { Route } from "./+types/admin-keys.$id"
-import { methodNotAllowed } from "~/lib/api.server"
-import { v1 } from "~/lib/v1.server"
+import { methodNotAllowed, v1 } from "~/lib/v1.server"
 
 /** DELETE — admin_keys.revoke (superadmin; a key may revoke itself). */
 export async function action(args: Route.ActionArgs) {

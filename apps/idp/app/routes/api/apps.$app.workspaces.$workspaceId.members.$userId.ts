@@ -1,6 +1,5 @@
 import type { Route } from "./+types/apps.$app.workspaces.$workspaceId.members.$userId"
-import { methodNotAllowed } from "~/lib/api.server"
-import { v1 } from "~/lib/v1.server"
+import { methodNotAllowed, v1 } from "~/lib/v1.server"
 
 /** DELETE — workspace_members.remove. */
 export async function action(args: Route.ActionArgs) {

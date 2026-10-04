@@ -1,6 +1,5 @@
 import type { Route } from "./+types/apps.$app.user-keys.validate"
-import { methodNotAllowed } from "~/lib/api.server"
-import { v1 } from "~/lib/v1.server"
+import { methodNotAllowed, v1 } from "~/lib/v1.server"
 
 /** POST — user_keys.validate: always 200 with a `valid` discriminator (a miss is data). */
 export async function action(args: Route.ActionArgs) {

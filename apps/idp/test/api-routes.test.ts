@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import type { AuthService } from "../app/lib/auth.server"
-import type { Caller } from "../app/lib/caller.server"
+import type { IdpPrincipal } from "../app/lib/caller.server"
 import * as applications from "../app/routes/api/applications"
 import * as application from "../app/routes/api/applications.$clientId"
 import * as rotateSecret from "../app/routes/api/applications.$clientId.rotate-secret"
@@ -42,7 +42,7 @@ describe("management API routes", () => {
   let context: Record<string, unknown>
   let acme: { clientId: string; app: string }
   /** An IdP-level admin key — the only bearer a cross-app endpoint accepts. */
-  let root: Caller
+  let root: IdpPrincipal
   let adminToken: string
   /** Swapped per test; the context hands the routes a thunk so this stays live. */
   let lister: ResourceLister
@@ -75,7 +75,7 @@ describe("management API routes", () => {
     context = { ...h.ctx, services: { auth: authStub(null), resources }, cloudflare: {} }
     const bootstrap = await bootstrapAdminKey(h.ctx)
     adminToken = bootstrap.token
-    root = bootstrap.caller
+    root = bootstrap.principal
     const created = await (await kitContext(h.ctx, bootstrap.principal, null)).services.applications.register({
       name: "Acme",
       app: "acme",
@@ -501,7 +501,7 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({ status: 201, body: { result: "added" } })
 
-      const members = (await (await kitContext(h.ctx, root.principal, "acme")).services.members.list()).members
+      const members = (await (await kitContext(h.ctx, root, "acme")).services.members.list()).members
       expect(members.find((m) => m.userId === user.id)?.productPermissions).toEqual(["chat:respond"])
     })
 
@@ -548,7 +548,7 @@ describe("management API routes", () => {
       })
       expect(granted).toEqual({ status: 200, body: { ok: true } })
       expect(
-        ((await (await kitContext(h.ctx, root.principal, "acme")).services.members.list()).members).find((m) => m.userId === user.id)?.productPermissions,
+        ((await (await kitContext(h.ctx, root, "acme")).services.members.list()).members).find((m) => m.userId === user.id)?.productPermissions,
       ).toEqual(["chat:respond"])
 
       // No productPermissions in the body: an unrelated edit must not wipe them.
@@ -561,7 +561,7 @@ describe("management API routes", () => {
         params: { app: "acme", userId: user.id },
       })
       expect(
-        ((await (await kitContext(h.ctx, root.principal, "acme")).services.members.list()).members).find((m) => m.userId === user.id)?.productPermissions,
+        ((await (await kitContext(h.ctx, root, "acme")).services.members.list()).members).find((m) => m.userId === user.id)?.productPermissions,
       ).toEqual(["chat:respond"])
     })
   })
@@ -761,7 +761,7 @@ describe("management API routes", () => {
           valid: true,
           kind: "app",
           keyId: id,
-          issuedBy: `adminkey:${root.keyId}`,
+          issuedBy: root.id,
           workspaceId: null,
           scopes: ["*"],
           name: "Bootstrap key",
