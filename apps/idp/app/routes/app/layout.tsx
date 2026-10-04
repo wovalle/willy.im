@@ -2,24 +2,23 @@ import { Form, Link, Outlet, useLocation } from "react-router"
 import { ShieldCheck, UserCog } from "lucide-react"
 
 import type { Route } from "./+types/layout"
-import { requireConsoleCaller } from "~/lib/caller.server"
+import { consoleContext } from "~/lib/console.server"
 import { Avatar } from "~/components/avatar"
 import { cn } from "~/lib/utils"
 import { appContext } from "~/context"
 
 export async function loader({ request, context: router }: Route.LoaderArgs) {
   const context = router.get(appContext)
-  const caller = await requireConsoleCaller(request, context, context.services.auth)
-  // The impersonation banner reads the session directly — it's a property of the
-  // cookie, not of the caller's authority. The display name and picture are
-  // profile details, so they come from here too rather than from the caller.
+  const ctx = await consoleContext(context, request, null)
+  // Who is signed in, and the impersonation banner, are properties of the
+  // session cookie, not of the caller's authority: they come from the session.
   const session = await context.services.auth.api.getSession({ headers: request.headers })
   return {
-    email: caller.email,
-    userId: caller.userId,
+    email: session?.user.email ?? null,
+    userId: session?.user.id ?? null,
     name: session?.user.name ?? null,
     image: session?.user.image ?? null,
-    isAdmin: caller.kind === "superadmin",
+    isAdmin: ctx.caller.isSuperadmin,
     // Set on impersonation sessions (Better Auth admin plugin).
     impersonating: !!session?.session.impersonatedBy,
   }

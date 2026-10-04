@@ -2,7 +2,7 @@ import { invalidFields, publicError } from "./method.js"
 import type { CallArgs, PublicMethod, Result } from "./types.js"
 
 /** Throws an error `Response`: React Router renders it, the API returns it as is. */
-export function fail(status: 400 | 401 | 403 | 404 | 409, message: string): never {
+export function fail(status: 400 | 401 | 403 | 404 | 409 | 422 | 502, message: string): never {
   throw publicError(Response.json({ error: message }, { status }))
 }
 

@@ -1,59 +1,19 @@
 import type { Route } from "./+types/apps.$app.user-keys"
-import { requireApiCaller } from "~/lib/caller.server"
-import { readJson } from "~/lib/api.server"
-import { CreateUserApiKeyInput } from "@willyim/idp/schemas"
-import { createUserApiKey, listUserApiKeys } from "~/lib/user-api-keys.server"
-import { appContext } from "~/context"
+import { methodNotAllowed, v1 } from "~/lib/v1.server"
 
-/** GET — list end-user API keys (filter: ?userId=&workspaceId=). Requires userkey:read. */
-export async function loader({ request, context: router, params }: Route.LoaderArgs) {
-  const context = router.get(appContext)
-  const caller = await requireApiCaller(request, context, context.services.auth)
-  const url = new URL(request.url)
-  const keys = await listUserApiKeys(context, caller, {
-    app: params.app,
-    userId: url.searchParams.get("userId") ?? undefined,
-    workspaceId: url.searchParams.get("workspaceId") ?? undefined,
-  })
-  return Response.json({
-    keys: keys.map((k) => ({
-      ...k,
-      createdAt: k.createdAt.toISOString(),
-      lastUsedAt: k.lastUsedAt?.toISOString() ?? null,
-      expiresAt: k.expiresAt?.toISOString() ?? null,
-      revokedAt: undefined,
-    })),
-  })
+/** GET — user_keys.list (filter: ?userId=&workspaceId=). */
+export async function loader(args: Route.LoaderArgs) {
+  const query = new URL(args.request.url).searchParams
+  return v1(args, args.params.app, (ctx) =>
+    ctx.services.user_keys.list({
+      userId: query.get("userId") ?? undefined,
+      workspaceId: query.get("workspaceId") ?? undefined,
+    }),
+  )
 }
 
-/** POST — mint an end-user API key. Plaintext returned once. Requires userkey:create. */
-export async function action({ request, context: router, params }: Route.ActionArgs) {
-  const context = router.get(appContext)
-  if (request.method !== "POST") {
-    return Response.json({ error: "method_not_allowed" }, { status: 405, headers: { Allow: "POST" } })
-  }
-  const caller = await requireApiCaller(request, context, context.services.auth)
-  const body = await readJson(request, CreateUserApiKeyInput)
-  const res = await createUserApiKey(
-    context,
-    caller,
-    {
-      app: params.app,
-      userId: body.userId,
-      name: body.name,
-      scopes: body.scopes,
-      workspaceId: body.workspaceId ?? null,
-      expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
-    },
-    { resources: context.services.resources },
-  )
-  if ("error" in res) {
-    // The app's list endpoint being down is not the caller's mistake.
-    const status = res.error === "resource_lookup_failed" ? 502 : 422
-    return Response.json(
-      { error: res.error, ...("detail" in res ? { detail: res.detail } : {}) },
-      { status },
-    )
-  }
-  return Response.json(res, { status: 201 })
+/** POST — user_keys.mint. */
+export async function action(args: Route.ActionArgs) {
+  if (args.request.method !== "POST") return methodNotAllowed(["POST"])
+  return v1(args, args.params.app, (ctx, body) => ctx.services.user_keys.mint(body), 201)
 }

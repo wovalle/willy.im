@@ -138,7 +138,11 @@ describe("management api", () => {
   })
 
   it("passes a well-formed response straight through", async () => {
-    const body = { members: [{ userId: "u_1", email: "a@b.c", name: null, role: "admin", permissions: [] }] }
+    const body = {
+      members: [
+        { userId: "u_1", email: "a@b.c", name: null, role: "admin", permissions: [], productPermissions: [] },
+      ],
+    }
     expect(
       await api(body).request("get", "/api/v1/apps/{app}/members", { params: { app: "acme" } }),
     ).toEqual(body)

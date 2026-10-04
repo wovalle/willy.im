@@ -7,7 +7,7 @@ import { createIdentities } from "../src/identities.js"
  * and that a failed round trip is never remembered.
  */
 
-type Seen = { url: string; method: string; headers: Headers }
+type Seen = { url: string; method: string; headers: Headers; body: unknown }
 
 function fakeIdp(
   answer: (provider: string, externalId: string) => unknown,
@@ -16,10 +16,10 @@ function fakeIdp(
   const seen: Seen[] = []
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
-    seen.push({ url, method: init?.method ?? "GET", headers: new Headers(init?.headers) })
+    const body = JSON.parse(String(init?.body)) as { provider: string; externalId: string }
+    seen.push({ url, method: init?.method ?? "GET", headers: new Headers(init?.headers), body })
     if (opts.fail) return new Response("boom", { status: 503 })
-    const m = /\/identities\/([^/]+)\/([^/]+)$/.exec(new URL(url).pathname)!
-    return Response.json(answer(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!)))
+    return Response.json(answer(body.provider, body.externalId))
   }
   return { seen, fetch: fetchImpl }
 }
@@ -27,13 +27,15 @@ function fakeIdp(
 const willy = { found: true, userId: "u_willy", email: "hey@willy.im", name: "Willy", permissions: ["*"] }
 
 describe("createIdentities", () => {
-  it("resolves through the app-scoped endpoint with the app's own key", async () => {
+  it("resolves through the app's identities.resolve with the app's own key", async () => {
     const idp = fakeIdp((p, e) => (p === "slack" && e === "U1" ? willy : { found: false }))
     const ids = createIdentities({ baseUrl: "https://idp.test", token: "wim_x", app: "bender", fetch: idp.fetch })
 
     const res = await ids.resolve("slack", "U1")
     expect(res).toEqual(willy)
-    expect(new URL(idp.seen[0]!.url).pathname).toBe("/api/v1/apps/bender/identities/slack/U1")
+    expect(new URL(idp.seen[0]!.url).pathname).toBe("/apps/bender/api/identities.resolve")
+    expect(idp.seen[0]!.method).toBe("POST")
+    expect(idp.seen[0]!.body).toEqual({ provider: "slack", externalId: "U1" })
     expect(idp.seen[0]!.headers.get("authorization")).toBe("Bearer wim_x")
   })
 
@@ -43,7 +45,7 @@ describe("createIdentities", () => {
     await ids.resolve(" Slack ", "U1")
     await ids.resolve("slack", "U1")
     expect(idp.seen).toHaveLength(1)
-    expect(new URL(idp.seen[0]!.url).pathname).toBe("/api/v1/apps/bender/identities/slack/U1")
+    expect(idp.seen[0]!.body).toEqual({ provider: "slack", externalId: "U1" })
   })
 
   it("caches hits and misses, with separate TTLs", async () => {

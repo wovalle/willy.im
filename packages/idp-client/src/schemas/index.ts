@@ -170,12 +170,16 @@ export const MemberSchema = z.object({
   name: z.string().nullable(),
   role: RoleSchema,
   permissions: z.array(z.string()),
+  productPermissions: z
+    .array(z.string())
+    .default([])
+    .describe("Grants from the app's own catalog; admins hold the whole catalog and store none"),
 })
 export const MemberListSchema = z.object({ members: z.array(MemberSchema) })
 
 /** Add (existing user) or invite (new email) an app member. */
 export const InviteMemberInput = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   role: RoleSchema.default("member"),
   permissions: z.array(z.string()).default([]),
   /**
@@ -430,3 +434,152 @@ export const AdminKeyCreatedSchema = z.object({
   token: z.string().describe("Plaintext key — shown exactly once, never stored"),
   prefix: z.string(),
 })
+
+// --- The IdP's methods (kit): `service.method` → where it lives, input, output ---
+//
+// Every management capability is one semantic method the IdP serves through
+// @willyim/kit. This table is the one place its wire contract is written: the
+// IdP's method contracts take their `input`/`output` from it, and the SDK's
+// `call()` builds the URL (`/apps/<app>/api/<name>` or `/api/<name>`) and
+// parses the answer with it. `scope: "app"` methods run inside one app (the
+// tenant is in the URL), `scope: "idp"` ones at the IdP level.
+
+export const ListUserApiKeysInput = z.object({
+  userId: z.string().optional().describe("Only keys owned by this user"),
+  workspaceId: z.string().optional().describe("Only keys bound to this workspace"),
+})
+export const IdInput = z.object({ id: z.string().min(1) })
+
+export const SetMemberAccessInput = UpdateMemberInput.extend({ userId: z.string().min(1) })
+export const UserIdInput = z.object({ userId: z.string().min(1) })
+
+export const InvitationSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  role: RoleSchema,
+  permissions: z.array(z.string()),
+  expiresAt: z.string(),
+  createdAt: z.string(),
+})
+export const InvitationListSchema = z.object({ invitations: z.array(InvitationSchema) })
+
+export const WorkspaceIdInput = z.object({ workspaceId: z.string().min(1) })
+export const SetWorkspaceMemberMethodInput = SetWorkspaceMemberInput.extend({
+  workspaceId: z.string().min(1),
+})
+export const RemoveWorkspaceMemberInput = z.object({
+  workspaceId: z.string().min(1),
+  userId: z.string().min(1),
+})
+export const WorkspacePeopleSchema = z.object({
+  people: z.array(
+    z.object({ email: z.string(), name: z.string().nullable(), workspace: z.string(), role: z.string() }),
+  ),
+})
+
+export const ResolveIdentityInput = z.object({
+  provider: z.string().min(1).describe("The other system, e.g. slack — case-insensitive"),
+  externalId: z.string().min(1).describe("The id exactly as that system spells it"),
+})
+export const LinkIdentityMethodInput = LinkIdentityInput.extend({ userId: z.string().min(1) })
+export const UnlinkIdentityInput = z.object({ userId: z.string().min(1), id: z.string().min(1) })
+
+export const FindUserInput = z
+  .object({ id: z.string().min(1).optional(), email: z.string().trim().email().optional() })
+  .refine((v) => !!v.id !== !!v.email, "give exactly one of id or email")
+export const FoundUserSchema = z.object({ user: UserSchema.nullable() })
+export const ImpersonationSchema = z.object({
+  setCookies: z
+    .array(z.string())
+    .describe("The impersonation session's Set-Cookie headers, for the admin's own browser"),
+})
+
+export const ListAuditInput = z.object({
+  limit: z.number().int().min(1).max(200).default(50).describe("Newest first; 1 to 200"),
+})
+
+export type MethodDef = {
+  scope: "app" | "idp"
+  input: z.ZodType | undefined
+  output: z.ZodType
+}
+
+export const methods = {
+  "user_keys.list": { scope: "app", input: ListUserApiKeysInput, output: UserApiKeyListSchema },
+  "user_keys.mint": { scope: "app", input: CreateUserApiKeyInput, output: UserApiKeyCreatedSchema },
+  "user_keys.revoke": { scope: "app", input: IdInput, output: OkSchema },
+  "user_keys.validate": {
+    scope: "app",
+    input: ValidateUserApiKeyInput,
+    output: UserApiKeyValidationSchema,
+  },
+
+  "members.list": { scope: "app", input: undefined, output: MemberListSchema },
+  "members.invite": { scope: "app", input: InviteMemberInput, output: InviteMemberResult },
+  "members.set_access": { scope: "app", input: SetMemberAccessInput, output: OkSchema },
+  "members.remove": { scope: "app", input: UserIdInput, output: OkSchema },
+  "invitations.list": { scope: "app", input: undefined, output: InvitationListSchema },
+  "invitations.resend": { scope: "app", input: IdInput, output: OkSchema },
+  "invitations.revoke": { scope: "app", input: IdInput, output: OkSchema },
+
+  "workspaces.list": { scope: "app", input: undefined, output: WorkspaceListSchema },
+  "workspaces.create": { scope: "app", input: CreateWorkspaceInput, output: WorkspaceCreatedSchema },
+  "workspaces.people": { scope: "app", input: undefined, output: WorkspacePeopleSchema },
+  "workspaces.list_all": { scope: "idp", input: undefined, output: WorkspaceListSchema },
+  "workspace_members.list": {
+    scope: "app",
+    input: WorkspaceIdInput,
+    output: WorkspaceMemberListSchema,
+  },
+  "workspace_members.set": {
+    scope: "app",
+    input: SetWorkspaceMemberMethodInput,
+    output: WorkspaceMemberSchema,
+  },
+  "workspace_members.remove": { scope: "app", input: RemoveWorkspaceMemberInput, output: OkSchema },
+
+  "management_keys.list": { scope: "app", input: undefined, output: ApiKeyListSchema },
+  "management_keys.mint": { scope: "app", input: CreateApiKeyInput, output: ApiKeyCreatedSchema },
+  "management_keys.revoke": { scope: "app", input: IdInput, output: OkSchema },
+
+  "admin_keys.list": { scope: "idp", input: undefined, output: AdminKeyListSchema },
+  "admin_keys.mint": { scope: "idp", input: CreateAdminKeyInput, output: AdminKeyCreatedSchema },
+  "admin_keys.revoke": { scope: "idp", input: IdInput, output: OkSchema },
+
+  "app_tokens.mint": { scope: "app", input: CreateAppTokenInput, output: AppTokenCreatedSchema },
+
+  "identities.resolve": {
+    scope: "app",
+    input: ResolveIdentityInput,
+    output: IdentityResolutionSchema,
+  },
+  "identities.list": { scope: "idp", input: UserIdInput, output: LinkedIdentityListSchema },
+  "identities.link": {
+    scope: "idp",
+    input: LinkIdentityMethodInput,
+    output: LinkedIdentityCreatedSchema,
+  },
+  "identities.unlink": { scope: "idp", input: UnlinkIdentityInput, output: OkSchema },
+
+  "applications.list": { scope: "idp", input: undefined, output: ApplicationListSchema },
+  "applications.register": {
+    scope: "idp",
+    input: CreateApplicationInput,
+    output: ApplicationCreatedSchema,
+  },
+  "applications.get": { scope: "app", input: undefined, output: ApplicationSchema },
+  "applications.update": { scope: "app", input: UpdateApplicationInput, output: ApplicationSchema },
+  "applications.delete": { scope: "app", input: undefined, output: OkSchema },
+  "applications.rotate_secret": { scope: "app", input: undefined, output: ClientSecretSchema },
+  "catalog.declare": { scope: "app", input: SetAppPermissionsInput, output: AppPermissionsSchema },
+
+  "users.list": { scope: "idp", input: undefined, output: UserListSchema },
+  "users.find": { scope: "idp", input: FindUserInput, output: FoundUserSchema },
+  "users.impersonate": { scope: "app", input: UserIdInput, output: ImpersonationSchema },
+
+  "audit.list": { scope: "app", input: ListAuditInput, output: AuditListSchema },
+} as const satisfies Record<string, MethodDef>
+
+export type Methods = typeof methods
+/** `"service.method"`: every method the IdP serves. */
+export type MethodName = keyof Methods

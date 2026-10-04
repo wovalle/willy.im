@@ -18,7 +18,7 @@ Node 20+ and Bun.
 @willyim/idp                core: OIDC client + server sessions
 @willyim/idp/drizzle        the session store, and the `idp_session` table
 @willyim/idp/react-router   the auth route and the loader guards
-@willyim/idp/schemas        the management API wire shapes, as zod schemas
+@willyim/idp/schemas        the management API: every method (`methods`) and wire shape, as zod schemas
 ```
 
 ## Install
@@ -306,8 +306,8 @@ const idp = createIdp({
 ## End-user API keys
 
 Keys an app's own users create to call *that app's* API. The IdP is the key
-store: the app mints, lists, revokes and validates `wak_…` tokens over the
-management API and never persists a plaintext or a hash.
+store: the app mints, lists, revokes and validates `wak_…` tokens through the
+IdP's `user_keys` methods and never persists a plaintext or a hash.
 
 ```ts
 import { createUserKeys } from "@willyim/idp"
@@ -381,7 +381,7 @@ await fetch("https://invoices.willy.im/api/clients.list", {
 await tokens.get("invoices", { scopes: ["clients:read"], workspaceId: "ws_1" })
 ```
 
-`get` mints through `POST /api/v1/apps/{app}/tokens` (superadmin only; scopes
+`get` mints through `app_tokens.mint` in the app (superadmin only; scopes
 resolve like an end-user key's, `"*"` allowed) and keeps the token per (app,
 scopes, workspace) until a minute before it expires. Concurrent callers share
 one mint, and a failed mint is never cached. Every mint is audited against the
@@ -414,9 +414,9 @@ inside it — one conversation, one document, one workspace — the app declares
 resource **type** in its catalog and the grant becomes `<type>:<id>`:
 
 ```ts
-await api.request("put", "/api/v1/apps/{app}/permissions", {
-  params: { app: "bender" },
-  body: {
+await api.call(
+  "catalog.declare",
+  {
     permissions: ["kirby:read", "kirby:write"],
     resourceTypes: [
       {
@@ -426,7 +426,8 @@ await api.request("put", "/api/v1/apps/{app}/permissions", {
       },
     ],
   },
-})
+  { app: "bender" },
+)
 ```
 
 The IdP never stores the instances. When someone picks one in the console, or a
@@ -475,9 +476,9 @@ Linking is **superadmin-only** — a link asserts identity with nothing to prove
 it, so no app and no member may do it:
 
 ```sh
-curl -X POST https://idp.willy.im/api/v1/users/<userId>/identities \
+curl -X POST https://idp.willy.im/api/identities.link \
   -H "authorization: Bearer wim_<admin key>" -H "content-type: application/json" \
-  -d '{"provider":"slack","externalId":"U0AAE7LAATD","label":"house workspace"}'
+  -d '{"userId":"<userId>","provider":"slack","externalId":"U0AAE7LAATD","label":"house workspace"}'
 ```
 
 Resolving is app-scoped and needs `identity:resolve` on the app's own key:
@@ -511,36 +512,65 @@ round trip. A failed round trip is never cached. The miss TTL bounds how fast a
 yourself. The provider is case-insensitive; the id is exact, as the other
 system spells it.
 
-## Management API types
+## The management API
 
-Endpoints without sugar of their own go through `createManagementApi`, whose
-paths, methods, path parameters, bodies and response shapes all come from the
-operations table in `@willyim/idp/schemas` — one zod definition per shape,
-which also builds `openapi/idp-api.json` (`npm run openapi`) and which the IdP
-itself validates incoming requests with. A typo in a path is a compile error,
-not a 404 in production, and a response that doesn't match its schema throws
-instead of reaching your code as `undefined`.
+Every IdP capability is one semantic method (`service.method`), served by
+[`@willyim/kit`](../kit/README.md): `POST /apps/<app>/api/<service>.<method>`
+for an app's methods (the app is the tenant), `POST /api/<service>.<method>`
+for IdP-level ones, each with `/openapi.json` and `/llms.txt` beside it,
+filtered to what the key may call — and MCP at `/mcp` and `/mcp/<app>`. The
+helpers above are sugar over it; `call` reaches all of it:
 
 ```ts
 const api = createManagementApi({ baseUrl, token })
-const { members } = await api.request("get", "/api/v1/apps/{app}/members", {
-  params: { app: "luchy" },
-})
+await api.call("members.invite", { email: "a@b.test", role: "member" }, { app: "luchy" })
+const { applications } = await api.call("applications.list", undefined) // IdP level: an admin key
 ```
+
+Names, inputs and outputs come from the `methods` table in
+`@willyim/idp/schemas`, the one the IdP's method contracts are written from:
+a wrong name, input or missing `app` is a compile error, and an answer that
+doesn't match its schema throws instead of reaching your code as `undefined`.
+Errors arrive as the IdP answers them, in an `IdpError` (`status`, `body`):
+400 `{ error, fields }` for invalid input, 403 for a missing permission, 404 for
+an app the key holds nothing in or a row that isn't there, 409 for a business
+rule, 422 for a scope or URL the app's catalog doesn't admit, 502 when the
+app's own resource list can't be read.
+
+| service | methods |
+| --- | --- |
+| `applications` | `list`, `register` (IdP level); `get`, `update`, `delete`, `rotate_secret` |
+| `catalog` | `declare` |
+| `members` | `list`, `invite`, `set_access`, `remove` |
+| `invitations` | `list`, `resend`, `revoke` |
+| `workspaces` | `list`, `create`, `people`; `list_all` (IdP level) |
+| `workspace_members` | `list`, `set`, `remove` |
+| `management_keys` | `list`, `mint`, `revoke` |
+| `admin_keys` | `list`, `mint`, `revoke` (IdP level) |
+| `user_keys` | `list`, `mint`, `revoke`, `validate` |
+| `app_tokens` | `mint` |
+| `identities` | `resolve`; `list`, `link`, `unlink` (IdP level) |
+| `users` | `list`, `find` (IdP level); `impersonate` (console only) |
+| `audit` | `list` |
+
+`api.request(method, "/api/v1/…")` is the previous major's REST API, typed
+from the operations table in `@willyim/idp/schemas`. The IdP serves it until
+every app is on this major; then it, and `request`, go away.
 
 ### Admin keys
 
 Most management endpoints take a scoped `wim_` key, which is bound to one
 application and carries an explicit permission set. IdP-level work — registering
 an application, listing users across apps — needs superadmin instead, and for
-that there are **admin keys**: `/api/v1/admin-keys` mints a named, optionally
+that there are **admin keys**: `admin_keys.mint` mints a named, optionally
 expiring, revocable credential that holds every permission on every app. Mint
 one per agent, so the audit trail records `adminkey:<id>` rather than an
 anonymous shared secret, and revoke it when that agent is done.
 
 ```ts
-const { token } = await api.request("post", "/api/v1/admin-keys", {
-  body: { name: "release-bot", expiresAt: "2026-12-31T00:00:00.000Z" },
+const { token } = await api.call("admin_keys.mint", {
+  name: "release-bot",
+  expiresAt: "2026-12-31T00:00:00.000Z",
 })
 // Shown exactly once. Presented like any other key:
 //   Authorization: Bearer wim_…
@@ -552,10 +582,10 @@ it issued, so every superadmin action names a revocable credential.
 **Break-glass.** If every admin key is lost, recover by writing one bootstrap
 key straight into D1 — insert an `api_key` row with `application_id` NULL and
 `key_hash` set to the SHA-256 hex digest of a token you generate — then use it
-to mint a real key via `POST /api/v1/admin-keys` and revoke the bootstrap row
-through `DELETE /api/v1/admin-keys/{id}`.
+to mint a real key via `admin_keys.mint` and revoke the bootstrap row through
+`admin_keys.revoke`.
 
-The OIDC endpoints are not in that document and never will be: they are
+The OIDC endpoints are not management methods and never will be: they are
 standards-defined and discovered at runtime from `.well-known`.
 
 ## Licence

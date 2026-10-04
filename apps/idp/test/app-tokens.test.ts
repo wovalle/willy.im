@@ -2,23 +2,22 @@ import { eq } from "drizzle-orm"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import * as schema from "../app/db/schema"
-import { revokeAdminKey } from "../app/lib/api-keys.server"
-import { createAppToken } from "../app/lib/app-tokens.server"
 import { listAuditForApp } from "../app/lib/audit.server"
 import type { AuthService } from "../app/lib/auth.server"
-import { resolveCaller, type Caller } from "../app/lib/caller.server"
+import { principalFrom, type IdpPrincipal } from "../app/lib/caller.server"
 import { APP_PERMISSIONS } from "../app/lib/permissions"
-import { validateKey } from "../app/lib/user-api-keys.server"
 import {
   bearerRequest,
   bootstrapAdminKey,
   createApplication,
   createMember,
   createUser,
+  failureOf,
+  kitContext,
   mintAdminKey,
   mintApiKey,
   noResources,
-  signedInCaller,
+  signedInPrincipal,
   stubResources,
 } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
@@ -34,23 +33,12 @@ const sessionless = {
   api: { getSession: async () => null },
 } as unknown as AuthService
 
-/** Gates and services signal failure by throwing a Response; normalise both. */
-async function thrown(fn: () => Promise<unknown>): Promise<Response | null> {
-  try {
-    await fn()
-    return null
-  } catch (err) {
-    if (err instanceof Response) return err
-    throw err
-  }
-}
-
 const MINUTE = 60_000
 
 describe("app tokens", () => {
   let h: TestHarness
   /** The admin key every token here is minted with, unless a test says otherwise. */
-  let root: { id: string; caller: Caller }
+  let root: Awaited<ReturnType<typeof bootstrapAdminKey>>
 
   const THREAD = {
     type: "kirby:thread",
@@ -76,23 +64,19 @@ describe("app tokens", () => {
   })
 
   const later = (ms: number) => vi.setSystemTime(Date.now() + ms)
-  const present = (token: string) => resolveCaller(bearerRequest(token), h.ctx, sessionless)
+  const present = (token: string) => principalFrom(bearerRequest(token), h.ctx, sessionless)
 
-  const mint = (
-    input: Partial<Parameters<typeof createAppToken>[2]> = {},
-    caller: Caller = root.caller,
+  /** `app_tokens.mint` in `app` (acme unless given), as `principal`. */
+  const mint = async (
+    { app = "acme", ...input }: { app?: string; scopes?: string[]; workspaceId?: string; expiresIn?: number } = {},
+    principal: IdpPrincipal = root.principal,
     resources = noResources,
-  ) => createAppToken(h.ctx, caller, { app: "acme", ...input }, { resources })
+  ) => (await kitContext(h.ctx, principal, app, { resources })).services.app_tokens.mint(input)
+  const minted = mint
 
-  /** `mint`, failing the test on an error result. */
-  const minted = async (...args: Parameters<typeof mint>) => {
-    const res = await mint(...args)
-    if ("error" in res) throw new Error(`mint failed: ${JSON.stringify(res)}`)
-    return res
-  }
-
-  /** Validation as the app asks for it: through `validateKey`, with its own key. */
-  const validate = (token: string, app = "acme") => validateKey(h.ctx, root.caller, { app, token })
+  /** Validation as the app asks for it: `user_keys.validate` in the app. */
+  const validate = async (token: string, app = "acme") =>
+    (await kitContext(h.ctx, root.principal, app)).services.user_keys.validate({ token })
 
   describe("minting", () => {
     it('mints a wat_ token holding ["*"] for an hour by default, storing only its hash', async () => {
@@ -102,7 +86,7 @@ describe("app tokens", () => {
       expect(token.prefix).toBe(token.token.slice(0, 12))
       expect(token.scopes).toEqual(["*"])
       expect(token.workspaceId).toBeNull()
-      expect(token.expiresAt).toEqual(new Date("2026-06-01T01:00:00.000Z"))
+      expect(token.expiresAt).toBe("2026-06-01T01:00:00.000Z")
 
       const rows = await h.ctx.db.select().from(schema.appToken)
       expect(rows).toHaveLength(1)
@@ -127,7 +111,7 @@ describe("app tokens", () => {
     it("records exactly one issuer: the admin key, or the admin who signed in", async () => {
       const admin = await createUser(h.ctx, { email: "super@willy.im" })
       const byKey = await minted()
-      const bySession = await minted({}, await signedInCaller(h.ctx, admin))
+      const bySession = await minted({}, await signedInPrincipal(h.ctx, admin))
 
       const issuers = await h.ctx.db
         .select({
@@ -154,7 +138,7 @@ describe("app tokens", () => {
       })
       const narrowed = await minted(
         { scopes: ["invoices:read", "kirby:thread:t_1"], workspaceId: "ws_1" },
-        root.caller,
+        root.principal,
         listed,
       )
       expect(narrowed.scopes).toEqual(["invoices:read", "kirby:thread:t_1"])
@@ -164,47 +148,42 @@ describe("app tokens", () => {
     })
 
     it("rejects scopes the app never declared or doesn't list, naming them, and mints nothing", async () => {
-      expect(await mint({ scopes: ["invoices:read", "nope:read"] })).toEqual({
-        error: "unknown_scopes",
-        detail: ["nope:read"],
+      expect(await failureOf(mint({ scopes: ["invoices:read", "nope:read"] }))).toEqual({
+        status: 422,
+        error: "Not in this app's catalog: nope:read",
       })
       expect(
-        await mint(
-          { scopes: ["kirby:thread:t_gone"] },
-          root.caller,
-          stubResources({ "kirby:thread": [] }),
+        await failureOf(
+          mint({ scopes: ["kirby:thread:t_gone"] }, root.principal, stubResources({ "kirby:thread": [] })),
         ),
-      ).toEqual({ error: "unknown_resource", detail: ["kirby:thread:t_gone"] })
+      ).toEqual({ status: 422, error: "The app does not currently list: kirby:thread:t_gone" })
 
       expect(await h.ctx.db.select().from(schema.appToken)).toEqual([])
     })
 
     it("lives as long as asked, within the hour", async () => {
       const token = await minted({ expiresIn: 60 })
-      expect(token.expiresAt).toEqual(new Date("2026-06-01T00:01:00.000Z"))
+      expect(token.expiresAt).toBe("2026-06-01T00:01:00.000Z")
     })
 
-    it("answers not_found for an app that isn't registered", async () => {
-      expect(await mint({ app: "ghost" })).toEqual({ error: "not_found" })
+    it("404s an app that isn't registered", async () => {
+      expect(await failureOf(mint({ app: "ghost" }))).toEqual({ status: 404, error: "No application ghost." })
     })
 
     it("refuses an app-scoped key or a member session, however privileged on the app", async () => {
       const scoped = await mintApiKey(
         h.ctx,
         { app: "acme", permissions: [...APP_PERMISSIONS] },
-        root.caller,
+        root.principal,
       )
       const appAdmin = await createUser(h.ctx, { email: "admin@acme.test" })
       await createMember(h.ctx, { app: "acme", userId: appAdmin.id, role: "admin" })
 
-      for (const caller of [
+      for (const principal of [
         (await present(scoped.token))!,
-        await signedInCaller(h.ctx, appAdmin),
-      ]) {
-        const res = await thrown(() => mint({}, caller))
-        expect(res?.status).toBe(403)
-        expect(await res!.json()).toEqual({ error: "forbidden" })
-      }
+        await signedInPrincipal(h.ctx, appAdmin),
+      ])
+        expect((await failureOf(mint({}, principal))).status).toBe(403)
       expect(await h.ctx.db.select().from(schema.appToken)).toEqual([])
     })
   })
@@ -226,7 +205,7 @@ describe("app tokens", () => {
 
     it("validates a token minted from an admin session, naming the admin by email", async () => {
       const admin = await createUser(h.ctx, { email: "super@willy.im" })
-      const token = await minted({}, await signedInCaller(h.ctx, admin))
+      const token = await minted({}, await signedInPrincipal(h.ctx, admin))
 
       expect(await validate(token.token)).toMatchObject({
         valid: true,
@@ -246,11 +225,11 @@ describe("app tokens", () => {
     })
 
     it("reports revoked once the issuing admin key is revoked, logging why", async () => {
-      const agent = await mintAdminKey(h.ctx, { name: "Agent" }, root.caller)
+      const agent = await mintAdminKey(h.ctx, { name: "Agent" }, root.principal)
       const token = await minted({}, (await present(agent.token))!)
       expect(await validate(token.token)).toMatchObject({ valid: true, name: "Agent" })
 
-      await revokeAdminKey(h.ctx, root.caller, agent.id)
+      await (await kitContext(h.ctx, root.principal, null)).services.admin_keys.revoke({ id: agent.id })
       expect(await validate(token.token)).toEqual({ valid: false, reason: "revoked" })
       expect(h.logs.find((l) => l.message === "apptoken.issuer_lost_access")?.fields).toEqual({
         keyId: token.id,
@@ -263,7 +242,7 @@ describe("app tokens", () => {
       const agent = await mintAdminKey(
         h.ctx,
         { expiresAt: new Date(Date.now() + 30 * MINUTE) },
-        root.caller,
+        root.principal,
       )
       const token = await minted({}, (await present(agent.token))!)
 
@@ -278,7 +257,7 @@ describe("app tokens", () => {
 
     it("reports revoked once the issuing admin leaves the allowlist", async () => {
       const admin = await createUser(h.ctx, { email: "super@willy.im" })
-      const token = await minted({}, await signedInCaller(h.ctx, admin))
+      const token = await minted({}, await signedInPrincipal(h.ctx, admin))
 
       process.env.ADMIN_EMAILS = "someone-else@willy.im"
       expect(await validate(token.token)).toEqual({ valid: false, reason: "revoked" })

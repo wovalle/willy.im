@@ -1,6 +1,6 @@
 import type { Route } from "./+types/app-resources"
 import { getApplication } from "~/lib/admin.server"
-import { requireConsoleCaller } from "~/lib/caller.server"
+import { consoleContext } from "~/lib/console.server"
 import { ResourceListError } from "~/lib/resources.server"
 import { appContext } from "~/context"
 
@@ -27,10 +27,9 @@ export async function loader({ request, context: router, params }: Route.LoaderA
   const app = application?.app
   if (!application || !app) return Response.json({ error: "not_found" }, { status: 404 })
 
-  const caller = await requireConsoleCaller(request, context, context.services.auth)
-  const mayGrant =
-    (await caller.can(app, "member:invite")) || (await caller.can(app, "member:manage"))
-  if (!mayGrant) return Response.json({ error: "forbidden" }, { status: 403 })
+  const { caller } = await consoleContext(context, request, app)
+  if (!caller.has("member:invite") && !caller.has("member:manage"))
+    return Response.json({ error: "forbidden" }, { status: 403 })
 
   const declared = application.resourceTypes.find((t) => t.type === type)
   if (!declared) return Response.json({ error: "unknown_type" }, { status: 404 })

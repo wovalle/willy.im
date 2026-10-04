@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { createApplication, listAppMembers } from "../app/lib/admin.server"
 import type { AuthService } from "../app/lib/auth.server"
-import type { Caller } from "../app/lib/caller.server"
+import type { IdpPrincipal } from "../app/lib/caller.server"
 import * as applications from "../app/routes/api/applications"
 import * as application from "../app/routes/api/applications.$clientId"
 import * as rotateSecret from "../app/routes/api/applications.$clientId.rotate-secret"
@@ -20,6 +19,7 @@ import {
   bootstrapAdminKey,
   createMember,
   createUser,
+  kitContext,
   mintApiKey,
   stubResources,
 } from "./helpers/fixtures"
@@ -42,7 +42,7 @@ describe("management API routes", () => {
   let context: Record<string, unknown>
   let acme: { clientId: string; app: string }
   /** An IdP-level admin key — the only bearer a cross-app endpoint accepts. */
-  let root: Caller
+  let root: IdpPrincipal
   let adminToken: string
   /** Swapped per test; the context hands the routes a thunk so this stays live. */
   let lister: ResourceLister
@@ -75,13 +75,12 @@ describe("management API routes", () => {
     context = { ...h.ctx, services: { auth: authStub(null), resources }, cloudflare: {} }
     const bootstrap = await bootstrapAdminKey(h.ctx)
     adminToken = bootstrap.token
-    root = bootstrap.caller
-    const created = await createApplication(h.ctx, root, {
+    root = bootstrap.principal
+    const created = await (await kitContext(h.ctx, bootstrap.principal, null)).services.applications.register({
       name: "Acme",
       app: "acme",
       redirectUris: ["https://acme.test/cb"],
     })
-    if ("error" in created) throw new Error(created.error)
     acme = { clientId: created.clientId, app: created.app }
   })
   afterEach(() => h.close())
@@ -134,10 +133,10 @@ describe("management API routes", () => {
           body: { name: "Acme 2", app: "acme", redirectUris: ["https://acme.test/cb"] },
         }),
       })
-      expect(res).toEqual({ status: 409, body: { error: "app_taken" } })
+      expect(res).toEqual({ status: 409, body: { error: 'The app key "acme" is already taken.' } })
     })
 
-    it("422s a body the schema rejects", async () => {
+    it("400s a body the schema rejects, naming the fields", async () => {
       const res = await call(applications.action, {
         request: request("/api/v1/applications", {
           method: "POST",
@@ -145,8 +144,8 @@ describe("management API routes", () => {
           body: { name: "No key", redirectUris: [] },
         }),
       })
-      expect(res.status).toBe(422)
-      expect(res.body).toMatchObject({ error: "validation_error" })
+      expect(res.status).toBe(400)
+      expect(res.body).toMatchObject({ error: "invalid input", fields: expect.any(Object) })
     })
 
     it("405s a method the resource doesn't serve", async () => {
@@ -317,7 +316,7 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({
         status: 422,
-        body: { error: "invalid_resource_type", detail: "http://bender.internal/x" },
+        body: { error: "The list URL of kirby:thread isn't callable: http://bender.internal/x" },
       })
     })
 
@@ -379,7 +378,7 @@ describe("management API routes", () => {
         }),
         params: { app: "ghost" },
       })
-      expect(res).toEqual({ status: 404, body: { error: "not_found" } })
+      expect(res).toEqual({ status: 404, body: { error: "No application ghost." } })
     })
 
     it("405s POST", async () => {
@@ -428,7 +427,7 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({
         status: 403,
-        body: { error: "permissions_exceed_caller", detail: ["member:manage"] },
+        body: { error: "You can't grant permissions you don't hold: member:manage." },
       })
     })
 
@@ -502,7 +501,7 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({ status: 201, body: { result: "added" } })
 
-      const members = await listAppMembers(h.ctx, "acme")
+      const members = (await (await kitContext(h.ctx, root, "acme")).services.members.list()).members
       expect(members.find((m) => m.userId === user.id)?.productPermissions).toEqual(["chat:respond"])
     })
 
@@ -524,7 +523,7 @@ describe("management API routes", () => {
         params: { app: "acme" },
       })
       expect(res.status).toBe(422)
-      expect(res.body).toMatchObject({ error: "invalid_scope" })
+      expect(res.body).toEqual({ error: "Not in this app's catalog: not:declared" })
     })
 
     it("PATCH replaces a member's product permissions, and omitting them leaves them alone", async () => {
@@ -549,7 +548,7 @@ describe("management API routes", () => {
       })
       expect(granted).toEqual({ status: 200, body: { ok: true } })
       expect(
-        (await listAppMembers(h.ctx, "acme")).find((m) => m.userId === user.id)?.productPermissions,
+        ((await (await kitContext(h.ctx, root, "acme")).services.members.list()).members).find((m) => m.userId === user.id)?.productPermissions,
       ).toEqual(["chat:respond"])
 
       // No productPermissions in the body: an unrelated edit must not wipe them.
@@ -562,7 +561,7 @@ describe("management API routes", () => {
         params: { app: "acme", userId: user.id },
       })
       expect(
-        (await listAppMembers(h.ctx, "acme")).find((m) => m.userId === user.id)?.productPermissions,
+        ((await (await kitContext(h.ctx, root, "acme")).services.members.list()).members).find((m) => m.userId === user.id)?.productPermissions,
       ).toEqual(["chat:respond"])
     })
   })
@@ -621,7 +620,7 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({
         status: 502,
-        body: { error: "resource_lookup_failed", detail: ["kirby:thread"] },
+        body: { error: "Could not read the app's resource list for: kirby:thread" },
       })
     })
 
@@ -652,7 +651,7 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({
         status: 422,
-        body: { error: "scopes_not_held", detail: ["invoices:write"] },
+        body: { error: "The owner doesn't hold: invoices:write" },
       })
     })
   })
@@ -699,7 +698,7 @@ describe("management API routes", () => {
     it("404s an app that isn't registered", async () => {
       expect(await mint({}, adminToken, "ghost")).toEqual({
         status: 404,
-        body: { error: "not_found" },
+        body: { error: "No application ghost." },
       })
     })
 
@@ -719,15 +718,15 @@ describe("management API routes", () => {
 
       expect(await mint({ scopes: ["invoices:read", "nope:read"] })).toEqual({
         status: 422,
-        body: { error: "unknown_scopes", detail: ["nope:read"] },
+        body: { error: "Not in this app's catalog: nope:read" },
       })
     })
 
-    it("422s an expiresIn outside 60–3600 seconds, and honours one inside", async () => {
+    it("400s an expiresIn outside 60–3600 seconds, naming the field, and honours one inside", async () => {
       for (const expiresIn of [59, 3601, 90.5]) {
         const res = await mint({ expiresIn })
-        expect(res.status).toBe(422)
-        expect(res.body).toMatchObject({ error: "validation_error" })
+        expect(res.status).toBe(400)
+        expect(res.body).toMatchObject({ error: "invalid input", fields: { expiresIn: [expect.any(String)] } })
       }
 
       const since = Date.now()
@@ -762,7 +761,7 @@ describe("management API routes", () => {
           valid: true,
           kind: "app",
           keyId: id,
-          issuedBy: `adminkey:${root.keyId}`,
+          issuedBy: root.id,
           workspaceId: null,
           scopes: ["*"],
           name: "Bootstrap key",
@@ -808,7 +807,7 @@ describe("management API routes", () => {
         }),
         params: { app: "acme", id: "ghost" },
       })
-      expect(res).toEqual({ status: 404, body: { error: "not_found" } })
+      expect(res).toEqual({ status: 404, body: { error: "Key not found." } })
     })
 
     it("405s GET", async () => {

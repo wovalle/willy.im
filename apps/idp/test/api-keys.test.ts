@@ -1,59 +1,62 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { createApiKey, listApiKeys, revokeApiKey } from "../app/lib/api-keys.server"
 import { listAuditForApp } from "../app/lib/audit.server"
-import type { Caller } from "../app/lib/caller.server"
+import type { IdpPrincipal } from "../app/lib/caller.server"
 import { APP_PERMISSIONS } from "../app/lib/permissions"
-import { bootstrapAdminKey, createUser, fakeUserCaller } from "./helpers/fixtures"
+import {
+  bootstrapAdminKey,
+  createUser,
+  failureOf,
+  kitContext,
+  memberPrincipal,
+} from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
- * Minting, listing and revoking scoped management keys. Resolving a presented
- * token to a caller lives in caller.test.ts — this file is only the store.
+ * management_keys: minting, listing and revoking an app's management keys.
+ * Resolving a presented token to a principal lives in caller.test.ts — this
+ * file is only the store.
  */
-describe("scoped management API keys", () => {
+describe("management_keys", () => {
   let h: TestHarness
   let creator: { id: string }
   /** A real IdP-level admin key, resolved through the production resolver. */
-  let root: Caller
+  let root: IdpPrincipal
 
   beforeEach(async () => {
     h = createTestHarness()
-    root = (await bootstrapAdminKey(h.ctx)).caller
+    root = (await bootstrapAdminKey(h.ctx)).principal
     creator = await createUser(h.ctx, { email: "creator@acme.test" })
   })
   afterEach(() => h.close())
 
   /** The console's path: a signed-in app admin mints the key. */
-  const admin = (): Caller =>
-    fakeUserCaller({
-      userId: creator.id,
-      app: "acme",
-      permissions: ["apikey:create", "apikey:read", "apikey:revoke", "member:read", "member:invite"],
-    })
+  const admin = () =>
+    memberPrincipal(creator.id, "acme", [
+      "apikey:create",
+      "apikey:read",
+      "apikey:revoke",
+      "member:read",
+      "member:invite",
+    ])
 
-  const mint = (
-    overrides: Partial<Parameters<typeof createApiKey>[2]> = {},
-    caller: Caller = admin(),
+  const keys = async (principal: IdpPrincipal = admin(), app = "acme") =>
+    (await kitContext(h.ctx, principal, app)).services.management_keys
+
+  const mint = async (
+    overrides: { permissions?: string[]; expiresAt?: string } = {},
+    principal: IdpPrincipal = admin(),
   ) =>
-    createApiKey(h.ctx, caller, {
-      app: "acme",
+    (await keys(principal)).mint({
       name: "CI runner",
       permissions: ["member:read", "member:invite"],
       ...overrides,
     })
 
-  /** Unwraps the success branch — most cases here aren't about the error union. */
-  const mintOk = async (overrides: Partial<Parameters<typeof createApiKey>[2]> = {}) => {
-    const res = await mint(overrides)
-    if ("error" in res) throw new Error(`unexpected ${res.error}`)
-    return res
-  }
-
-  const list = (app = "acme") => listApiKeys(h.ctx, root, app)
+  const list = async () => (await (await keys(root)).list()).keys
 
   it("returns the plaintext token exactly once and never stores it", async () => {
-    const { token, prefix, id } = await mintOk()
+    const { token, prefix, id } = await mint()
 
     expect(token.startsWith("wim_")).toBe(true)
     expect(prefix).toBe(token.slice(0, 12))
@@ -65,46 +68,39 @@ describe("scoped management API keys", () => {
   })
 
   it("drops permissions that are not in the management catalog", async () => {
-    await mintOk({ permissions: ["member:read", "not:a-real-permission"] })
-    const [listed] = await list()
-    expect(listed.permissions).toEqual(["member:read"])
+    await mint({ permissions: ["member:read", "not:a-real-permission"] })
+    expect((await list())[0].permissions).toEqual(["member:read"])
   })
 
   it("marks a revoked key revoked, idempotently", async () => {
-    const { id } = await mintOk()
-    expect(await revokeApiKey(h.ctx, admin(), { app: "acme", id })).toEqual({ ok: true })
-    expect(await revokeApiKey(h.ctx, admin(), { app: "acme", id })).toEqual({ ok: true })
-
-    const [listed] = await list()
-    expect(listed.status).toBe("revoked")
+    const { id } = await mint()
+    const k = await keys()
+    expect(await k.revoke({ id })).toEqual({ ok: true })
+    expect(await k.revoke({ id })).toEqual({ ok: true })
+    expect((await list())[0].status).toBe("revoked")
   })
 
   it("reports a past expiry as expired", async () => {
-    await mintOk({ expiresAt: new Date(Date.now() - 1000) })
-    const [listed] = await list()
-    expect(listed.status).toBe("expired")
+    await mint({ expiresAt: new Date(Date.now() - 1000).toISOString() })
+    expect((await list())[0].status).toBe("expired")
   })
 
   it("will not let one app revoke another app's key", async () => {
-    const { id } = await mintOk()
-    expect(await revokeApiKey(h.ctx, root, { app: "other", id })).toEqual({
+    const { id } = await mint()
+    expect(await failureOf((await keys(root, "other")).revoke({ id }))).toEqual({
+      status: 404,
       error: "Key not found.",
     })
-
-    const [listed] = await list()
-    expect(listed.id).toBe(id)
-    expect(listed.status).toBe("active")
+    expect((await list())[0]).toMatchObject({ id, status: "active" })
   })
 
-  it("accepts a machine caller — the static admin token has no user behind it", async () => {
-    const res = await mint({}, root)
-    if ("error" in res) throw new Error(res.error)
-    const [listed] = await list()
-    expect(listed.id).toBe(res.id)
+  it("accepts a machine caller — an admin key has no user behind it", async () => {
+    const { id } = await mint({}, root)
+    expect((await list())[0].id).toBe(id)
   })
 
-  it("records the creator on the row and an audit entry with the caller's label", async () => {
-    const { id } = await mintOk()
+  it("records an audit entry with the caller's label", async () => {
+    const { id } = await mint()
 
     const [entry] = await listAuditForApp(h.ctx, "acme")
     expect(entry).toMatchObject({
@@ -117,9 +113,10 @@ describe("scoped management API keys", () => {
   })
 
   it("audits a revoke once, not on the idempotent repeat", async () => {
-    const { id } = await mintOk()
-    await revokeApiKey(h.ctx, admin(), { app: "acme", id })
-    await revokeApiKey(h.ctx, admin(), { app: "acme", id })
+    const { id } = await mint()
+    const k = await keys()
+    await k.revoke({ id })
+    await k.revoke({ id })
 
     const revokes = (await listAuditForApp(h.ctx, "acme")).filter((e) => e.operation === "revoke")
     expect(revokes).toHaveLength(1)
@@ -127,41 +124,30 @@ describe("scoped management API keys", () => {
   })
 
   describe("permission escalation", () => {
-    /** A key that may mint keys, and holds exactly one other permission. */
-    const minter = (): Caller =>
-      fakeUserCaller({
-        userId: creator.id,
-        app: "acme",
-        permissions: ["apikey:create", "member:read"],
-      })
+    /** May mint keys, and holds exactly one other permission. */
+    const minter = () => memberPrincipal(creator.id, "acme", ["apikey:create", "member:read"])
 
     it("lets a caller grant a subset of what it holds", async () => {
-      const res = await mint({ permissions: ["member:read"] }, minter())
-      expect("token" in res).toBe(true)
+      expect(await mint({ permissions: ["member:read"] }, minter())).toHaveProperty("token")
     })
 
-    it("refuses to mint permissions the caller doesn't hold", async () => {
-      const res = await mint({ permissions: ["member:read", "member:manage"] }, minter())
-      expect(res).toEqual({ error: "permissions_exceed_caller", detail: ["member:manage"] })
+    it("403s minting permissions the caller doesn't hold, naming them", async () => {
+      expect(
+        await failureOf(mint({ permissions: ["member:read", "member:manage"] }, minter())),
+      ).toEqual({ status: 403, error: "You can't grant permissions you don't hold: member:manage." })
 
       // Nothing was written — a rejected mint leaves no key behind.
       expect(await list()).toHaveLength(0)
     })
 
     it("lets a superadmin mint anything", async () => {
-      const res = await mint({ permissions: [...APP_PERMISSIONS] }, root)
-      if ("error" in res) throw new Error(res.error)
-
-      const [listed] = await list()
-      expect(listed.permissions).toEqual([...APP_PERMISSIONS])
+      await mint({ permissions: [...APP_PERMISSIONS] }, root)
+      expect((await list())[0].permissions).toEqual([...APP_PERMISSIONS])
     })
 
     it("403s a caller without apikey:create before it looks at the permissions", async () => {
-      const powerless = fakeUserCaller({ userId: creator.id, app: "acme", permissions: [] })
-      const failure = await mint({ permissions: [] }, powerless).catch((e: unknown) => e)
-
-      expect(failure).toBeInstanceOf(Response)
-      expect((failure as Response).status).toBe(403)
+      const powerless = memberPrincipal(creator.id, "acme", [])
+      expect((await failureOf(mint({ permissions: [] }, powerless))).status).toBe(403)
     })
   })
 })

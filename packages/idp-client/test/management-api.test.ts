@@ -4,11 +4,10 @@ import { createManagementApi } from "../src/api.js"
 import { IdpError } from "../src/index.js"
 
 /**
- * The `/api/v1/*` helper. Nothing in v1 calls it — the management surface is
- * cut — but the pipeline is wired now so the first management call can't be
- * hand-written: paths, path params, bodies and response shapes all come from
- * the operations table in `src/schemas/operations.ts`, which also builds
- * apps/idp's OpenAPI document.
+ * The management API client: `call`, over the IdP's semantic methods, and
+ * `request`, the previous major's `/api/v1` REST API (its paths, path params,
+ * bodies and response shapes come from `src/schemas/operations.ts`), kept
+ * while the IdP still serves it.
  */
 function apiFor(handler: (request: Request) => Response) {
   const seen: Request[] = []
@@ -27,7 +26,54 @@ function apiFor(handler: (request: Request) => Response) {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })
 
-describe("createManagementApi", () => {
+describe("call", () => {
+  it("posts an app method to /apps/<app>/api/<service>.<method>, parsing the answer", async () => {
+    const { api, seen } = apiFor(() => json({ result: "invited" }))
+    const res = await api.call("members.invite", { email: "a@b.test", role: "admin" }, { app: "in voices" })
+
+    expect(res).toEqual({ result: "invited" })
+    expectTypeOf(res).toEqualTypeOf<{ result: "added" | "invited" }>()
+    expect(seen[0]?.method).toBe("POST")
+    expect(seen[0]?.url).toBe("https://idp.test/apps/in%20voices/api/members.invite")
+    expect(seen[0]?.headers.get("authorization")).toBe("Bearer wim_test")
+    expect(await seen[0]?.clone().json()).toEqual({ email: "a@b.test", role: "admin" })
+  })
+
+  it("posts an IdP-level method to /api/<service>.<method>, with no body when it takes no input", async () => {
+    const { api, seen } = apiFor(() => json({ applications: [] }))
+    expect(await api.call("applications.list", undefined)).toEqual({ applications: [] })
+    expect(seen[0]?.url).toBe("https://idp.test/api/applications.list")
+    expect(await seen[0]?.clone().text()).toBe("")
+  })
+
+  it("surfaces the IdP's error as it arrives: status and body", async () => {
+    const body = { error: "invalid input", fields: { email: ["Invalid email address"] } }
+    const { api } = apiFor(() => json(body, 400))
+    const err = await api.call("members.invite", { email: "x@y.z" }, { app: "acme" }).catch((e) => e)
+    expect(err).toBeInstanceOf(IdpError)
+    expect(err).toMatchObject({ status: 400, body })
+  })
+
+  it("raises on an answer the method's output schema rejects", async () => {
+    const { api } = apiFor(() => json({ result: "maybe" }))
+    await expect(api.call("members.invite", { email: "a@b.test" }, { app: "acme" })).rejects.toThrow(
+      IdpError,
+    )
+  })
+
+  it("types names, inputs and the app", () => {
+    const { api } = apiFor(() => json({}))
+    // @ts-expect-error — an app method needs its app.
+    void (() => api.call("members.list", undefined))
+    // @ts-expect-error — not a method.
+    void (() => api.call("members.nope", undefined, { app: "acme" }))
+    // @ts-expect-error — the input is the method's.
+    void (() => api.call("user_keys.revoke", { key: "k" }, { app: "acme" }))
+    expect(api).toBeTruthy()
+  })
+})
+
+describe("request (/api/v1)", () => {
   it("fills path parameters and authenticates with the bearer token", async () => {
     const { api, seen } = apiFor(() => json({ members: [] }))
     await api.request("get", "/api/v1/apps/{app}/members", { params: { app: "in voices" } })

@@ -1,17 +1,7 @@
 import type { Route } from "./+types/users"
-import { listUsers, resolveAvatars } from "~/lib/admin.server"
-import { requireApiCaller } from "~/lib/caller.server"
-import { appContext } from "~/context"
+import { v1 } from "~/lib/v1.server"
 
-export async function loader({ request, context: router }: Route.LoaderArgs) {
-  const context = router.get(appContext)
-  await requireApiCaller(request, context, context.services.auth, { superadmin: true })
-  const users = await listUsers(context)
-  const origin = new URL(request.url).origin
-  return Response.json({
-    users: resolveAvatars(users, origin).map((u) => ({
-      ...u,
-      createdAt: new Date(u.createdAt).toISOString(),
-    })),
-  })
+/** GET — users.list (superadmin). */
+export async function loader(args: Route.LoaderArgs) {
+  return v1(args, null, (ctx) => ctx.services.users.list())
 }

@@ -1,12 +1,10 @@
+import { eq } from "drizzle-orm"
+
 import * as schema from "../../app/db/schema"
-import {
-  createAdminKey,
-  createApiKey,
-  generateToken,
-  hashToken,
-} from "../../app/lib/api-keys.server"
+import { generateToken, hashToken } from "../../app/lib/api-keys.server"
 import type { AuthService } from "../../app/lib/auth.server"
-import { callerFromPrincipal, resolveCaller, type Caller } from "../../app/lib/caller.server"
+import { app } from "../../app/kit.server"
+import { principalFrom, type IdpPrincipal } from "../../app/lib/caller.server"
 import type { ResourceTypeDecl } from "../../app/lib/metadata"
 import type { AppPermission } from "../../app/lib/permissions"
 import {
@@ -156,13 +154,19 @@ const sessionlessAuth = {
  * recovery does: an unscoped row (`application_id` NULL) whose `key_hash` is
  * the SHA-256 of a token we generated. Everything a test needs to act as a
  * superadmin comes back — the plaintext bearer, a Request carrying it, and the
- * Caller the *real* resolver builds from it, so no test hand-rolls a superadmin
+ * principal the *real* resolver builds from it, so no test hand-rolls a superadmin
  * object that production could never produce.
  */
 export async function bootstrapAdminKey(
   ctx: BaseServiceContext,
   input: { name?: string; expiresAt?: Date | null } = {},
-): Promise<{ id: string; name: string; token: string; request: Request; caller: Caller }> {
+): Promise<{
+  id: string
+  name: string
+  token: string
+  request: Request
+  principal: IdpPrincipal
+}> {
   const token = generateToken()
   const id = `adminkey_${uniq()}`
   const name = input.name ?? "Bootstrap key"
@@ -176,86 +180,33 @@ export async function bootstrapAdminKey(
     expiresAt: input.expiresAt ?? null,
   })
   const request = bearerRequest(token)
-  const caller = await resolveCaller(request, ctx, sessionlessAuth)
-  if (!caller) throw new Error("bootstrapAdminKey: the resolver rejected the key it was handed")
-  return { id, name, token, request, caller }
+  const principal = await principalFrom(request, ctx, sessionlessAuth)
+  if (!principal) throw new Error("bootstrapAdminKey: the resolver rejected the key it was handed")
+  return { id, name, token, request, principal }
 }
 
-/**
- * A signed-in human caller with an explicit permission set on one app: one
- * membership, built into a Caller the way the resolver builds one.
- */
-export function fakeUserCaller(input: {
-  userId: string
-  email?: string
-  app: string
-  permissions: AppPermission[]
-}): Caller {
-  return callerFromPrincipal(
-    {
-      id: `user:${input.userId}`,
-      grants: [],
-      memberships: [{ tenantId: input.app, grants: input.permissions }],
-    },
-    {
-      via: "session",
-      userId: input.userId,
-      email: input.email ?? `${input.userId}@test`,
-      keyId: null,
-      applicationId: null,
-      actor: { userId: input.userId, label: `user:${input.userId}` },
-    },
-  )
-}
-
-/**
- * A signed-in human as the real resolver sees them: their grants come from the
- * `application_member` rows in the database, not from the test. `impersonatedBy`
- * makes it an impersonation session, as Better Auth's admin plugin marks one.
- */
-export async function signedInCaller(
-  ctx: BaseServiceContext,
-  user: { id: string; email: string },
-  input: { impersonatedBy?: string } = {},
-): Promise<Caller> {
-  const auth = {
-    api: {
-      getSession: async () => ({
-        user,
-        session: { impersonatedBy: input.impersonatedBy ?? null },
-      }),
-    },
-  } as unknown as AuthService
-  const caller = await resolveCaller(new Request("https://idp.willy.im/"), ctx, auth)
-  if (!caller) throw new Error("signedInCaller: the resolver rejected the session")
-  return caller
-}
-
-/** Mints a scoped key as `caller`, unwrapping the error union. */
+/** Mints a scoped key as `by` through `management_keys.mint`. */
 export async function mintApiKey(
   ctx: BaseServiceContext,
   input: { app: string; name?: string; permissions?: string[]; expiresAt?: Date | null },
-  caller: Caller,
+  principal: IdpPrincipal,
 ) {
-  const res = await createApiKey(ctx, caller, {
-    app: input.app,
+  return (await kitContext(ctx, principal, input.app)).services.management_keys.mint({
     name: input.name ?? "CI runner",
     permissions: input.permissions ?? ["member:read", "member:invite"],
-    expiresAt: input.expiresAt ?? null,
+    expiresAt: input.expiresAt?.toISOString(),
   })
-  if ("error" in res) throw new Error(`mintApiKey: ${res.error} ${res.detail.join(",")}`)
-  return res
 }
 
-/** Mints an IdP-level admin key (unscoped ⇒ superadmin) through the service. */
+/** Mints an IdP-level admin key (unscoped ⇒ superadmin) through `admin_keys.mint`. */
 export async function mintAdminKey(
   ctx: BaseServiceContext,
   input: { name?: string; expiresAt?: Date | null },
-  caller: Caller,
+  principal: IdpPrincipal,
 ) {
-  return createAdminKey(ctx, caller, {
+  return (await kitContext(ctx, principal, null)).services.admin_keys.mint({
     name: input.name ?? "Agent alpha",
-    expiresAt: input.expiresAt ?? null,
+    expiresAt: input.expiresAt?.toISOString(),
   })
 }
 
@@ -283,3 +234,88 @@ export function stubResources(
  * is itself the bug, and this one fails loudly rather than returning `[]`.
  */
 export const noResources: ResourceLister = stubResources({})
+
+/**
+ * A kit context for `principal` in `tenant` (an app key, or null for the IdP
+ * level): exactly what every surface builds, so a test calls
+ * `ctx.services.<service>.<method>()` as the console and the API do.
+ */
+export function kitContext(
+  ctx: BaseServiceContext,
+  principal: IdpPrincipal | null,
+  tenant: string | null,
+  deps: { resources?: ResourceLister; auth?: AuthService; request?: Request } = {},
+) {
+  return app.context(principal, tenant, {
+    base: ctx,
+    auth: deps.auth ?? sessionlessAuth,
+    resources: deps.resources ?? noResources,
+    request: deps.request ?? new Request("https://idp.willy.im/"),
+  })
+}
+
+/** A signed-in member of one app holding exactly `permissions` there. */
+export function memberPrincipal(userId: string, app: string, permissions: AppPermission[]): IdpPrincipal {
+  return { id: `user:${userId}`, grants: [], memberships: [{ tenantId: app, grants: permissions }] }
+}
+
+/** What a method failed with: `fail()`'s status and message, or kit's own 400/403/404. */
+export async function failureOf(promise: Promise<unknown>): Promise<{ status: number; error: unknown }> {
+  try {
+    await promise
+  } catch (e) {
+    if (!(e instanceof Response)) throw e
+    const text = await e.text()
+    let error: unknown = text
+    try {
+      error = (JSON.parse(text) as { error?: unknown }).error
+    } catch {}
+    return { status: e.status, error }
+  }
+  throw new Error("expected the call to fail")
+}
+
+/** A signed-in human's principal, built by the real resolver from their rows. */
+export async function signedInPrincipal(
+  ctx: BaseServiceContext,
+  user: { id: string; email: string },
+  input: { impersonatedBy?: string } = {},
+): Promise<IdpPrincipal> {
+  const principal = await principalFrom(new Request("https://idp.willy.im/"), ctx, sessionAuth(user, input))
+  if (!principal) throw new Error("signedInPrincipal: the resolver rejected the session")
+  return principal
+}
+
+/** A Better Auth stub whose session is `user`'s (impersonated by `impersonatedBy`). */
+export function sessionAuth(
+  user: { id: string; email: string },
+  input: { impersonatedBy?: string } = {},
+): AuthService {
+  return {
+    api: {
+      getSession: async () => ({ user, session: { impersonatedBy: input.impersonatedBy ?? null } }),
+    },
+  } as unknown as AuthService
+}
+
+/** Replaces an app's declared product catalog in place, as the app re-declaring it would. */
+export async function setCatalog(
+  ctx: BaseServiceContext,
+  app: string,
+  catalog: { permissions?: string[]; resourceTypes?: ResourceTypeDecl[] },
+) {
+  const rows = await ctx.db.select().from(schema.oauthClient)
+  const row = rows.find((r) => (r.metadata as { app?: string } | null)?.app === app)
+  if (!row) throw new Error(`setCatalog: no app ${app}`)
+  const metadata = row.metadata as Record<string, unknown>
+  await ctx.db
+    .update(schema.oauthClient)
+    .set({
+      metadata: {
+        ...metadata,
+        ...(catalog.permissions && { permissions: catalog.permissions }),
+        ...(catalog.resourceTypes && { resource_types: catalog.resourceTypes }),
+      },
+    })
+    .where(eq(schema.oauthClient.id, row.id))
+}

@@ -1,5 +1,5 @@
 import { withAudit } from "@willyim/kit/audit/d1-runtime"
-import { and, desc, eq } from "drizzle-orm"
+import { desc, eq } from "drizzle-orm"
 
 import * as schema from "../db/schema"
 import type { BaseServiceContext } from "./services"
@@ -9,7 +9,8 @@ import type { BaseServiceContext } from "./services"
  * (invite, revoke, impersonate…) with a curated before/after, not row diffs:
  * several of the writes happen inside Better Auth, out of a wrapper's sight.
  * Writes are best-effort: a failure to log must never break the action being
- * audited.
+ * audited. Methods write through `ctx.audit` (auditTrail below), bound to the
+ * caller and the app once per context.
  */
 
 /**
@@ -37,7 +38,7 @@ export type AuditOperation =
   | "impersonate"
   | "issue"
 
-export async function recordAudit(
+async function recordAudit(
   ctx: BaseServiceContext,
   entry: {
     actor: Actor
@@ -106,23 +107,44 @@ export async function listAuditForApp(
   return rows.map(toEntry)
 }
 
-/** A single entity's history (e.g. one API key), newest first. */
-export async function listAuditForRow(
+/**
+ * The audit trail bound to one caller in one tenant, once per context (app/kit.ts):
+ * methods record events without naming who or where. `app` overrides the scope
+ * for an IdP-level act that belongs to one app (registering it).
+ *
+ * The actor follows the principal: "user:<id>" (with that user as `user_id`),
+ * "adminkey:<id>" / "apikey:<id>" (no user), and an impersonated session reads
+ * "user:<impersonator> as user:<target>" with the impersonator as `user_id`.
+ */
+export function auditTrail(
   ctx: BaseServiceContext,
-  app: string,
-  table: string,
-  rowId: string,
-): Promise<AuditEntry[]> {
-  const rows = await ctx.db
-    .select()
-    .from(schema.auditLog)
-    .where(
-      and(
-        eq(schema.auditLog.application_id, app),
-        eq(schema.auditLog.table_name, table),
-        eq(schema.auditLog.row_id, rowId),
-      ),
-    )
-    .orderBy(desc(schema.auditLog.id))
-  return rows.map(toEntry)
+  principal: { id: string; actor?: { id: string } } | null,
+  tenantId: string | null,
+) {
+  const label = principal
+    ? principal.actor
+      ? `${principal.actor.id} as ${principal.id}`
+      : principal.id
+    : "anonymous"
+  const actor: Actor = { userId: humanIdOf(principal?.actor?.id ?? principal?.id), label }
+  return {
+    record: (event: {
+      table: string
+      operation: AuditOperation
+      rowId?: string | null
+      before?: Record<string, unknown>
+      after?: Record<string, unknown>
+      app?: string
+    }) =>
+      recordAudit(ctx, {
+        ...event,
+        actor,
+        applicationId: event.app ?? tenantId ?? IDP_AUDIT_SCOPE,
+      }),
+  }
+}
+
+/** The user id in a "user:<id>" principal id; null for keys and anonymous callers. */
+export function humanIdOf(principalId: string | null | undefined): string | null {
+  return principalId?.startsWith("user:") ? principalId.slice("user:".length) : null
 }

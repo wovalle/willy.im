@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { addOrInviteAppMember } from "../app/lib/members.server"
 import { clientIdFromSignInRequest, decideSignup } from "../app/lib/signup.server"
-import { createApplication, createMember, createUser, fakeUserCaller } from "./helpers/fixtures"
+import {
+  createApplication,
+  createMember,
+  createUser,
+  kitContext,
+  memberPrincipal,
+} from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /** How the app context is recovered from a sign-in request. */
@@ -47,6 +52,12 @@ describe("decideSignup", () => {
   })
   afterEach(() => h.close())
 
+  /** guest@internet.test, invited to `app` by a member holding member:invite. */
+  const invite = async (inviterId: string, app: string) =>
+    (await kitContext(h.ctx, memberPrincipal(inviterId, app, ["member:invite"]), app)).services.members.invite({
+      email: "guest@internet.test",
+    })
+
   it("allows an open app to create an account for anyone", async () => {
     const { clientId } = await createApplication(h.ctx, { app: "open", allowSignup: true })
 
@@ -68,17 +79,7 @@ describe("decideSignup", () => {
   it("lets an invited email through on an invite-only app", async () => {
     const { clientId } = await createApplication(h.ctx, { app: "closed", allowSignup: false })
     const inviter = await createUser(h.ctx, { email: "boss@closed.test" })
-    await addOrInviteAppMember(
-      h.ctx,
-      fakeUserCaller({ userId: inviter.id, app: "closed", permissions: ["member:invite"] }),
-      {
-        app: "closed",
-        email: "guest@internet.test",
-        role: "member",
-        permissions: [],
-        origin: "https://idp.willy.im",
-      },
-    )
+    await invite(inviter.id, "closed")
 
     expect(await decideSignup(h.ctx, { clientId, email: "guest@internet.test" })).toEqual({
       allowed: true,
@@ -89,17 +90,7 @@ describe("decideSignup", () => {
   it("matches the invitation regardless of email casing or padding", async () => {
     const { clientId } = await createApplication(h.ctx, { app: "closed", allowSignup: false })
     const inviter = await createUser(h.ctx, { email: "boss@closed.test" })
-    await addOrInviteAppMember(
-      h.ctx,
-      fakeUserCaller({ userId: inviter.id, app: "closed", permissions: ["member:invite"] }),
-      {
-        app: "closed",
-        email: "guest@internet.test",
-        role: "member",
-        permissions: [],
-        origin: "https://idp.willy.im",
-      },
-    )
+    await invite(inviter.id, "closed")
 
     expect(await decideSignup(h.ctx, { clientId, email: " Guest@Internet.TEST " })).toEqual({
       allowed: true,
@@ -110,17 +101,7 @@ describe("decideSignup", () => {
   it("does not honor an expired invitation", async () => {
     const { clientId } = await createApplication(h.ctx, { app: "closed", allowSignup: false })
     const inviter = await createUser(h.ctx, { email: "boss@closed.test" })
-    await addOrInviteAppMember(
-      h.ctx,
-      fakeUserCaller({ userId: inviter.id, app: "closed", permissions: ["member:invite"] }),
-      {
-        app: "closed",
-        email: "guest@internet.test",
-        role: "member",
-        permissions: [],
-        origin: "https://idp.willy.im",
-      },
-    )
+    await invite(inviter.id, "closed")
     const { applicationInvitation } = await import("../app/db/schema")
     await h.ctx.db.update(applicationInvitation).set({ expiresAt: new Date(Date.now() - 1000) })
 
@@ -134,17 +115,7 @@ describe("decideSignup", () => {
     const { clientId } = await createApplication(h.ctx, { app: "closed", allowSignup: false })
     await createApplication(h.ctx, { app: "open", allowSignup: true })
     const inviter = await createUser(h.ctx, { email: "boss@open.test" })
-    await addOrInviteAppMember(
-      h.ctx,
-      fakeUserCaller({ userId: inviter.id, app: "open", permissions: ["member:invite"] }),
-      {
-        app: "open",
-        email: "guest@internet.test",
-        role: "member",
-        permissions: [],
-        origin: "https://idp.willy.im",
-      },
-    )
+    await invite(inviter.id, "open")
 
     expect(await decideSignup(h.ctx, { clientId, email: "guest@internet.test" })).toEqual({
       allowed: false,

@@ -17,6 +17,11 @@ export type HandlerContext = {
   services: object
 }
 
+export type HandleOptions = {
+  /** A prefix every path is served under, e.g. `/apps/acme`. Default: the root. */
+  basePath?: string
+}
+
 const error = (status: number, message: string, headers?: HeadersInit) =>
   Response.json({ error: message }, { status, headers })
 
@@ -31,28 +36,36 @@ const error = (status: number, message: string, headers?: HeadersInit) =>
  * Returns null for any other path, so the UI's router takes it. A thrown
  * `Response` (400, 403, 404, 409 from a method) is returned as is; any other
  * error is rethrown.
+ *
+ * `basePath` mounts all three under a prefix (`/apps/acme` serves
+ * `/apps/acme/api/<service>.<method>`, `/apps/acme/openapi.json`…), and the
+ * documents name that prefix in their URLs. A path outside it is null.
  */
 export async function handle(
   app: KitApp,
   request: Request,
   ctx: HandlerContext,
+  options: HandleOptions = {},
 ): Promise<Response | null> {
   const url = new URL(request.url)
-  const { pathname } = url
+  const basePath = (options.basePath ?? "").replace(/\/+$/, "")
+  if (basePath && !url.pathname.startsWith(`${basePath}/`)) return null
+  const pathname = url.pathname.slice(basePath.length)
+  const base = url.origin + basePath
 
   if (pathname === "/openapi.json" || pathname === "/llms.txt") {
     if (request.method !== "GET" && request.method !== "HEAD")
       return error(405, "use GET", { allow: "GET, HEAD" })
     if (locked(app, ctx.caller))
       return pathname === "/openapi.json"
-        ? Response.json(lockedOpenapi(app, url.origin))
+        ? Response.json(lockedOpenapi(app, base))
         : new Response(lockedLlmsTxt(app), {
             headers: { "content-type": "text/markdown; charset=utf-8" },
           })
     const methods = visibleTo(app, registry(app), ctx)
     return pathname === "/openapi.json"
-      ? Response.json(openapi(app, methods, url.origin))
-      : new Response(llmsTxt(app, methods, url.origin), {
+      ? Response.json(openapi(app, methods, base))
+      : new Response(llmsTxt(app, methods, base), {
           headers: { "content-type": "text/markdown; charset=utf-8" },
         })
   }

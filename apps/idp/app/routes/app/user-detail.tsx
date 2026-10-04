@@ -2,13 +2,7 @@ import { Form, Link, useActionData, useNavigation, useSubmit } from "react-route
 import { Link2, Loader2, Plus, Trash2 } from "lucide-react"
 
 import type { Route } from "./+types/user-detail"
-import { getUser } from "~/lib/admin.server"
-import { requireConsoleCaller } from "~/lib/caller.server"
-import {
-  linkIdentity,
-  listLinkedIdentities,
-  unlinkIdentity,
-} from "~/lib/identities.server"
+import { attempt, consoleContext, refused } from "~/lib/console.server"
 import { Avatar } from "~/components/avatar"
 import {
   AlertDialog,
@@ -45,20 +39,17 @@ export async function loader({ request, context: router, params }: Route.LoaderA
   const context = router.get(appContext)
   // Linking is superadmin-only in the service; gate the page the same way so a
   // non-admin never sees controls that would only 403.
-  const caller = await requireConsoleCaller(request, context, context.services.auth, {
-    superadmin: true,
-  })
-  const user = await getUser(context, params.userId)
+  const ctx = await consoleContext(context, request, null, "*")
+  const { user } = await ctx.services.users.find({ id: params.userId })
   if (!user) throw new Response("User not found", { status: 404 })
-  const identities = await listLinkedIdentities(context, caller, { userId: params.userId })
+  const { identities } = await ctx.services.identities.list({ userId: params.userId })
   return { user, identities }
 }
 
 export async function action({ request, context: router, params }: Route.ActionArgs) {
   const context = router.get(appContext)
-  const caller = await requireConsoleCaller(request, context, context.services.auth, {
-    superadmin: true,
-  })
+  const ctx = await consoleContext(context, request, null, "*")
+  const userId = params.userId
   const form = await request.formData()
   const intent = form.get("intent")
 
@@ -68,30 +59,19 @@ export async function action({ request, context: router, params }: Route.ActionA
     const label = String(form.get("label") ?? "").trim()
     if (!provider) return { error: "Choose a provider.", field: "link" }
     if (!externalId) return { error: "Enter the external id.", field: "link" }
-    const res = await linkIdentity(context, caller, {
-      userId: params.userId,
-      provider,
-      externalId,
-      label: label || null,
-    })
-    if ("error" in res) {
-      // The pair is unique: it either belongs to nobody (link it) or to someone
-      // else (refuse — silently re-pointing an identity hands one person
-      // another's grants).
-      if (res.error === "unknown_user") return { error: "This user no longer exists.", field: "link" }
-      return {
-        error: `${provider}:${externalId} is already linked to another user.`,
-        field: "link",
-      }
-    }
+    // The pair is unique: it belongs to nobody (link it), to this user already,
+    // or to someone else (refused — silently re-pointing an identity hands one
+    // person another's grants).
+    const res = await attempt(
+      () => ctx.services.identities.link({ userId, provider, externalId, label: label || undefined }),
+      "link",
+    )
+    if (refused(res)) return res
     return { ok: res.created ? "linked" : "already-yours" }
   }
 
   if (intent === "unlink") {
-    await unlinkIdentity(context, caller, {
-      userId: params.userId,
-      id: String(form.get("id") ?? ""),
-    })
+    await ctx.services.identities.unlink({ userId, id: String(form.get("id") ?? "") })
     return { ok: "unlinked" }
   }
 

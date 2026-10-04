@@ -47,25 +47,17 @@
                             "type": "string"
                           },
                           "name": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "app": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ],
-                            "description": "Application key; consumer workspace claims are filtered by this"
+                            "description": "Application key; consumer workspace claims are filtered by this",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "allowSignup": {
                             "type": "boolean",
@@ -188,13 +180,9 @@
                   },
                   "firstAdminUserId": {
                     "description": "Who becomes the app's first IdP admin. Defaults to the calling user; null leaves the app with no members (superadmin-managed).",
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
+                    "type": [
+                      "string",
+                      "null"
                     ]
                   }
                 },
@@ -285,25 +273,17 @@
                       "type": "string"
                     },
                     "name": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "app": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "Application key; consumer workspace claims are filtered by this"
+                      "description": "Application key; consumer workspace claims are filtered by this",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "allowSignup": {
                       "type": "boolean",
@@ -457,25 +437,17 @@
                       "type": "string"
                     },
                     "name": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "app": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "Application key; consumer workspace claims are filtered by this"
+                      "description": "Application key; consumer workspace claims are filtered by this",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "allowSignup": {
                       "type": "boolean",
@@ -892,33 +864,21 @@
                             "type": "string"
                           },
                           "lastUsedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "expiresAt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "revokedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           }
                         },
@@ -996,7 +956,7 @@
                     "description": "ISO 8601; omit for non-expiring",
                     "type": "string",
                     "format": "date-time",
-                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                   }
                 },
                 "required": [
@@ -1168,33 +1128,21 @@
                             "type": "string"
                           },
                           "lastUsedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "expiresAt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "revokedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           }
                         },
@@ -1250,7 +1198,7 @@
                     "description": "ISO 8601; omit for non-expiring",
                     "type": "string",
                     "format": "date-time",
-                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                   }
                 },
                 "required": [
@@ -1392,13 +1340,9 @@
                             "type": "string"
                           },
                           "name": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "image": {
@@ -1471,13 +1415,9 @@
                             "type": "string"
                           },
                           "applicationId": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "createdAt": {
@@ -1550,13 +1490,9 @@
                             "type": "string"
                           },
                           "name": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "role": {
@@ -1571,6 +1507,14 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "productPermissions": {
+                            "default": [],
+                            "description": "Grants from the app's own catalog; admins hold the whole catalog and store none",
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "required": [
@@ -1578,7 +1522,8 @@
                           "email",
                           "name",
                           "role",
-                          "permissions"
+                          "permissions",
+                          "productPermissions"
                         ],
                         "additionalProperties": false
                       }
@@ -1630,7 +1575,7 @@
                   "email": {
                     "type": "string",
                     "format": "email",
-                    "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
                   },
                   "role": {
                     "default": "member",
@@ -1641,6 +1586,13 @@
                     ]
                   },
                   "permissions": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "productPermissions": {
                     "default": [],
                     "type": "array",
                     "items": {
@@ -1743,6 +1695,12 @@
                   },
                   "permissions": {
                     "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "productPermissions": {
                     "type": "array",
                     "items": {
                       "type": "string"
@@ -1903,13 +1861,9 @@
                             "type": "string"
                           },
                           "applicationId": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "createdAt": {
@@ -2035,6 +1989,278 @@
         }
       }
     },
+    "/api/v1/apps/{app}/workspaces/{workspaceId}/members": {
+      "get": {
+        "summary": "List a workspace's members and their roles",
+        "description": "Requires `member:read` on the path app (or an admin key).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "description": "Application key (oauth_client.metadata.app).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "description": "Workspace id, from the app's workspaces.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "members": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "userId": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "role": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "userId",
+                          "email",
+                          "name",
+                          "role"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "members"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          }
+        }
+      },
+      "put": {
+        "summary": "Put an existing user in a workspace with a role (or change it)",
+        "description": "The user must already exist at the IdP (404 `unknown_user` otherwise: invite them to the app first). Idempotent: the same call twice leaves one membership.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "description": "Application key (oauth_client.metadata.app).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "description": "Workspace id, from the app's workspaces.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "role": {
+                    "default": "member",
+                    "type": "string",
+                    "enum": [
+                      "owner",
+                      "admin",
+                      "member"
+                    ]
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "userId": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "role": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "userId",
+                    "email",
+                    "name",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          },
+          "422": {
+            "description": "Body failed validation"
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app}/workspaces/{workspaceId}/members/{userId}": {
+      "delete": {
+        "summary": "Remove someone from a workspace",
+        "description": "Requires `member:manage` on the path app (or an admin key).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "description": "Application key (oauth_client.metadata.app).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "description": "Workspace id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "The member's user id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Key lacks the permission / is bound to another app"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          }
+        }
+      }
+    },
     "/api/v1/apps/{app}/user-keys": {
       "get": {
         "summary": "List end-user API keys",
@@ -2094,13 +2320,9 @@
                             "type": "string"
                           },
                           "workspaceId": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "name": {
@@ -2128,23 +2350,15 @@
                             "type": "string"
                           },
                           "lastUsedAt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "expiresAt": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           }
                         },
@@ -2230,7 +2444,7 @@
                     "description": "ISO 8601; omit for non-expiring",
                     "type": "string",
                     "format": "date-time",
-                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                   }
                 },
                 "required": [
@@ -2291,8 +2505,8 @@
     },
     "/api/v1/apps/{app}/user-keys/validate": {
       "post": {
-        "summary": "Validate a presented end-user key (200 + valid discriminator)",
-        "description": "Requires `userkey:validate` on the path app (or an admin key).",
+        "summary": "Validate a presented end-user key or app token (200 + valid discriminator)",
+        "description": "Requires `userkey:validate` on the path app (or an admin key). Answers for both credentials an app's API accepts: an end-user key (`wak_`, `kind: \"user\"`) and an app token (`wat_`, `kind: \"app\"`: an IdP superadmin acting in this app, named by `issuedBy`). An app token is `revoked` once the admin key that minted it is revoked or expired, or its admin leaves the allowlist. A miss is data, not an error: 200 with `valid: false` and a reason.",
         "security": [
           {
             "bearerAuth": []
@@ -2336,49 +2550,102 @@
               "application/json": {
                 "schema": {
                   "$schema": "https://json-schema.org/draft/2020-12/schema",
-                  "anyOf": [
+                  "oneOf": [
                     {
-                      "type": "object",
-                      "properties": {
-                        "valid": {
-                          "type": "boolean",
-                          "const": true
-                        },
-                        "keyId": {
-                          "type": "string"
-                        },
-                        "userId": {
-                          "type": "string"
-                        },
-                        "workspaceId": {
-                          "anyOf": [
-                            {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "valid": {
+                              "type": "boolean",
+                              "const": true
+                            },
+                            "kind": {
+                              "type": "string",
+                              "const": "user"
+                            },
+                            "keyId": {
                               "type": "string"
                             },
-                            {
-                              "type": "null"
+                            "userId": {
+                              "type": "string"
+                            },
+                            "workspaceId": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "scopes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "name": {
+                              "type": "string"
                             }
-                          ]
+                          },
+                          "required": [
+                            "valid",
+                            "kind",
+                            "keyId",
+                            "userId",
+                            "workspaceId",
+                            "scopes",
+                            "name"
+                          ],
+                          "additionalProperties": false
                         },
-                        "scopes": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "name": {
-                          "type": "string"
+                        {
+                          "type": "object",
+                          "properties": {
+                            "valid": {
+                              "type": "boolean",
+                              "const": true
+                            },
+                            "kind": {
+                              "type": "string",
+                              "const": "app"
+                            },
+                            "keyId": {
+                              "type": "string",
+                              "description": "The app token's id"
+                            },
+                            "issuedBy": {
+                              "type": "string",
+                              "description": "Who minted it, as a principal id: `adminkey:<id>` or `user:<id>`"
+                            },
+                            "workspaceId": {
+                              "description": "The one workspace it is bound to; null for any",
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "scopes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "name": {
+                              "type": "string",
+                              "description": "The issuing admin key's name, or the issuing admin's email"
+                            }
+                          },
+                          "required": [
+                            "valid",
+                            "kind",
+                            "keyId",
+                            "issuedBy",
+                            "workspaceId",
+                            "scopes",
+                            "name"
+                          ],
+                          "additionalProperties": false
                         }
-                      },
-                      "required": [
-                        "valid",
-                        "keyId",
-                        "userId",
-                        "workspaceId",
-                        "scopes",
-                        "name"
-                      ],
-                      "additionalProperties": false
+                      ]
                     },
                     {
                       "type": "object",
@@ -2490,6 +2757,124 @@
         }
       }
     },
+    "/api/v1/apps/{app}/tokens": {
+      "post": {
+        "summary": "Mint an app token (plaintext returned once)",
+        "description": "Requires an admin key. GitHub-App style: the admin key is the private key and never goes to an app; this exchanges it for a short-lived `wat_` token bound to the path app, which the app validates like an end-user key (`kind: \"app\"`). `scopes` default to `[\"*\"]`, everything the issuer may do in the app; given ones resolve like end-user key scopes — 422 `unknown_scopes` / `unknown_resource`, 502 `resource_lookup_failed`. `expiresIn` is seconds, 60 to 3600 (the default).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "description": "Application key (oauth_client.metadata.app).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "scopes": {
+                    "description": "Omit for `[\"*\"]`, everything the issuer may do in the app. Otherwise `\"*\"`, declared permissions, or `<type>:<id>` grants over a declared resource type whose instance the app currently lists",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "workspaceId": {
+                    "description": "Bind the token to one workspace; omit for any",
+                    "type": "string"
+                  },
+                  "expiresIn": {
+                    "default": 3600,
+                    "description": "Lifetime in seconds, 60 to 3600",
+                    "type": "integer",
+                    "minimum": 60,
+                    "maximum": 3600
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "Plaintext token (wat_…) — shown exactly once, never stored"
+                    },
+                    "prefix": {
+                      "type": "string"
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "workspaceId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "description": "ISO 8601"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "token",
+                    "prefix",
+                    "scopes",
+                    "workspaceId",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "404": {
+            "description": "No application with that app key"
+          },
+          "405": {
+            "description": "Method not allowed on this resource (see the `Allow` header)"
+          },
+          "409": {
+            "description": "Conflict (already a member, last admin, slug taken, …)"
+          },
+          "422": {
+            "description": "Body failed validation"
+          }
+        }
+      }
+    },
     "/api/v1/users/{userId}/identities": {
       "get": {
         "summary": "List a user's linked identities (their ids on other systems)",
@@ -2539,13 +2924,9 @@
                             "description": "The id exactly as that system spells it"
                           },
                           "label": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "createdAt": {
@@ -2791,13 +3172,9 @@
                           "type": "string"
                         },
                         "name": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
+                          "type": [
+                            "string",
+                            "null"
                           ]
                         },
                         "permissions": {
@@ -2888,33 +3265,21 @@
                             "type": "string"
                           },
                           "rowId": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "userId": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "actor": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "createdAt": {

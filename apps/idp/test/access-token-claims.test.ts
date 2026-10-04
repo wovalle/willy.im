@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { getApplication, updateApplication } from "../app/lib/admin.server"
-import type { Caller } from "../app/lib/caller.server"
+import { getApplication } from "../app/lib/admin.server"
+import type { IdpPrincipal } from "../app/lib/caller.server"
 import {
   APP_CLAIM,
   PERMISSIONS_CLAIM,
@@ -9,7 +9,14 @@ import {
   allResources,
   appForResource,
 } from "../app/lib/claims.server"
-import { bootstrapAdminKey, createApplication, createMember, createUser } from "./helpers/fixtures"
+import {
+  bootstrapAdminKey,
+  createApplication,
+  createMember,
+  createUser,
+  failureOf,
+  kitContext,
+} from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
@@ -20,7 +27,7 @@ import { createTestHarness, type TestHarness } from "./helpers/harness"
  */
 describe("access-token claims by resource", () => {
   let h: TestHarness
-  let root: Caller
+  let root: IdpPrincipal
   let bender: { clientId: string }
   let willy: { id: string }
   let gf: { id: string }
@@ -30,7 +37,7 @@ describe("access-token claims by resource", () => {
 
   beforeEach(async () => {
     h = createTestHarness()
-    root = (await bootstrapAdminKey(h.ctx)).caller
+    root = (await bootstrapAdminKey(h.ctx)).principal
     bender = await createApplication(h.ctx, { app: "bender", permissions: CATALOG })
     await createApplication(h.ctx, { app: "other", permissions: ["x:read"] })
     willy = await createUser(h.ctx, { email: "hey@willy.im" })
@@ -42,21 +49,25 @@ describe("access-token claims by resource", () => {
       role: "member",
       productPermissions: ["chat:respond", "tool:publish_artifact"],
     })
-    await updateApplication(h.ctx, root, bender.clientId, { resources: [BENDER_MCP] })
+    await update({ resources: [BENDER_MCP] })
   })
   afterEach(() => h.close())
+
+  /** `applications.update` on bender, as the admin key. */
+  const update = async (patch: { resources?: string[]; allowSignup?: boolean }) =>
+    (await kitContext(h.ctx, root, "bender")).services.applications.update(patch)
 
   describe("resources on an application", () => {
     it("round-trip through the PATCH service and survive other metadata edits", async () => {
       expect((await getApplication(h.ctx, bender.clientId))!.resources).toEqual([BENDER_MCP])
-      await updateApplication(h.ctx, root, bender.clientId, { allowSignup: true })
+      await update({ allowSignup: true })
       expect((await getApplication(h.ctx, bender.clientId))!.resources).toEqual([BENDER_MCP])
     })
 
     it("must be absolute https with no fragment — an audience is matched exactly", async () => {
       for (const bad of ["http://bender.romo.fyi/mcp", "bender.romo.fyi/mcp", "https://bender.romo.fyi/mcp#x"]) {
-        const res = await updateApplication(h.ctx, root, bender.clientId, { resources: [bad] })
-        expect(res).toEqual({ error: "invalid_resource", detail: bad })
+        // Not a URL at all is kit's 400; a URL that isn't https or has a fragment, the method's 422.
+        expect([400, 422]).toContain((await failureOf(update({ resources: [bad] }))).status)
       }
     })
 

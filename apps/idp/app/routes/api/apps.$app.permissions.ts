@@ -1,28 +1,8 @@
 import type { Route } from "./+types/apps.$app.permissions"
-import { getApplicationByApp, updateApplicationPermissions } from "~/lib/admin.server"
-import { methodNotAllowed, readJson } from "~/lib/api.server"
-import { requireApiCaller } from "~/lib/caller.server"
-import { SetAppPermissionsInput } from "@willyim/idp/schemas"
-import { appContext } from "~/context"
+import { methodNotAllowed, v1 } from "~/lib/v1.server"
 
-/**
- * PUT — replace the app's product-permission catalog wholesale. This is the
- * vocabulary members can be granted and what's emitted in the permissions
- * claim, so a replace (not a merge) is the honest verb. Requires `app:update`.
- */
-export async function action({ request, context: router, params }: Route.ActionArgs) {
-  const context = router.get(appContext)
-  if (request.method !== "PUT") return methodNotAllowed(["PUT"])
-  const caller = await requireApiCaller(request, context, context.services.auth)
-  const application = await getApplicationByApp(context, params.app)
-  if (!application) return Response.json({ error: "not_found" }, { status: 404 })
-  const body = await readJson(request, SetAppPermissionsInput)
-  const catalog = await updateApplicationPermissions(context, caller, application.clientId, {
-    permissions: body.permissions,
-    resourceTypes: body.resourceTypes.map((t) => ({ ...t, label: t.label ?? t.type })),
-  })
-  if ("error" in catalog) {
-    return Response.json({ error: catalog.error, detail: catalog.detail }, { status: 422 })
-  }
-  return Response.json(catalog)
+/** PUT — catalog.declare: replace the app's product-permission catalog wholesale. */
+export async function action(args: Route.ActionArgs) {
+  if (args.request.method !== "PUT") return methodNotAllowed(["PUT"])
+  return v1(args, args.params.app, (ctx, body) => ctx.services.catalog.declare(body))
 }

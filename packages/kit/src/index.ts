@@ -1,5 +1,5 @@
-export { handle, type HandlerContext } from "./api.js"
-export { createApp, declareService, type DiscoveryOptions, type KitApp } from "./app.js"
+export { handle, type HandleOptions, type HandlerContext } from "./api.js"
+export { createApp, declareService, type App, type DiscoveryOptions, type KitApp } from "./app.js"
 export { jsonSchema, llmsTxt, openapi, type JsonSchema } from "./discovery.js"
 export { fail, safe } from "./errors.js"
 export { kitImage, type KitImage } from "./image.js"
@@ -24,6 +24,8 @@ export type {
   Contract,
   Grant,
   Hints,
+  KitFields,
+  Method,
   Permission,
   Principal,
   PublicMethod,

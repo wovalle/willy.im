@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/cloudflare"
 import { createRequestHandler, RouterContextProvider } from "react-router"
 
 import { appContext } from "../app/context"
+import { serveApi, serveMcp } from "../app/kit.server"
 import { getAppEnv } from "../app/lib/env"
 import { createAuthService, idpAudience } from "../app/lib/auth.server"
 import { allResources, syncResourceRegistry } from "../app/lib/claims.server"
@@ -85,9 +86,15 @@ const handler = {
     const finishTracking = createIdpRequestTracker(baseCtx, auth).begin(request)
 
     try {
+      const appCtx = { cloudflare: { env, ctx }, ...baseCtx, services: { auth, resources } }
+      // kit's generated API (/api/<service>.<method>, /apps/<app>/api/…) and MCP
+      // (/mcp, /mcp/<app>) first; everything else, /api/v1 included, is React Router's.
       const context = new RouterContextProvider()
-      context.set(appContext, { cloudflare: { env, ctx }, ...baseCtx, services: { auth, resources } })
-      const response = await requestHandler(request, context)
+      context.set(appContext, appCtx)
+      const response =
+        (await serveApi(appCtx, request)) ??
+        (await serveMcp(appCtx, request)) ??
+        (await requestHandler(request, context))
       baseCtx.logger.debug("request.end", {
         method: request.method,
         path: url.pathname,

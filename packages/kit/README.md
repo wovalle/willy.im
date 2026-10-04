@@ -87,6 +87,8 @@ export const loader = async ({ request, params }) =>
 
 // HTTP: POST /api/notes.get, GET /openapi.json, GET /llms.txt (null for any other path)
 const response = await app.handle(request, await app.context(principal, tenantId))
+// …or with the tenant in the path: POST /w/acme/api/notes.get
+const scoped = await app.handle(request, await app.context(principal, "acme"), { basePath: "/w/acme" })
 
 // MCP: you bring the transport
 import { toMcpServer } from "@willyim/kit/mcp"
@@ -148,8 +150,10 @@ method({
 
 ### Errors
 
-- `fail(400 | 401 | 403 | 404 | 409, message)` throws a JSON `Response`. React Router renders
-  it, `/api` returns it as is, `tools()` and MCP turn it into a failure with that message.
+- `fail(400 | 401 | 403 | 404 | 409 | 422 | 502, message)` throws a JSON `Response`. React Router
+  renders it, `/api` returns it as is, `tools()` and MCP turn it into a failure with that message.
+  422: the input parses but names something that doesn't exist (an unknown scope); 502: a service
+  the method depends on failed.
 - A missing permission throws a 403 `Response`; invalid input a 400 `{ error, fields }`, with
   errors on the input as a whole under `fields._`.
 - Any other thrown error is a bug, not a message: `/api` rethrows it, and `tools()` and MCP
@@ -228,7 +232,7 @@ reference in the data; MCP sends them as image blocks.
 | Surface | How                                                                | Notes                                                                                                                                                                                                                                                                                                     |
 | ------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | UI      | `ctx.services.notes.get(...)`                                      | In process, fully typed; the output comes back as the method returned it.                                                                                                                                                                                                                                 |
-| HTTP    | `app.handle(request, ctx)`                                         | `POST /api/<service>.<method>`, `GET /openapi.json`, `GET /llms.txt`. JSON in and out, 204 for no output.                                                                                                                                                                                                 |
+| HTTP    | `app.handle(request, ctx, { basePath? })`                          | `POST /api/<service>.<method>`, `GET /openapi.json`, `GET /llms.txt`. JSON in and out, 204 for no output. `basePath` (`/apps/acme`) serves all three under a prefix, so the tenant can live in the path; the documents name it.                                                                          |
 | Agents  | `tools(app, ctx)`                                                  | `{ name, title, description, inputSchema, inputZod, outputSchema, outputZod, hints, call }`. `inputZod` is always a `z.object` (a non-object input is wrapped as `{ input }`). `call` never throws: `{ ok: true, data, images }` or `{ ok: false, message, fields? }`. Write a small adapter per runtime. |
 | MCP     | `toMcpServer(app, ctx, { instructions? })` from `@willyim/kit/mcp` | A `Server` from `@modelcontextprotocol/sdk` (optional peer). You bring the transport and auth. To mix kit tools with your own, use `toMcpTool(t)` and `toCallToolResult(t, result)`.                                                                                                                      |
 | React   | `createPermissionsHook(useData)` from `@willyim/kit/react`         | Show or hide UI by the caller's grants.                                                                                                                                                                                                                                                                   |
