@@ -1,6 +1,6 @@
 {
   "name": "@willyim/kit",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Write a capability once as a typed method; serve it to your UI, an HTTP API, MCP and any agent runtime",
   "type": "module",
   "main": "./dist/index.js",
@@ -99,7 +99,7 @@
     "directory": "packages/kit"
   },
   "dependencies": {
-    "@willyim/idp": "0.8.0"
+    "@willyim/idp": "1.0.0"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
