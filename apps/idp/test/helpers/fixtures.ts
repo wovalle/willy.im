@@ -1,11 +1,7 @@
 import { eq } from "drizzle-orm"
 
 import * as schema from "../../app/db/schema"
-import {
-  createAdminKey,
-  generateToken,
-  hashToken,
-} from "../../app/lib/api-keys.server"
+import { generateToken, hashToken } from "../../app/lib/api-keys.server"
 import type { AuthService } from "../../app/lib/auth.server"
 import { app } from "../../app/kit.server"
 import {
@@ -262,15 +258,16 @@ export async function mintApiKey(
   })
 }
 
-/** Mints an IdP-level admin key (unscoped ⇒ superadmin) through the service. */
+/** Mints an IdP-level admin key (unscoped ⇒ superadmin) through `admin_keys.mint`. */
 export async function mintAdminKey(
   ctx: BaseServiceContext,
   input: { name?: string; expiresAt?: Date | null },
-  caller: Caller,
+  by: IdpPrincipal | { principal: IdpPrincipal },
 ) {
-  return createAdminKey(ctx, caller, {
+  const principal = "principal" in by ? by.principal : by
+  return (await kitContext(ctx, principal, null)).services.admin_keys.mint({
     name: input.name ?? "Agent alpha",
-    expiresAt: input.expiresAt ?? null,
+    expiresAt: input.expiresAt?.toISOString(),
   })
 }
 

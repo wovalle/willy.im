@@ -1,5 +1,5 @@
 import { declareService, fail, method } from "@willyim/kit"
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, isNull } from "drizzle-orm"
 
 import * as schema from "../db/schema"
 import { generateToken, hashToken } from "../lib/api-keys.server"
@@ -116,6 +116,90 @@ export const management_keys = declareService((ctx) => ({
         .where(and(eq(schema.apiKey.id, id), eq(schema.apiKey.applicationId, ctx.app)))
         .limit(1)
       if (!row) fail(404, "Key not found.")
+      if (!row.revokedAt) {
+        await ctx.db.update(schema.apiKey).set({ revokedAt: new Date() }).where(eq(schema.apiKey.id, id))
+        await ctx.audit.record({ table: "api_key", operation: "revoke", rowId: id })
+      }
+      return { ok: true as const }
+    },
+  ),
+}))
+
+/**
+ * IdP-level admin keys: `api_key` rows with no app, which the resolver turns
+ * into superadmins (`adminkey:<id>`). The only superadmin credential the IdP
+ * accepts over the wire, so automation never shares one anonymous secret: each
+ * agent gets its own named, expiring, revocable key the audit log names.
+ */
+export const admin_keys = declareService((ctx) => ({
+  list: method(
+    {
+      summary: "List the IdP's admin keys, newest first (never the secrets)",
+      permission: "*",
+      hints: { readOnly: true },
+      ...io("admin_keys.list"),
+    },
+    async () => {
+      const rows = await ctx.db
+        .select()
+        .from(schema.apiKey)
+        .where(isNull(schema.apiKey.applicationId))
+        .orderBy(desc(schema.apiKey.createdAt))
+      // No permissions column on the wire: an admin key holds everything by being unscoped.
+      return { keys: rows.map(({ permissions: _, ...r }) => toKey({ ...r, permissions: [] })) }
+    },
+  ),
+
+  mint: method(
+    {
+      summary: "Mint an IdP admin key: a superadmin over every app (the token is returned once)",
+      description:
+        "Mint one per agent: an admin key has a name, an optional expiry, a revoke switch, and its own `adminkey:<id>` identity in the audit log, so every superadmin action is attributable.",
+      permission: "*",
+      ...io("admin_keys.mint"),
+    },
+    async (input) => {
+      const key = await newKey()
+      const name = input.name.trim() || "Untitled admin key"
+      const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null
+      await ctx.db.insert(schema.apiKey).values({
+        id: key.id,
+        // The whole point: no app ⇒ every permission on every app.
+        applicationId: null,
+        name,
+        prefix: key.prefix,
+        keyHash: key.keyHash,
+        permissions: [],
+        createdByUserId: ctx.userId,
+        expiresAt,
+      })
+      await ctx.audit.record({
+        table: "api_key",
+        operation: "create",
+        rowId: key.id,
+        after: { name, expiresAt: expiresAt?.toISOString() ?? null },
+      })
+      return { id: key.id, token: key.token, prefix: key.prefix }
+    },
+  ),
+
+  revoke: method(
+    {
+      summary: "Revoke an IdP admin key (idempotent; a key may revoke itself)",
+      description:
+        "An agent cleaning up its own key when it finishes is the point, not an accident: its next request is simply unauthorized. Never reaches an app's own keys.",
+      permission: "*",
+      hints: { destructive: true, idempotent: true },
+      ...io("admin_keys.revoke"),
+    },
+    async ({ id }) => {
+      const [row] = await ctx.db
+        .select({ revokedAt: schema.apiKey.revokedAt })
+        .from(schema.apiKey)
+        .where(and(eq(schema.apiKey.id, id), isNull(schema.apiKey.applicationId)))
+        .limit(1)
+      if (!row) fail(404, "Key not found.")
+      if (ctx.keyId === id) ctx.logger.warn("adminkey.self_revoke", { keyId: id })
       if (!row.revokedAt) {
         await ctx.db.update(schema.apiKey).set({ revokedAt: new Date() }).where(eq(schema.apiKey.id, id))
         await ctx.audit.record({ table: "api_key", operation: "revoke", rowId: id })

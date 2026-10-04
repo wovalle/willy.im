@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import * as schema from "../app/db/schema"
-import { revokeAdminKey } from "../app/lib/api-keys.server"
 import type { AuthService } from "../app/lib/auth.server"
 import {
   authorize,
@@ -318,7 +317,7 @@ describe("resolveCaller", () => {
 
   it("refuses a revoked admin key", async () => {
     const { token, id } = await mintAdminKey(h.ctx, {}, root.caller)
-    await revokeAdminKey(h.ctx, root.caller, id)
+    await (await kitContext(h.ctx, root.principal, null)).services.admin_keys.revoke({ id })
     expect(await resolveCaller(bearerRequest(token), h.ctx, authStub(null))).toBeNull()
   })
 

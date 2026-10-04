@@ -1,23 +1,11 @@
-import { and, desc, eq, isNull } from "drizzle-orm"
-
-import * as schema from "../db/schema"
-import { IDP_AUDIT_SCOPE, recordAudit } from "./audit.server"
-import { assertCan, assertSuperadmin, type Caller } from "./caller.server"
-import { isAppPermission, type AppPermission } from "./permissions"
-import type { BaseServiceContext } from "./services"
-
 /**
- * Scoped API keys — hashed, revocable, optionally-expiring credentials that let
- * an agent drive the management API for *one application* with a specific
- * permission set. The plaintext token is shown once at creation; only its
- * SHA-256 hash and a non-secret prefix are stored.
+ * Opaque credentials the IdP issues — management keys (`wim_`), end-user keys
+ * (`wak_`), app tokens (`wat_`): a random token shown once, stored only as its
+ * SHA-256.
  */
 
-const TOKEN_PREFIX = "wim_"
 // Bytes of entropy in the random part of a token.
 const TOKEN_BYTES = 32
-// How many chars of the token (including the "wim_" prefix) we keep for display.
-const DISPLAY_PREFIX_LEN = TOKEN_PREFIX.length + 8
 
 /** base64url without padding — URL/header safe, no `+` `/` `=`. */
 function base64url(bytes: Uint8Array): string {
@@ -26,8 +14,8 @@ function base64url(bytes: Uint8Array): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
-/** A fresh opaque token, e.g. `wim_X8f...`. Shared with user-api-keys (wak_). */
-export function generateToken(prefix: string = TOKEN_PREFIX): string {
+/** A fresh opaque token, e.g. `wim_X8f...`. */
+export function generateToken(prefix = "wim_"): string {
   const bytes = new Uint8Array(TOKEN_BYTES)
   crypto.getRandomValues(bytes)
   return prefix + base64url(bytes)
@@ -37,156 +25,4 @@ export function generateToken(prefix: string = TOKEN_PREFIX): string {
 export async function hashToken(token: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token))
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("")
-}
-
-/** Keep only catalog permissions. */
-function sanitizePermissions(permissions: string[]): AppPermission[] {
-  return permissions.filter(isAppPermission)
-}
-
-export type ApiKeySummary = {
-  id: string
-  name: string
-  prefix: string
-  permissions: AppPermission[]
-  createdAt: Date
-  lastUsedAt: Date | null
-  expiresAt: Date | null
-  revokedAt: Date | null
-  /** Derived lifecycle state for the UI. */
-  status: "active" | "expired" | "revoked"
-}
-
-function statusOf(row: { revokedAt: Date | null; expiresAt: Date | null }, now: Date) {
-  if (row.revokedAt) return "revoked" as const
-  if (row.expiresAt && row.expiresAt.getTime() <= now.getTime()) return "expired" as const
-  return "active" as const
-}
-
-/**
- * IdP-level admin keys: `api_key` rows with a NULL `application_id`, which the
- * resolver turns into superadmin callers. They are the only superadmin
- * credential the IdP accepts over the wire, so automation never shares one
- * anonymous secret — each agent gets its own named, expiring, revocable key
- * that shows up in the audit log as `adminkey:<id>`.
- */
-
-/** Every IdP-level admin key, newest first. Never returns the hash. Superadmin only. */
-export async function listAdminKeys(
-  ctx: BaseServiceContext,
-  caller: Caller,
-): Promise<ApiKeySummary[]> {
-  assertSuperadmin(caller)
-  const now = new Date()
-  const rows = await ctx.db
-    .select({
-      id: schema.apiKey.id,
-      name: schema.apiKey.name,
-      prefix: schema.apiKey.prefix,
-      createdAt: schema.apiKey.createdAt,
-      lastUsedAt: schema.apiKey.lastUsedAt,
-      expiresAt: schema.apiKey.expiresAt,
-      revokedAt: schema.apiKey.revokedAt,
-    })
-    .from(schema.apiKey)
-    .where(isNull(schema.apiKey.applicationId))
-    .orderBy(desc(schema.apiKey.createdAt))
-
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    prefix: r.prefix,
-    // Always empty: an admin key holds every permission by virtue of being
-    // unscoped, so the column would only ever be a misleading second opinion.
-    permissions: [],
-    createdAt: r.createdAt,
-    lastUsedAt: r.lastUsedAt ?? null,
-    expiresAt: r.expiresAt ?? null,
-    revokedAt: r.revokedAt ?? null,
-    status: statusOf({ revokedAt: r.revokedAt ?? null, expiresAt: r.expiresAt ?? null }, now),
-  }))
-}
-
-/**
- * Mints an IdP-level admin key. Superadmin only — and since the new key *is* a
- * superadmin, there is no subset rule to apply: the caller already holds
- * everything it could possibly grant.
- *
- * Returns the plaintext `token` exactly once; it is never recoverable after.
- */
-export async function createAdminKey(
-  ctx: BaseServiceContext,
-  caller: Caller,
-  input: { name: string; expiresAt?: Date | null },
-): Promise<{ id: string; token: string; prefix: string }> {
-  assertSuperadmin(caller)
-
-  const token = generateToken()
-  const keyHash = await hashToken(token)
-  const prefix = token.slice(0, DISPLAY_PREFIX_LEN)
-  const id = crypto.randomUUID()
-  const name = input.name.trim() || "Untitled admin key"
-  const expiresAt = input.expiresAt ?? null
-
-  await ctx.db.insert(schema.apiKey).values({
-    id,
-    // The whole point: no app scope ⇒ every permission on every app.
-    applicationId: null,
-    name,
-    prefix,
-    keyHash,
-    // Meaningless for an admin key — see listAdminKeys.
-    permissions: [],
-    // Null when another admin key (rather than a signed-in human) mints this one.
-    createdByUserId: caller.userId,
-    expiresAt,
-  })
-
-  await recordAudit(ctx, {
-    actor: caller.actor,
-    table: "api_key",
-    operation: "create",
-    applicationId: IDP_AUDIT_SCOPE,
-    rowId: id,
-    after: { name, expiresAt: expiresAt?.toISOString() ?? null },
-  })
-
-  return { id, token, prefix }
-}
-
-/**
- * Revokes an admin key (idempotent). Superadmin only. Scoped to unscoped rows,
- * so this can never reach into an app's own keys.
- *
- * A key may revoke *itself*: an agent cleaning up its own credential when it
- * finishes is the point, not an accident. It is logged at warn so the
- * surprising aftermath ("my key stopped working") is greppable.
- */
-export async function revokeAdminKey(
-  ctx: BaseServiceContext,
-  caller: Caller,
-  id: string,
-): Promise<{ ok: true } | { error: string }> {
-  assertSuperadmin(caller)
-  const [row] = await ctx.db
-    .select({ id: schema.apiKey.id, revokedAt: schema.apiKey.revokedAt })
-    .from(schema.apiKey)
-    .where(and(eq(schema.apiKey.id, id), isNull(schema.apiKey.applicationId)))
-    .limit(1)
-  if (!row) return { error: "Key not found." }
-  if (caller.keyId === id) ctx.logger.warn("adminkey.self_revoke", { keyId: id })
-  if (!row.revokedAt) {
-    await ctx.db
-      .update(schema.apiKey)
-      .set({ revokedAt: new Date() })
-      .where(eq(schema.apiKey.id, id))
-    await recordAudit(ctx, {
-      actor: caller.actor,
-      table: "api_key",
-      operation: "revoke",
-      applicationId: IDP_AUDIT_SCOPE,
-      rowId: id,
-    })
-  }
-  return { ok: true }
 }

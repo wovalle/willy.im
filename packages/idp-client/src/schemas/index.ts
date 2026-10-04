@@ -520,6 +520,10 @@ export const methods = {
   "management_keys.list": { scope: "app", input: undefined, output: ApiKeyListSchema },
   "management_keys.mint": { scope: "app", input: CreateApiKeyInput, output: ApiKeyCreatedSchema },
   "management_keys.revoke": { scope: "app", input: IdInput, output: OkSchema },
+
+  "admin_keys.list": { scope: "idp", input: undefined, output: AdminKeyListSchema },
+  "admin_keys.mint": { scope: "idp", input: CreateAdminKeyInput, output: AdminKeyCreatedSchema },
+  "admin_keys.revoke": { scope: "idp", input: IdInput, output: OkSchema },
 } as const satisfies Record<string, MethodDef>
 
 export type Methods = typeof methods

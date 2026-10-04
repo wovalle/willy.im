@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import * as schema from "../app/db/schema"
-import { revokeAdminKey } from "../app/lib/api-keys.server"
 import { createAppToken } from "../app/lib/app-tokens.server"
 import { listAuditForApp } from "../app/lib/audit.server"
 import type { AuthService } from "../app/lib/auth.server"
@@ -251,7 +250,7 @@ describe("app tokens", () => {
       const token = await minted({}, (await present(agent.token))!)
       expect(await validate(token.token)).toMatchObject({ valid: true, name: "Agent" })
 
-      await revokeAdminKey(h.ctx, root.caller, agent.id)
+      await (await kitContext(h.ctx, root.principal, null)).services.admin_keys.revoke({ id: agent.id })
       expect(await validate(token.token)).toEqual({ valid: false, reason: "revoked" })
       expect(h.logs.find((l) => l.message === "apptoken.issuer_lost_access")?.fields).toEqual({
         keyId: token.id,
