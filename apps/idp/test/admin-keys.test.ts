@@ -3,9 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
   createAdminKey,
   listAdminKeys,
-  listApiKeys,
   revokeAdminKey,
-  revokeApiKey,
 } from "../app/lib/api-keys.server"
 import { IDP_AUDIT_SCOPE, listAuditForApp } from "../app/lib/audit.server"
 import type { AuthService } from "../app/lib/auth.server"
@@ -21,6 +19,8 @@ import {
   fakeUserCaller,
   mintAdminKey,
   mintApiKey,
+  kitContext,
+  failureOf,
 } from "./helpers/fixtures"
 import { createTestHarness, routerContext, type TestHarness } from "./helpers/harness"
 
@@ -54,7 +54,7 @@ describe("admin keys", () => {
    * back in when every admin key is lost, and the only bootstrap there is now
    * that no static token exists.
    */
-  let root: { id: string; name: string; token: string; caller: Caller }
+  let root: Awaited<ReturnType<typeof bootstrapAdminKey>>
 
   beforeEach(async () => {
     h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
@@ -105,8 +105,8 @@ describe("admin keys", () => {
     it("keeps admin keys out of an app's key list", async () => {
       await mintAdminKey(h.ctx, {}, root.caller)
       await mintApiKey(h.ctx, { app: "acme", name: "Scoped" }, root.caller)
-      const appKeys = await listApiKeys(h.ctx, root.caller, "acme")
-      expect(appKeys.map((k) => k.name)).toEqual(["Scoped"])
+      const { keys } = await (await kitContext(h.ctx, root.principal, "acme")).services.management_keys.list()
+      expect(keys.map((k) => k.name)).toEqual(["Scoped"])
     })
   })
 
@@ -197,8 +197,8 @@ describe("admin keys", () => {
 
     it("does not let an app-scoped revoke reach an admin key by id", async () => {
       const admin = await mintAdminKey(h.ctx, {}, root.caller)
-      const res = await revokeApiKey(h.ctx, root.caller, { app: "acme", id: admin.id })
-      expect(res).toEqual({ error: "Key not found." })
+      const keys = (await kitContext(h.ctx, root.principal, "acme")).services.management_keys
+      expect((await failureOf(keys.revoke({ id: admin.id }))).status).toBe(404)
       // Still very much alive.
       expect(await present(admin.token)).not.toBeNull()
     })

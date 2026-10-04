@@ -428,7 +428,7 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({
         status: 403,
-        body: { error: "permissions_exceed_caller", detail: ["member:manage"] },
+        body: { error: "You can't grant permissions you don't hold: member:manage." },
       })
     })
 
@@ -808,7 +808,7 @@ describe("management API routes", () => {
         }),
         params: { app: "acme", id: "ghost" },
       })
-      expect(res).toEqual({ status: 404, body: { error: "not_found" } })
+      expect(res).toEqual({ status: 404, body: { error: "Key not found." } })
     })
 
     it("405s GET", async () => {

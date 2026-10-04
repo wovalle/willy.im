@@ -516,6 +516,10 @@ export const methods = {
     output: WorkspaceMemberSchema,
   },
   "workspace_members.remove": { scope: "app", input: RemoveWorkspaceMemberInput, output: OkSchema },
+
+  "management_keys.list": { scope: "app", input: undefined, output: ApiKeyListSchema },
+  "management_keys.mint": { scope: "app", input: CreateApiKeyInput, output: ApiKeyCreatedSchema },
+  "management_keys.revoke": { scope: "app", input: IdInput, output: OkSchema },
 } as const satisfies Record<string, MethodDef>
 
 export type Methods = typeof methods

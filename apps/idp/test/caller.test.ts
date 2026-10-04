@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import * as schema from "../app/db/schema"
-import { revokeAdminKey, revokeApiKey } from "../app/lib/api-keys.server"
+import { revokeAdminKey } from "../app/lib/api-keys.server"
 import type { AuthService } from "../app/lib/auth.server"
 import {
   authorize,
@@ -20,6 +20,7 @@ import {
   createUser,
   mintAdminKey,
   mintApiKey,
+  kitContext,
 } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
@@ -51,7 +52,7 @@ async function thrown(fn: () => Promise<unknown>): Promise<Response | null> {
 describe("resolveCaller", () => {
   let h: TestHarness
   /** An IdP-level admin key — the only superadmin credential a bearer can be. */
-  let root: { id: string; token: string; caller: Caller }
+  let root: Awaited<ReturnType<typeof bootstrapAdminKey>>
   beforeEach(async () => {
     h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
     root = await bootstrapAdminKey(h.ctx)
@@ -278,7 +279,7 @@ describe("resolveCaller", () => {
 
   it("refuses a revoked key", async () => {
     const { token, id } = await mint()
-    await revokeApiKey(h.ctx, root.caller, { app: "acme", id })
+    await (await kitContext(h.ctx, root.principal, "acme")).services.management_keys.revoke({ id })
     expect(await resolveCaller(bearerRequest(token), h.ctx, authStub(null))).toBeNull()
   })
 
@@ -333,7 +334,7 @@ describe("resolveCaller", () => {
 
 describe("authorize", () => {
   let h: TestHarness
-  let root: { id: string; token: string; caller: Caller }
+  let root: Awaited<ReturnType<typeof bootstrapAdminKey>>
   beforeEach(async () => {
     h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
     root = await bootstrapAdminKey(h.ctx)
@@ -394,7 +395,7 @@ describe("authorize", () => {
 
 describe("requireApiCaller", () => {
   let h: TestHarness
-  let root: { id: string; token: string; caller: Caller }
+  let root: Awaited<ReturnType<typeof bootstrapAdminKey>>
   beforeEach(async () => {
     h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
     root = await bootstrapAdminKey(h.ctx)

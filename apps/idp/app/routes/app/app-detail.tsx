@@ -37,7 +37,6 @@ import {
 } from "~/lib/admin.server"
 import { appConfigSchema, type ResourceTypeDecl } from "~/lib/metadata"
 import type { ResourceInstance } from "~/lib/resources.server"
-import { createApiKey, listApiKeys, revokeApiKey } from "~/lib/api-keys.server"
 import { listAuditForApp } from "~/lib/audit.server"
 import { requireConsoleCaller } from "~/lib/caller.server"
 import { attempt, refused } from "~/lib/console.server"
@@ -95,14 +94,14 @@ export async function loader({ request, context: router, params }: Route.LoaderA
   const permissions = await caller.permissionsFor(app)
   const ctx = await requestContext(context, request, app)
   const may = (permission: AppPermission) => permissions.includes(permission)
+  // Each list is gated by its method's permission: asking without it would 403
+  // the page for a member otherwise entitled to read it.
   const [workspaces, people, members, invitations, apiKeys, audit] = await Promise.all([
     app && may("workspace:read") ? ctx.services.workspaces.list().then((r) => r.workspaces) : [],
     app && may("workspace:read") ? ctx.services.workspaces.people().then((r) => r.people) : [],
     app && may("member:read") ? ctx.services.members.list().then((r) => r.members) : [],
     app && may("member:read") ? ctx.services.invitations.list().then((r) => r.invitations) : [],
-    // Gated in the service: asking without apikey:read would 403 the page for a
-    // member who is otherwise perfectly entitled to read it.
-    app && may("apikey:read") ? listApiKeys(context, caller, app) : Promise.resolve([]),
+    app && may("apikey:read") ? ctx.services.management_keys.list().then((r) => r.keys) : [],
     app ? listAuditForApp(context, app, 20) : Promise.resolve([]),
   ])
   return {
@@ -175,6 +174,7 @@ export async function action({ request, context: router, params }: Route.ActionA
     const application = await getApplication(context, clientId)
     const app = application?.app
     if (!app) return { error: "This application has no app key yet." }
+    const ctx = await requestContext(context, request, app)
 
     if (intent === "create-api-key") {
       const name = String(form.get("name") ?? "").trim()
@@ -187,20 +187,23 @@ export async function action({ request, context: router, params }: Route.ActionA
         Number.isFinite(days) && days > 0
           ? new Date(Date.now() + days * 24 * 60 * 60 * 1000)
           : null
-      const created = await createApiKey(context, caller, { app, name, permissions, expiresAt })
-      if ("error" in created)
-        return {
-          error: `You can't grant permissions you don't hold: ${created.detail.join(", ")}.`,
-          field: "key-name",
-        }
+      const created = await attempt(
+        () =>
+          ctx.services.management_keys.mint({
+            name,
+            permissions,
+            expiresAt: expiresAt?.toISOString(),
+          }),
+        "key-name",
+      )
+      if (refused(created)) return created
       return { createdApiKey: { token: created.token, prefix: created.prefix, name } }
     }
 
     // revoke-api-key
     const keyId = String(form.get("keyId") ?? "")
-    const res = await revokeApiKey(context, caller, { app, id: keyId })
-    if ("error" in res) return { error: res.error }
-    return { ok: "api-key-revoked" }
+    const res = await attempt(() => ctx.services.management_keys.revoke({ id: keyId }))
+    return refused(res) ? res : { ok: "api-key-revoked" }
   }
 
   if (intent === "create-workspace") {

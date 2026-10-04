@@ -7,7 +7,6 @@ import {
   resolveIdentity,
   unlinkIdentity,
 } from "../app/lib/identities.server"
-import { createApiKey } from "../app/lib/api-keys.server"
 import { resolveCaller, type Caller } from "../app/lib/caller.server"
 import type { AuthService } from "../app/lib/auth.server"
 import {
@@ -17,6 +16,7 @@ import {
   createMember,
   createUser,
   fakeUserCaller,
+  mintApiKey,
 } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
@@ -37,9 +37,8 @@ describe("linked identities", () => {
   const sessionless = { api: { getSession: async () => null } } as unknown as AuthService
 
   /** A scoped `wim_` key for the bender app, resolved through the real resolver. */
-  async function appKey(permissions: Parameters<typeof createApiKey>[2]["permissions"]) {
-    const minted = await createApiKey(h.ctx, root, { app: "bender", name: "bender-app", permissions })
-    if (!("token" in minted)) throw new Error("mint failed")
+  async function appKey(permissions: string[]) {
+    const minted = await mintApiKey(h.ctx, { app: "bender", name: "bender-app", permissions }, root)
     const caller = await resolveCaller(bearerRequest(minted.token), h.ctx, sessionless)
     if (!caller) throw new Error("resolve failed")
     return caller
@@ -197,8 +196,7 @@ describe("linked identities", () => {
       // They exist; this app just never granted them anything. That is the
       // "store the message, do not answer it" signal, not a miss.
       await createApplication(h.ctx, { app: "other", permissions: ["x:read"] })
-      const other = await createApiKey(h.ctx, root, { app: "other", name: "k", permissions: ["identity:resolve"] })
-      if (!("token" in other)) throw new Error("mint failed")
+      const other = await mintApiKey(h.ctx, { app: "other", name: "k", permissions: ["identity:resolve"] }, root)
       const caller = (await resolveCaller(bearerRequest(other.token), h.ctx, sessionless))!
       const res = await resolveIdentity(h.ctx, caller, { app: "other", provider: "slack", externalId: "U_WILLY" })
       expect(res).toMatchObject({ found: true, userId: willy.id, permissions: [] })

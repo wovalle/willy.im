@@ -44,7 +44,8 @@ export async function v1(
     return Response.json(await call(ctx, body), { status })
   } catch (e) {
     if (!(e instanceof Response)) throw e
-    return e.status === 403 ? forbidden() : e
+    // kit's own denial is plain text; a method's fail(403, …) keeps its message.
+    return e.status === 403 && !e.headers.get("content-type")?.includes("json") ? forbidden() : e
   }
 }
 

@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm"
 import * as schema from "../../app/db/schema"
 import {
   createAdminKey,
-  createApiKey,
   generateToken,
   hashToken,
 } from "../../app/lib/api-keys.server"
@@ -249,20 +248,18 @@ export async function signedInCaller(
   return caller
 }
 
-/** Mints a scoped key as `caller`, unwrapping the error union. */
+/** Mints a scoped key as `by` (a principal, or a Caller during the move to kit) through `management_keys.mint`. */
 export async function mintApiKey(
   ctx: BaseServiceContext,
   input: { app: string; name?: string; permissions?: string[]; expiresAt?: Date | null },
-  caller: Caller,
+  by: IdpPrincipal | { principal: IdpPrincipal },
 ) {
-  const res = await createApiKey(ctx, caller, {
-    app: input.app,
+  const principal = "principal" in by ? by.principal : by
+  return (await kitContext(ctx, principal, input.app)).services.management_keys.mint({
     name: input.name ?? "CI runner",
     permissions: input.permissions ?? ["member:read", "member:invite"],
-    expiresAt: input.expiresAt ?? null,
+    expiresAt: input.expiresAt?.toISOString(),
   })
-  if ("error" in res) throw new Error(`mintApiKey: ${res.error} ${res.detail.join(",")}`)
-  return res
 }
 
 /** Mints an IdP-level admin key (unscoped ⇒ superadmin) through the service. */

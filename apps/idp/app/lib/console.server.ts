@@ -1,8 +1,8 @@
 /**
  * A method's refusal as a console form shows it: `{ error, field }`. kit's
- * invalid input (400) reads as its first field error; `fail()`'s 404/409/422/502
- * as its message. A 401/403 or anything that isn't a `Response` is thrown: the
- * page can't fix those by editing the form.
+ * invalid input (400) reads as its first field error; a denial (403) and
+ * `fail()`'s 404/409/422/502 as their message. A 401, or anything that isn't a
+ * `Response`, is thrown: editing the form can't fix it.
  */
 export async function attempt<T>(
   fn: () => Promise<T>,
@@ -11,14 +11,15 @@ export async function attempt<T>(
   try {
     return await fn()
   } catch (e) {
-    if (!(e instanceof Response) || ![400, 404, 409, 422, 502].includes(e.status)) throw e
-    const body = (await e.json().catch(() => ({}))) as {
-      error?: string
-      fields?: Record<string, string[] | undefined>
-    }
+    if (!(e instanceof Response) || ![400, 403, 404, 409, 422, 502].includes(e.status)) throw e
+    const text = await e.text()
+    let body: { error?: string; fields?: Record<string, string[] | undefined> } = {}
+    try {
+      body = JSON.parse(text)
+    } catch {}
     const [name, errors] = Object.entries(body.fields ?? {})[0] ?? []
     const error = errors?.[0] ? `${name === "_" ? "" : `${name}: `}${errors[0]}` : body.error
-    return { error: error ?? "Something went wrong.", ...(field ? { field } : {}) }
+    return { error: error ?? (text || "Something went wrong."), ...(field ? { field } : {}) }
   }
 }
 
