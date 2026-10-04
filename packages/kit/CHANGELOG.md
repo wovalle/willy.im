@@ -1,5 +1,18 @@
 # @willyim/kit
 
+## 0.6.0
+
+### Minor Changes
+
+- 1c322f5: `fail()` takes 422 (the input parses but names something that doesn't exist, such as an unknown scope) and 502 (a service the method depends on failed).
+- 1c322f5: `app.handle(request, ctx, { basePath })` serves `/api/<service>.<method>`, `/openapi.json` and `/llms.txt` under a prefix (`/apps/acme/api/...`), so a tenant can live in the path; the OpenAPI server URL and `llms.txt` name the prefix, and a path outside it is `null`.
+
+### Patch Changes
+
+- 1c322f5: Exports `App`, `Method` and `KitFields`, the types an app's `createApp` and `declareService` results refer to, so a TypeScript project that emits declarations (`composite`) can name them.
+- Updated dependencies [1c322f5]
+  - @willyim/idp@1.0.0
+
 ## 0.5.2
 
 ### Patch Changes
