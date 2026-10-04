@@ -4,6 +4,7 @@ import {
   createApp,
   declareService,
   definePolicies,
+  fail,
   method,
   registry,
   safe,
@@ -430,6 +431,31 @@ describe("HTTP", () => {
     ])
     expect(full).toEqual({ id: "1", secret: "s" })
     expect(slim).toEqual({ id: "1" })
+  })
+
+  test("fail(422) and fail(502) reach the caller with their status and message", async () => {
+    const failing = createApp({
+      auth,
+      context,
+      services: {
+        x: declareService(() => ({
+          unknown: method({ summary: "u", permission: "notes:read" }, async () =>
+            fail(422, "no such scope: x:y"),
+          ),
+          upstream: method({ summary: "d", permission: "notes:read" }, async () =>
+            fail(502, "the list endpoint is down"),
+          ),
+        })),
+      },
+    })
+    const ctx = await failing.context(member("w1", ["notes:read"]), "w1")
+    const unknown = (await failing.handle(post("/api/x.unknown"), ctx))!
+    const upstream = (await failing.handle(post("/api/x.upstream"), ctx))!
+    expect([unknown.status, await unknown.json()]).toEqual([422, { error: "no such scope: x:y" }])
+    expect([upstream.status, await upstream.json()]).toEqual([
+      502,
+      { error: "the list endpoint is down" },
+    ])
   })
 
   test("a denied caller gets 403 whatever the body", async () => {

@@ -6,7 +6,14 @@ import {
   hashToken,
 } from "../../app/lib/api-keys.server"
 import type { AuthService } from "../../app/lib/auth.server"
-import { callerFromPrincipal, resolveCaller, type Caller } from "../../app/lib/caller.server"
+import { app } from "../../app/kit"
+import {
+  callerFromPrincipal,
+  principalFrom,
+  resolveCaller,
+  type Caller,
+  type IdpPrincipal,
+} from "../../app/lib/caller.server"
 import type { ResourceTypeDecl } from "../../app/lib/metadata"
 import type { AppPermission } from "../../app/lib/permissions"
 import {
@@ -162,7 +169,14 @@ const sessionlessAuth = {
 export async function bootstrapAdminKey(
   ctx: BaseServiceContext,
   input: { name?: string; expiresAt?: Date | null } = {},
-): Promise<{ id: string; name: string; token: string; request: Request; caller: Caller }> {
+): Promise<{
+  id: string
+  name: string
+  token: string
+  request: Request
+  caller: Caller
+  principal: IdpPrincipal
+}> {
   const token = generateToken()
   const id = `adminkey_${uniq()}`
   const name = input.name ?? "Bootstrap key"
@@ -177,8 +191,10 @@ export async function bootstrapAdminKey(
   })
   const request = bearerRequest(token)
   const caller = await resolveCaller(request, ctx, sessionlessAuth)
-  if (!caller) throw new Error("bootstrapAdminKey: the resolver rejected the key it was handed")
-  return { id, name, token, request, caller }
+  const principal = await principalFrom(request, ctx, sessionlessAuth)
+  if (!caller || !principal)
+    throw new Error("bootstrapAdminKey: the resolver rejected the key it was handed")
+  return { id, name, token, request, caller, principal }
 }
 
 /**
@@ -283,3 +299,43 @@ export function stubResources(
  * is itself the bug, and this one fails loudly rather than returning `[]`.
  */
 export const noResources: ResourceLister = stubResources({})
+
+/**
+ * A kit context for `principal` in `tenant` (an app key, or null for the IdP
+ * level): exactly what every surface builds, so a test calls
+ * `ctx.services.<service>.<method>()` as the console and the API do.
+ */
+export function kitContext(
+  ctx: BaseServiceContext,
+  principal: IdpPrincipal | null,
+  tenant: string | null,
+  deps: { resources?: ResourceLister; auth?: AuthService; request?: Request } = {},
+) {
+  return app.context(principal, tenant, {
+    base: ctx,
+    auth: deps.auth ?? sessionlessAuth,
+    resources: deps.resources ?? noResources,
+    request: deps.request ?? new Request("https://idp.willy.im/"),
+  })
+}
+
+/** A signed-in member of one app holding exactly `permissions` there. */
+export function memberPrincipal(userId: string, app: string, permissions: AppPermission[]): IdpPrincipal {
+  return { id: `user:${userId}`, grants: [], memberships: [{ tenantId: app, grants: permissions }] }
+}
+
+/** What a method failed with: `fail()`'s status and message, or kit's own 400/403/404. */
+export async function failureOf(promise: Promise<unknown>): Promise<{ status: number; error: unknown }> {
+  try {
+    await promise
+  } catch (e) {
+    if (!(e instanceof Response)) throw e
+    const text = await e.text()
+    let error: unknown = text
+    try {
+      error = (JSON.parse(text) as { error?: unknown }).error
+    } catch {}
+    return { status: e.status, error }
+  }
+  throw new Error("expected the call to fail")
+}

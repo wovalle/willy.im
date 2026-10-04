@@ -430,3 +430,39 @@ export const AdminKeyCreatedSchema = z.object({
   token: z.string().describe("Plaintext key — shown exactly once, never stored"),
   prefix: z.string(),
 })
+
+// --- The IdP's methods (kit): `service.method` → where it lives, input, output ---
+//
+// Every management capability is one semantic method the IdP serves through
+// @willyim/kit. This table is the one place its wire contract is written: the
+// IdP's method contracts take their `input`/`output` from it, and the SDK's
+// `call()` builds the URL (`/apps/<app>/api/<name>` or `/api/<name>`) and
+// parses the answer with it. `scope: "app"` methods run inside one app (the
+// tenant is in the URL), `scope: "idp"` ones at the IdP level.
+
+export const ListUserApiKeysInput = z.object({
+  userId: z.string().optional().describe("Only keys owned by this user"),
+  workspaceId: z.string().optional().describe("Only keys bound to this workspace"),
+})
+export const RevokeByIdInput = z.object({ id: z.string().min(1) })
+
+export type MethodDef = {
+  scope: "app" | "idp"
+  input: z.ZodType | undefined
+  output: z.ZodType
+}
+
+export const methods = {
+  "user_keys.list": { scope: "app", input: ListUserApiKeysInput, output: UserApiKeyListSchema },
+  "user_keys.mint": { scope: "app", input: CreateUserApiKeyInput, output: UserApiKeyCreatedSchema },
+  "user_keys.revoke": { scope: "app", input: RevokeByIdInput, output: OkSchema },
+  "user_keys.validate": {
+    scope: "app",
+    input: ValidateUserApiKeyInput,
+    output: UserApiKeyValidationSchema,
+  },
+} as const satisfies Record<string, MethodDef>
+
+export type Methods = typeof methods
+/** `"service.method"`: every method the IdP serves. */
+export type MethodName = keyof Methods

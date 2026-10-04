@@ -119,7 +119,7 @@ export type AppTokenValidation =
   | { valid: false; reason: "not_found" | "revoked" | "expired" }
 
 /**
- * The `wat_` half of `validateKey` (user-api-keys.server.ts), which holds the
+ * The `wat_` half of `user_keys.validate` (services/user-keys.ts), which holds the
  * `userkey:validate` check for both kinds. Scoped to `app`, so a token minted
  * for app A never validates for app B.
  *

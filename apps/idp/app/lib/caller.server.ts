@@ -115,26 +115,14 @@ export function callerFromPrincipal(
  * An impersonated session keeps the target's grants, but names the impersonator
  * as the principal's `actor`, and the audit trail records both.
  */
-async function sessionCaller(
+async function sessionPrincipal(
   ctx: BaseServiceContext,
   user: { id: string; email: string },
   impersonatorId: string | null,
-): Promise<Caller> {
+): Promise<IdpPrincipal> {
   const id = `user:${user.id}`
   const actor = impersonatorId ? { id: `user:${impersonatorId}` } : undefined
-  const identity = {
-    via: "session" as const,
-    userId: user.id,
-    email: user.email,
-    keyId: null,
-    applicationId: null,
-    actor: impersonatorId
-      ? { userId: impersonatorId, label: `user:${impersonatorId} as ${id}` }
-      : { userId: user.id, label: id },
-  }
-
-  if (isAdminEmail(ctx, user.email))
-    return callerFromPrincipal({ id, grants: ["*"], memberships: [], actor }, identity)
+  if (isAdminEmail(ctx, user.email)) return { id, grants: ["*"], memberships: [], actor }
 
   const rows = await ctx.db
     .select({
@@ -148,16 +136,36 @@ async function sessionCaller(
     tenantId: row.applicationId,
     grants: resolvePermissions(row.role, row.permissions ?? []),
   }))
-  return callerFromPrincipal({ id, grants: [], memberships, actor }, identity)
+  return { id, grants: [], memberships, actor }
+}
+
+async function sessionCaller(
+  ctx: BaseServiceContext,
+  user: { id: string; email: string },
+  impersonatorId: string | null,
+): Promise<Caller> {
+  const principal = await sessionPrincipal(ctx, user, impersonatorId)
+  return callerFromPrincipal(principal, {
+    via: "session",
+    userId: user.id,
+    email: user.email,
+    keyId: null,
+    applicationId: null,
+    actor: impersonatorId
+      ? { userId: impersonatorId, label: `user:${impersonatorId} as ${principal.id}` }
+      : { userId: user.id, label: principal.id },
+  })
 }
 
 /**
- * Resolves a `wim_` bearer token to a caller, or null if it is unknown, revoked
- * or expired. A null `applicationId` on the row means an IdP-level admin key —
- * a superadmin with a name, an expiry and a revoke switch. A hit bumps
- * `lastUsedAt` best-effort.
+ * Resolves a `wim_` bearer token to a principal, or null if it is unknown,
+ * revoked or expired. A null `applicationId` on the row means an IdP-level
+ * admin key — a superadmin with a name, an expiry and a revoke switch
+ * (`adminkey:<id>`); an app-bound key is one membership holding the key's
+ * permissions (`apikey:<id>`), filtered to the catalog in case it shrank since
+ * the key was minted. A hit bumps `lastUsedAt` best-effort.
  */
-async function keyCaller(ctx: BaseServiceContext, token: string): Promise<Caller | null> {
+async function keyPrincipal(ctx: BaseServiceContext, token: string): Promise<IdpPrincipal | null> {
   const keyHash = await hashToken(token)
   const [row] = await ctx.db
     .select({
@@ -187,30 +195,54 @@ async function keyCaller(ctx: BaseServiceContext, token: string): Promise<Caller
       }),
     )
 
-  const identity = { via: "token" as const, userId: null, email: null, keyId: row.id }
-
-  // No app scope ⇒ IdP-level admin key: full superadmin authority, carrying an
-  // identity the audit log can name and an admin can revoke.
-  if (row.applicationId === null) {
-    const id = `adminkey:${row.id}`
-    return callerFromPrincipal(
-      { id, grants: ["*"], memberships: [] },
-      { ...identity, applicationId: null, actor: { userId: null, label: id } },
-    )
+  if (row.applicationId === null) return { id: `adminkey:${row.id}`, grants: ["*"], memberships: [] }
+  return {
+    id: `apikey:${row.id}`,
+    grants: [],
+    memberships: [
+      { tenantId: row.applicationId, grants: (row.permissions ?? []).filter(isAppPermission) },
+    ],
   }
+}
 
-  // App-bound: one membership holding the key's permissions (filtered to the
-  // catalog, in case it shrank since the key was minted).
-  const id = `apikey:${row.id}`
-  return callerFromPrincipal(
-    {
-      id,
-      grants: [],
-      memberships: [
-        { tenantId: row.applicationId, grants: (row.permissions ?? []).filter(isAppPermission) },
-      ],
-    },
-    { ...identity, applicationId: row.applicationId, actor: { userId: null, label: id } },
+async function keyCaller(ctx: BaseServiceContext, token: string): Promise<Caller | null> {
+  const principal = await keyPrincipal(ctx, token)
+  if (!principal) return null
+  const keyId = principal.id.slice(principal.id.indexOf(":") + 1)
+  return callerFromPrincipal(principal, {
+    via: "token",
+    userId: null,
+    email: null,
+    keyId,
+    applicationId: principal.memberships[0]?.tenantId ?? null,
+    actor: { userId: null, label: principal.id },
+  })
+}
+
+/**
+ * The single door from a Request to who is calling: a kit principal, or null
+ * when it carries no usable credential. Ids are the audit labels:
+ * "user:<id>", "adminkey:<id>", "apikey:<id>".
+ *
+ * Bearer wins over cookie, and a *bad* bearer resolves to null rather than
+ * falling through to the session: a request that presents a token is asking to
+ * be judged as that token, and must not silently inherit session authority.
+ * Every bearer is a key row we issued — there is no env-configured superadmin
+ * secret — so anything without our prefix isn't worth a lookup.
+ */
+export async function principalFrom(
+  request: Request,
+  ctx: BaseServiceContext,
+  auth: AuthService,
+): Promise<IdpPrincipal | null> {
+  const token = extractBearer(request)
+  if (token) return token.startsWith(TOKEN_PREFIX) ? keyPrincipal(ctx, token) : null
+  const session = await auth.api.getSession({ headers: request.headers })
+  if (!session) return null
+  return sessionPrincipal(
+    ctx,
+    { id: session.user.id, email: session.user.email },
+    session.session.impersonatedBy ?? null,
   )
 }
 

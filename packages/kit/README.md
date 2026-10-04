@@ -148,8 +148,10 @@ method({
 
 ### Errors
 
-- `fail(400 | 401 | 403 | 404 | 409, message)` throws a JSON `Response`. React Router renders
-  it, `/api` returns it as is, `tools()` and MCP turn it into a failure with that message.
+- `fail(400 | 401 | 403 | 404 | 409 | 422 | 502, message)` throws a JSON `Response`. React Router
+  renders it, `/api` returns it as is, `tools()` and MCP turn it into a failure with that message.
+  422: the input parses but names something that doesn't exist (an unknown scope); 502: a service
+  the method depends on failed.
 - A missing permission throws a 403 `Response`; invalid input a 400 `{ error, fields }`, with
   errors on the input as a whole under `fields._`.
 - Any other thrown error is a bug, not a message: `/api` rethrows it, and `tools()` and MCP

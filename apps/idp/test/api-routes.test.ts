@@ -621,7 +621,7 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({
         status: 502,
-        body: { error: "resource_lookup_failed", detail: ["kirby:thread"] },
+        body: { error: "Could not read the app's resource list for: kirby:thread" },
       })
     })
 
@@ -652,7 +652,7 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({
         status: 422,
-        body: { error: "scopes_not_held", detail: ["invoices:write"] },
+        body: { error: "The owner doesn't hold: invoices:write" },
       })
     })
   })

@@ -1,4 +1,5 @@
 import { RESOURCE_ID_RE } from "@willyim/idp/schemas"
+import { fail } from "@willyim/kit"
 
 import type { ResourceTypeDecl } from "./metadata"
 import { ResourceListError, type ResourceLister } from "./resources.server"
@@ -133,4 +134,14 @@ export function describeScopeError(res: Exclude<ScopeResolution, { ok: true }>):
     case "resource_lookup_failed":
       return `Could not read the app's resource list for: ${res.detail.join(", ")}`
   }
+}
+
+/**
+ * The scopes, or the method's failure naming what was refused: 502 when the
+ * app's list could not be read (not the caller's mistake), 422 otherwise.
+ */
+export async function requireScopes(...args: Parameters<typeof resolveScopes>): Promise<string[]> {
+  const res = await resolveScopes(...args)
+  if ("error" in res) fail(res.error === "resource_lookup_failed" ? 502 : 422, describeScopeError(res))
+  return res.scopes
 }

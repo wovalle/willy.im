@@ -8,13 +8,13 @@ import { listAuditForApp } from "../app/lib/audit.server"
 import type { AuthService } from "../app/lib/auth.server"
 import { resolveCaller, type Caller } from "../app/lib/caller.server"
 import { APP_PERMISSIONS } from "../app/lib/permissions"
-import { validateKey } from "../app/lib/user-api-keys.server"
 import {
   bearerRequest,
   bootstrapAdminKey,
   createApplication,
   createMember,
   createUser,
+  kitContext,
   mintAdminKey,
   mintApiKey,
   noResources,
@@ -50,7 +50,7 @@ const MINUTE = 60_000
 describe("app tokens", () => {
   let h: TestHarness
   /** The admin key every token here is minted with, unless a test says otherwise. */
-  let root: { id: string; caller: Caller }
+  let root: Awaited<ReturnType<typeof bootstrapAdminKey>>
 
   const THREAD = {
     type: "kirby:thread",
@@ -91,8 +91,9 @@ describe("app tokens", () => {
     return res
   }
 
-  /** Validation as the app asks for it: through `validateKey`, with its own key. */
-  const validate = (token: string, app = "acme") => validateKey(h.ctx, root.caller, { app, token })
+  /** Validation as the app asks for it: `user_keys.validate` in the app. */
+  const validate = async (token: string, app = "acme") =>
+    (await kitContext(h.ctx, root.principal, app)).services.user_keys.validate({ token })
 
   describe("minting", () => {
     it('mints a wat_ token holding ["*"] for an hour by default, storing only its hash', async () => {

@@ -126,3 +126,45 @@ export async function listAuditForRow(
     .orderBy(desc(schema.auditLog.id))
   return rows.map(toEntry)
 }
+
+/**
+ * The audit trail bound to one caller in one tenant, once per context (app/kit.ts):
+ * methods record events without naming who or where. `app` overrides the scope
+ * for an IdP-level act that belongs to one app (registering it).
+ *
+ * The actor follows the principal: "user:<id>" (with that user as `user_id`),
+ * "adminkey:<id>" / "apikey:<id>" (no user), and an impersonated session reads
+ * "user:<impersonator> as user:<target>" with the impersonator as `user_id`.
+ */
+export function auditTrail(
+  ctx: BaseServiceContext,
+  principal: { id: string; actor?: { id: string } } | null,
+  tenantId: string | null,
+) {
+  const label = principal
+    ? principal.actor
+      ? `${principal.actor.id} as ${principal.id}`
+      : principal.id
+    : "anonymous"
+  const actor: Actor = { userId: humanIdOf(principal?.actor?.id ?? principal?.id), label }
+  return {
+    record: (event: {
+      table: string
+      operation: AuditOperation
+      rowId?: string | null
+      before?: Record<string, unknown>
+      after?: Record<string, unknown>
+      app?: string
+    }) =>
+      recordAudit(ctx, {
+        ...event,
+        actor,
+        applicationId: event.app ?? tenantId ?? IDP_AUDIT_SCOPE,
+      }),
+  }
+}
+
+/** The user id in a "user:<id>" principal id; null for keys and anonymous callers. */
+export function humanIdOf(principalId: string | null | undefined): string | null {
+  return principalId?.startsWith("user:") ? principalId.slice("user:".length) : null
+}
