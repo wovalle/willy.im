@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm"
+
 import * as schema from "../../app/db/schema"
 import {
   createAdminKey,
@@ -6,7 +8,7 @@ import {
   hashToken,
 } from "../../app/lib/api-keys.server"
 import type { AuthService } from "../../app/lib/auth.server"
-import { app } from "../../app/kit"
+import { app } from "../../app/kit.server"
 import {
   callerFromPrincipal,
   principalFrom,
@@ -338,4 +340,49 @@ export async function failureOf(promise: Promise<unknown>): Promise<{ status: nu
     return { status: e.status, error }
   }
   throw new Error("expected the call to fail")
+}
+
+/** A signed-in human's principal, built by the real resolver from their rows. */
+export async function signedInPrincipal(
+  ctx: BaseServiceContext,
+  user: { id: string; email: string },
+  input: { impersonatedBy?: string } = {},
+): Promise<IdpPrincipal> {
+  const principal = await principalFrom(new Request("https://idp.willy.im/"), ctx, sessionAuth(user, input))
+  if (!principal) throw new Error("signedInPrincipal: the resolver rejected the session")
+  return principal
+}
+
+/** A Better Auth stub whose session is `user`'s (impersonated by `impersonatedBy`). */
+export function sessionAuth(
+  user: { id: string; email: string },
+  input: { impersonatedBy?: string } = {},
+): AuthService {
+  return {
+    api: {
+      getSession: async () => ({ user, session: { impersonatedBy: input.impersonatedBy ?? null } }),
+    },
+  } as unknown as AuthService
+}
+
+/** Replaces an app's declared product catalog in place, as the app re-declaring it would. */
+export async function setCatalog(
+  ctx: BaseServiceContext,
+  app: string,
+  catalog: { permissions?: string[]; resourceTypes?: ResourceTypeDecl[] },
+) {
+  const rows = await ctx.db.select().from(schema.oauthClient)
+  const row = rows.find((r) => (r.metadata as { app?: string } | null)?.app === app)
+  if (!row) throw new Error(`setCatalog: no app ${app}`)
+  const metadata = row.metadata as Record<string, unknown>
+  await ctx.db
+    .update(schema.oauthClient)
+    .set({
+      metadata: {
+        ...metadata,
+        ...(catalog.permissions && { permissions: catalog.permissions }),
+        ...(catalog.resourceTypes && { resource_types: catalog.resourceTypes }),
+      },
+    })
+    .where(eq(schema.oauthClient.id, row.id))
 }

@@ -228,7 +228,7 @@ describe("end-user API keys", () => {
     // Through kit's HTTP surface the output is parsed by the SDK's schema.
     const ctx = await kitContext(h.ctx, root, "acme")
     await mint()
-    const { app } = await import("../app/kit")
+    const { app } = await import("../app/kit.server")
     const res = await app.handle(
       new Request("https://idp.willy.im/api/user_keys.list", { method: "POST", body: "{}" }),
       ctx,

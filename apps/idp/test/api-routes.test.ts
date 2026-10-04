@@ -524,7 +524,7 @@ describe("management API routes", () => {
         params: { app: "acme" },
       })
       expect(res.status).toBe(422)
-      expect(res.body).toMatchObject({ error: "invalid_scope" })
+      expect(res.body).toEqual({ error: "Not in this app's catalog: not:declared" })
     })
 
     it("PATCH replaces a member's product permissions, and omitting them leaves them alone", async () => {

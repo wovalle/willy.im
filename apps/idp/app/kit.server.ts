@@ -7,6 +7,7 @@ import { principalFrom } from "./lib/caller.server"
 import { appRbac } from "./lib/permissions"
 import type { ResourceLister } from "./lib/resources.server"
 import type { BaseServiceContext } from "./lib/services"
+import { invitations, members } from "./services/members"
 import { user_keys } from "./services/user-keys"
 
 /**
@@ -49,7 +50,7 @@ const context = ({ principal, tenantId }: ContextInput, deps: KitDeps) => ({
   origin: new URL(deps.request.url).origin,
 })
 
-const services = { user_keys }
+const services = { user_keys, members, invitations }
 
 export const app = createApp({
   name: "idp",

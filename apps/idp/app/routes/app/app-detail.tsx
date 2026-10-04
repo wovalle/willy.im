@@ -27,12 +27,10 @@ import {
 
 import type { Route } from "./+types/app-detail"
 import {
-  catalogOf,
   createWorkspaceForApp,
   deleteApplication,
   getApplication,
   impersonateAppMember,
-  listAppMembers,
   listPeopleForApp,
   listWorkspacesForApp,
   rotateApplicationSecret,
@@ -42,18 +40,11 @@ import {
 } from "~/lib/admin.server"
 import { appConfigSchema, type ResourceTypeDecl } from "~/lib/metadata"
 import type { ResourceInstance } from "~/lib/resources.server"
-import { describeScopeError, resolveScopes } from "~/lib/scopes.server"
-import {
-  addOrInviteAppMember,
-  listAppInvitations,
-  removeAppMember,
-  resendInvitation,
-  revokeInvitation,
-  updateAppMember,
-} from "~/lib/members.server"
 import { createApiKey, listApiKeys, revokeApiKey } from "~/lib/api-keys.server"
 import { listAuditForApp } from "~/lib/audit.server"
 import { requireConsoleCaller } from "~/lib/caller.server"
+import { attempt, refused } from "~/lib/console.server"
+import { requestContext } from "~/kit.server"
 import { APP_PERMISSIONS, type AppPermission, type AppRole } from "~/lib/permissions"
 import { firstInvalidRedirectUri, parseUriList } from "~/lib/validate"
 import {
@@ -105,12 +96,13 @@ export async function loader({ request, context: router, params }: Route.LoaderA
   // What this caller may actually do here — the UI decides what to render, and
   // the loader decides what it can even ask for.
   const permissions = await caller.permissionsFor(app)
+  const ctx = await requestContext(context, request, app)
   const may = (permission: AppPermission) => permissions.includes(permission)
   const [workspaces, people, members, invitations, apiKeys, audit] = await Promise.all([
     app ? listWorkspacesForApp(context, app) : Promise.resolve([]),
     app ? listPeopleForApp(context, app) : Promise.resolve([]),
-    app ? listAppMembers(context, app) : Promise.resolve([]),
-    app ? listAppInvitations(context, app) : Promise.resolve([]),
+    app && may("member:read") ? ctx.services.members.list().then((r) => r.members) : [],
+    app && may("member:read") ? ctx.services.invitations.list().then((r) => r.invitations) : [],
     // Gated in the service: asking without apikey:read would 403 the page for a
     // member who is otherwise perfectly entitled to read it.
     app && may("apikey:read") ? listApiKeys(context, caller, app) : Promise.resolve([]),
@@ -237,93 +229,43 @@ export async function action({ request, context: router, params }: Route.ActionA
     const application = await getApplication(context, clientId)
     const app = application?.app
     if (!app) return { error: "This application has no app key yet." }
-    const origin = new URL(request.url).origin
-
-    const catalog = catalogOf(application)
-    const readRole = (v: FormDataEntryValue | null): AppRole =>
-      String(v) === "admin" ? "admin" : "member"
-    const readPermissions = () =>
-      form.getAll("permissions").map(String).filter(Boolean)
-    const readProductPermissions = () =>
-      form.getAll("productPermissions").map(String).filter(Boolean)
-    // Grants are validated against BOTH halves of the catalog before the write:
-    // structure against the declaration, per-instance ids against the app's live
-    // list. A grant that silently lost a scope is worse than one that failed.
-    const resolveGrants = () =>
-      resolveScopes(readProductPermissions(), app, catalog, context.services.resources)
+    const ctx = await requestContext(context, request, app)
+    const role = String(form.get("role")) === "admin" ? "admin" : "member"
+    const permissions = form.getAll("permissions").map(String).filter(Boolean)
+    const productPermissions = form.getAll("productPermissions").map(String).filter(Boolean)
+    const userId = String(form.get("userId") ?? "")
+    const id = String(form.get("invitationId") ?? "")
 
     if (intent === "invite-member") {
       const email = String(form.get("email") ?? "").trim()
-      if (!email || !email.includes("@"))
-        return { error: "Enter a valid email address.", field: "invite-email" }
-      const resolved = await resolveGrants()
-      if ("error" in resolved)
-        return { error: describeScopeError(resolved), field: "invite-email" }
-      const result = await addOrInviteAppMember(context, caller, {
-        app,
-        email,
-        role: readRole(form.get("role")),
-        permissions: readPermissions(),
-        productPermissions: resolved.scopes,
-        catalog,
-        origin,
-      })
-      if (result.kind === "already-member")
-        return { error: `${email} is already a member.`, field: "invite-email" }
-      return { ok: result.kind === "added" ? "member-added" : "member-invited" }
+      const res = await attempt(
+        () => ctx.services.members.invite({ email, role, permissions, productPermissions }),
+        "invite-email",
+      )
+      if (refused(res)) return res
+      return { ok: res.result === "added" ? "member-added" : "member-invited" }
     }
 
     if (intent === "update-member") {
-      const userId = String(form.get("userId") ?? "")
-      const existing = (await listAppMembers(context, app)).find((m) => m.userId === userId)
-      const current = existing?.productPermissions ?? []
-      const requested = readProductPermissions()
-      // Only NEW grants are checked against the app's live list: a stale grant
-      // the member already holds (rendered "(no longer listed)") must not block
-      // an unrelated edit — unchecking it is how it goes away.
-      const resolved = await resolveScopes(
-        requested.filter((s) => !current.includes(s)),
-        app,
-        catalog,
-        context.services.resources,
+      const res = await attempt(() =>
+        ctx.services.members.set_access({ userId, role, permissions, productPermissions }),
       )
-      if ("error" in resolved) return { error: describeScopeError(resolved) }
-      const res = await updateAppMember(context, caller, {
-        app,
-        userId,
-        role: readRole(form.get("role")),
-        permissions: readPermissions(),
-        productPermissions: requested,
-        catalog,
-      })
-      if ("error" in res) return { error: res.error }
-      return { ok: "member-updated" }
+      return refused(res) ? res : { ok: "member-updated" }
     }
 
     if (intent === "remove-member") {
-      const res = await removeAppMember(context, caller, {
-        app,
-        userId: String(form.get("userId") ?? ""),
-      })
-      if ("error" in res) return { error: res.error }
-      return { ok: "member-removed" }
+      const res = await attempt(() => ctx.services.members.remove({ userId }))
+      return refused(res) ? res : { ok: "member-removed" }
     }
 
     if (intent === "revoke-invite") {
-      await revokeInvitation(context, caller, {
-        app,
-        invitationId: String(form.get("invitationId") ?? ""),
-      })
-      return { ok: "invite-revoked" }
+      const res = await attempt(() => ctx.services.invitations.revoke({ id }))
+      return refused(res) ? res : { ok: "invite-revoked" }
     }
 
     if (intent === "resend-invite") {
-      const res = await resendInvitation(context, caller, {
-        app,
-        invitationId: String(form.get("invitationId") ?? ""),
-        origin,
-      })
-      return "error" in res ? { error: res.error } : { ok: "invite-resent" }
+      const res = await attempt(() => ctx.services.invitations.resend({ id }))
+      return refused(res) ? res : { ok: "invite-resent" }
     }
   }
 

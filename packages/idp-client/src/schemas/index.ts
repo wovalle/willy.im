@@ -170,12 +170,16 @@ export const MemberSchema = z.object({
   name: z.string().nullable(),
   role: RoleSchema,
   permissions: z.array(z.string()),
+  productPermissions: z
+    .array(z.string())
+    .default([])
+    .describe("Grants from the app's own catalog; admins hold the whole catalog and store none"),
 })
 export const MemberListSchema = z.object({ members: z.array(MemberSchema) })
 
 /** Add (existing user) or invite (new email) an app member. */
 export const InviteMemberInput = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   role: RoleSchema.default("member"),
   permissions: z.array(z.string()).default([]),
   /**
@@ -444,7 +448,20 @@ export const ListUserApiKeysInput = z.object({
   userId: z.string().optional().describe("Only keys owned by this user"),
   workspaceId: z.string().optional().describe("Only keys bound to this workspace"),
 })
-export const RevokeByIdInput = z.object({ id: z.string().min(1) })
+export const IdInput = z.object({ id: z.string().min(1) })
+
+export const SetMemberAccessInput = UpdateMemberInput.extend({ userId: z.string().min(1) })
+export const UserIdInput = z.object({ userId: z.string().min(1) })
+
+export const InvitationSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  role: RoleSchema,
+  permissions: z.array(z.string()),
+  expiresAt: z.string(),
+  createdAt: z.string(),
+})
+export const InvitationListSchema = z.object({ invitations: z.array(InvitationSchema) })
 
 export type MethodDef = {
   scope: "app" | "idp"
@@ -455,12 +472,20 @@ export type MethodDef = {
 export const methods = {
   "user_keys.list": { scope: "app", input: ListUserApiKeysInput, output: UserApiKeyListSchema },
   "user_keys.mint": { scope: "app", input: CreateUserApiKeyInput, output: UserApiKeyCreatedSchema },
-  "user_keys.revoke": { scope: "app", input: RevokeByIdInput, output: OkSchema },
+  "user_keys.revoke": { scope: "app", input: IdInput, output: OkSchema },
   "user_keys.validate": {
     scope: "app",
     input: ValidateUserApiKeyInput,
     output: UserApiKeyValidationSchema,
   },
+
+  "members.list": { scope: "app", input: undefined, output: MemberListSchema },
+  "members.invite": { scope: "app", input: InviteMemberInput, output: InviteMemberResult },
+  "members.set_access": { scope: "app", input: SetMemberAccessInput, output: OkSchema },
+  "members.remove": { scope: "app", input: UserIdInput, output: OkSchema },
+  "invitations.list": { scope: "app", input: undefined, output: InvitationListSchema },
+  "invitations.resend": { scope: "app", input: IdInput, output: OkSchema },
+  "invitations.revoke": { scope: "app", input: IdInput, output: OkSchema },
 } as const satisfies Record<string, MethodDef>
 
 export type Methods = typeof methods

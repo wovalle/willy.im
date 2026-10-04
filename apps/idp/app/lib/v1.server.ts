@@ -2,7 +2,7 @@ import type { Context } from "@willyim/kit"
 import type { RouterContextProvider } from "react-router"
 
 import { appContext } from "../context"
-import { app, depsOf } from "../kit"
+import { app, depsOf } from "../kit.server"
 import { principalFrom } from "./caller.server"
 
 /**
