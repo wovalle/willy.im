@@ -25,11 +25,11 @@ describe("IdP tracker configuration", () => {
   })
 
   it("suffixes intent-less API mutations with the method", () => {
-    expect(name({ method: "DELETE", pathname: "/api/v1/admin-keys/12345", status: 200 })).toBe(
-      "api/v1/admin-keys/:id:delete",
+    expect(name({ method: "POST", pathname: "/api/admin_keys.revoke", status: 200 })).toBe(
+      "api/admin_keys.revoke:post",
     )
-    expect(name({ method: "POST", pathname: "/api/v1/applications", status: 201 })).toBe(
-      "api/v1/applications:post",
+    expect(name({ method: "POST", pathname: "/apps/kasso/api/members.invite", status: 200 })).toBe(
+      "apps/kasso/api/members.invite:post",
     )
   })
 
@@ -44,10 +44,10 @@ describe("IdP tracker configuration", () => {
 
   it("drops key-validation plumbing for every app key", () => {
     expect(
-      name({ method: "POST", pathname: "/api/v1/apps/luchy/user-keys/validate", status: 200 }),
+      name({ method: "POST", pathname: "/apps/luchy/api/user_keys.validate", status: 200 }),
     ).toBeNull()
     expect(
-      name({ method: "POST", pathname: "/api/v1/apps/kasso/user-keys/validate", status: 200 }),
+      name({ method: "POST", pathname: "/apps/kasso/api/user_keys.validate", status: 200 }),
     ).toBeNull()
   })
 

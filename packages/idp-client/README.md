@@ -553,10 +553,6 @@ app's own resource list can't be read.
 | `users` | `list`, `find` (IdP level); `impersonate` (console only) |
 | `audit` | `list` |
 
-`api.request(method, "/api/v1/…")` is the previous major's REST API, typed
-from the operations table in `@willyim/idp/schemas`. The IdP serves it until
-every app is on this major; then it, and `request`, go away.
-
 ### Admin keys
 
 Most management endpoints take a scoped `wim_` key, which is bound to one

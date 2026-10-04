@@ -79,16 +79,16 @@ const handler = {
     })
 
     // Analytics (Luchy). Every mutation in the IdP is either a form POST whose
-    // `intent` field names it, a method-discriminated API call, or an auth verb
-    // whose path names it — so the event is DERIVED from the request instead of
-    // being emitted by hand per route. `luchy/react-router` owns the mechanics;
+    // `intent` field names it, or an API call or auth verb whose path names it —
+    // so the event is DERIVED from the request instead of being emitted by hand
+    // per route. `luchy/react-router` owns the mechanics;
     // `begin` must run before React Router consumes the body.
     const finishTracking = createIdpRequestTracker(baseCtx, auth).begin(request)
 
     try {
       const appCtx = { cloudflare: { env, ctx }, ...baseCtx, services: { auth, resources } }
       // kit's generated API (/api/<service>.<method>, /apps/<app>/api/…) and MCP
-      // (/mcp, /mcp/<app>) first; everything else, /api/v1 included, is React Router's.
+      // (/mcp, /mcp/<app>) first; everything else is React Router's.
       const context = new RouterContextProvider()
       context.set(appContext, appCtx)
       const response =

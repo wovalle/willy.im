@@ -32,7 +32,7 @@ An app declares a resource **type** in its catalog, once, at boot. A type is a
 permission prefix plus the URL the IdP can ask for instances:
 
 ```json
-PUT /api/v1/apps/bender/permissions
+POST /apps/bender/api/catalog.declare
 {
   "permissions": ["kirby:read", "kirby:write", "dexter:read", "dexter:write"],
   "resourceTypes": [
@@ -52,13 +52,13 @@ PUT /api/v1/apps/bender/permissions
 - `resourceTypes[].label` — what the console calls one instance. Optional;
   defaults to the type.
 - `resourceTypes[].list` — absolute `https` URL (`http` only on `localhost`,
-  `127.0.0.1`, `[::1]`). Anything else is `422 {"error":"invalid_resource_type",
-  "detail":"<the url>"}`.
+  `127.0.0.1`, `[::1]`). Anything else is `422 {"error":"The list URL of <type>
+  isn't callable: <the url>"}`.
 - Omitting `resourceTypes` clears them, the same way omitting a permission
   removes it. An app that declares no types is exactly as it was.
 
 The response is the stored catalog: `{"permissions":[…],"resourceTypes":[{type,
-label,list}]}`. `GET /api/v1/applications[/{clientId}]` carries `resourceTypes`
+label,list}]}`. `applications.get` and `applications.list` carry `resourceTypes`
 too.
 
 The catalog is stored where it always was — `oauth_client.metadata`, now with a
@@ -137,25 +137,25 @@ already exists. `idp:` is reserved as a namespace no app catalog should use.
 
 ## Minting
 
-`POST /api/v1/apps/{app}/user-keys` with `scopes` validates every scope:
+`user_keys.mint` (`POST /apps/{app}/api/user_keys.mint`) with `scopes` validates
+every scope:
 
 | scope | outcome |
 |---|---|
 | in `permissions` | minted |
 | `<declared type>:<id>` and the app's list contains `id` | minted, stored as the composed string |
-| `<declared type>:<id>` and the list does not contain `id` | `422 {"error":"unknown_resource","detail":["kirby:thread:t_nope"]}` |
-| anything else | `422 {"error":"unknown_scopes","detail":["artifacts:abc"]}` |
-| the list URL unreachable, non-2xx, or not `{resources:[…]}` | `502 {"error":"resource_lookup_failed","detail":["kirby:thread"]}` |
+| `<declared type>:<id>` and the list does not contain `id` | `422 {"error":"The app does not currently list: kirby:thread:t_nope"}` |
+| anything else | `422 {"error":"Not in this app's catalog: artifacts:abc"}` |
+| the list URL unreachable, non-2xx, or not `{resources:[…]}` | `502 {"error":"Could not read the app's resource list for: kirby:thread"}` |
 
 Structure is checked first, with no network; the list is fetched once per type
 that appears in the request, and only then. Scopes are trimmed and deduplicated,
 never silently dropped — a grant that quietly lost a scope is worse than one
 that failed loudly.
 
-Member grants from the console go through the same check: the picker offers
-only what the app listed, and the action re-validates before writing.
-`POST/PATCH /api/v1/apps/{app}/members…` carries IdP-management permissions
-only, as before; product grants over the API are not a thing this change adds.
+Member grants go through the same check: the console's picker offers only
+what the app listed, and `members.invite` / `members.set_access` re-validate
+`productPermissions` before writing.
 
 ## What an admin holds
 
@@ -189,7 +189,7 @@ the claim at once, exactly as a removed flat permission does today.
 | Classifying a scope, resolving a grant | `app/lib/scopes.server.ts` |
 | Asking the app, and the listing token | `app/lib/resources.server.ts` |
 | The claim (admins → `type:*`, members filtered by declaration) | `app/lib/claims.server.ts` `productPermissionsFor` |
-| Minting | `app/lib/user-api-keys.server.ts` `createUserApiKey` |
-| The catalog PUT | `app/routes/api/apps.$app.permissions.ts` |
+| Minting | `app/services/user-keys.ts` `user_keys.mint` |
+| Declaring the catalog | `app/services/applications.ts` `catalog.declare` |
 | The console picker and its JSON route | `app/routes/app/app-detail.tsx`, `app/routes/app/app-resources.ts` |
 | The wire schemas every consumer imports | `packages/idp-client/src/schemas/index.ts` |

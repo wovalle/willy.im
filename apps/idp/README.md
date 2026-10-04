@@ -115,8 +115,6 @@ request, and an OAuth callback carries none).
   inside an app, `/api/<service>.<method>` at the IdP level, each with
   `openapi.json` and `llms.txt` filtered per key) and to agents over MCP (`/mcp`,
   `/mcp/<app>`). The methods live in `app/services/`, the app in `app/kit.server.ts`.
-  `/api/v1` (the previous REST API) is still served until every app is on
-  `@willyim/idp` 1.x.
 
 The client side of all this is [`@willyim/idp`](../../packages/idp-client/README.md) —
 OIDC client, server sessions, and react-router guards, with no runtime deps.

@@ -21,15 +21,10 @@
     "./schemas": {
       "types": "./dist/src/schemas/index.d.ts",
       "import": "./dist/src/schemas/index.js"
-    },
-    "./schemas/openapi": {
-      "types": "./dist/src/schemas/openapi.d.ts",
-      "import": "./dist/src/schemas/openapi.js"
     }
   },
   "files": [
     "dist",
-    "openapi",
     "README.md",
     "LICENSE"
   ],
@@ -42,8 +37,7 @@
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "openapi": "npm run build && node scripts/generate-openapi.mjs"
+    "test:watch": "vitest"
   },
   "keywords": [
     "oidc",

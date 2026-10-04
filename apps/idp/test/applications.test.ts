@@ -207,6 +207,38 @@ describe("application lifecycle", () => {
       })
     })
 
+    it("takes plain http on loopback, so a local app can be wired to a local IdP", async () => {
+      await register()
+      const declared = await (await as()).catalog.declare({
+        permissions: [],
+        resourceTypes: [{ type: "kirby:thread", list: "http://localhost:8484/x" }],
+      })
+      expect(declared.resourceTypes).toEqual([
+        { type: "kirby:thread", label: "kirby:thread", list: "http://localhost:8484/x" },
+      ])
+    })
+
+    it("labels an unlabelled resource type by its type, and a declare without types clears them", async () => {
+      const { clientId } = await register()
+      const services = await as()
+      const list = "https://bender.test/idp/resources/kirby-thread"
+
+      const declared = await services.catalog.declare({
+        permissions: ["kirby:read"],
+        resourceTypes: [{ type: "kirby:thread", list }],
+      })
+      expect(declared.resourceTypes).toEqual([
+        { type: "kirby:thread", label: "kirby:thread", list },
+      ])
+
+      // A replace, not a merge.
+      expect(await services.catalog.declare({ permissions: ["kirby:read"] })).toEqual({
+        permissions: ["kirby:read"],
+        resourceTypes: [],
+      })
+      expect((await getApplication(h.ctx, clientId))!.resourceTypes).toEqual([])
+    })
+
     it("deletes the application, and then it's a 404", async () => {
       const { clientId } = await register()
       expect(await (await as()).applications.delete()).toEqual({ ok: true })
@@ -257,6 +289,21 @@ describe("application lifecycle", () => {
         permissions: ["x:read"],
       })
       expect((await failureOf(services.applications.delete())).status).toBe(403)
+    })
+
+    it("needs app:read to read the app and app:update to rotate its secret", async () => {
+      await register()
+      const servicesOf = async (email: string, permissions: string[]) => {
+        const user = await createUser(h.ctx, { email })
+        await createMember(h.ctx, { app: "acme", userId: user.id, role: "member", permissions })
+        return as(await signedInPrincipal(h.ctx, user))
+      }
+      const reader = await servicesOf("reader@acme.test", ["app:read"])
+      const membersOnly = await servicesOf("members@acme.test", ["member:read"])
+
+      expect(await reader.applications.get()).toMatchObject({ app: "acme", name: "Acme" })
+      expect((await failureOf(reader.applications.rotate_secret())).status).toBe(403)
+      expect((await failureOf(membersOnly.applications.get())).status).toBe(403)
     })
   })
 })
