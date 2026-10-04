@@ -22,7 +22,7 @@ export const LUCHY_TRACKER_OPTIONS = {
   // Consumer apps validate end-user API keys on (potentially) every request
   // they serve. That is key plumbing, not product usage — it already bumps
   // `lastUsedAt` on the key row, and here it would drown everything else.
-  ignoreRouteSuffixes: ["/user-keys/validate"],
+  ignoreRouteSuffixes: ["/user-keys/validate", "/user_keys.validate"],
 } satisfies Partial<RequestTrackerOptions>
 
 /**

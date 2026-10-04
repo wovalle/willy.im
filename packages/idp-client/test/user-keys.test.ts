@@ -67,9 +67,8 @@ describe("createUserKeys", () => {
     const { keys, seen } = keysFor(() => json({ keys: [] }))
     await keys.list({ userId: "u_1" })
 
-    const url = new URL(seen[0]!.url)
-    expect(url.pathname).toBe("/api/v1/apps/luchy/user-keys")
-    expect(url.searchParams.get("userId")).toBe("u_1")
+    expect(seen[0]?.url).toBe("https://idp.test/apps/luchy/api/user_keys.list")
+    expect(await seen[0]?.clone().json()).toEqual({ userId: "u_1" })
     expect(seen[0]?.headers.get("authorization")).toBe("Bearer wim_luchy")
   })
 
@@ -97,8 +96,9 @@ describe("createUserKeys", () => {
     const { keys, seen } = keysFor(() => json({ ok: true }))
     await keys.revoke("k_1")
 
-    expect(seen[0]?.method).toBe("DELETE")
-    expect(new URL(seen[0]!.url).pathname).toBe("/api/v1/apps/luchy/user-keys/k_1")
+    expect(seen[0]?.method).toBe("POST")
+    expect(new URL(seen[0]!.url).pathname).toBe("/apps/luchy/api/user_keys.revoke")
+    expect(await seen[0]?.clone().json()).toEqual({ id: "k_1" })
   })
 
   it("serves a repeat validation from cache, then refetches once the TTL lapses", async () => {

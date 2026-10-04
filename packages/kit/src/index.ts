@@ -1,4 +1,4 @@
-export { handle, type HandlerContext } from "./api.js"
+export { handle, type HandleOptions, type HandlerContext } from "./api.js"
 export { createApp, declareService, type App, type DiscoveryOptions, type KitApp } from "./app.js"
 export { jsonSchema, llmsTxt, openapi, type JsonSchema } from "./discovery.js"
 export { fail, safe } from "./errors.js"

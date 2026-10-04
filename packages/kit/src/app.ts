@@ -1,4 +1,4 @@
-import { handle, type HandlerContext } from "./api.js"
+import { handle, type HandleOptions, type HandlerContext } from "./api.js"
 import type { OnCall } from "./method.js"
 import type { PermissionsResult } from "./permissions.js"
 import { bindService, linkViews, registry, type Factory } from "./registry.js"
@@ -114,7 +114,7 @@ export function createApp<A extends unknown[], B, S extends Record<string, Facto
       servicesView(inner.services, shared, true)
       return ctx
     },
-    handle: (request, ctx) => handle(app, request, ctx),
+    handle: (request, ctx, options) => handle(app, request, ctx, options),
   }
   validateDiscovery(config.discovery)
   registry(app) // fail fast: a factory that uses ctx while building, or a bad tool name
@@ -216,8 +216,15 @@ export type App<A extends unknown[], C> = {
    * each built on first read. Throws a 404 `Response` for a tenant the principal has nothing in.
    */
   context: (principal: Principal | null, tenantId: string | null, ...args: A) => Promise<Context>
-  /** Serves `/api/<service>.<method>`, `/openapi.json` and `/llms.txt`; null for any other path. */
-  handle: (request: Request, ctx: HandlerContext) => Promise<Response | null>
+  /**
+   * Serves `/api/<service>.<method>`, `/openapi.json` and `/llms.txt`, under
+   * `options.basePath` when given; null for any other path.
+   */
+  handle: (
+    request: Request,
+    ctx: HandlerContext,
+    options?: HandleOptions,
+  ) => Promise<Response | null>
 }
 
 /** What the adapters need from an app. */

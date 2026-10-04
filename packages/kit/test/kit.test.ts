@@ -433,6 +433,24 @@ describe("HTTP", () => {
     expect(slim).toEqual({ id: "1" })
   })
 
+  test("basePath serves the API and its documents under a prefix, and nothing outside it", async () => {
+    const ctx = await ctxFor(["notes:read"])
+    // A trailing slash on the prefix is the same prefix.
+    const opts = { basePath: "/apps/w1/" }
+
+    const res = await app.handle(post("/apps/w1/api/notes.get", { id: "1" }), ctx, opts)
+    expect(await res?.json()).toEqual({ id: "1", title: "First" })
+    expect(await app.handle(post("/api/notes.get", { id: "1" }), ctx, opts)).toBeNull()
+    expect(await app.handle(post("/apps/w2/api/notes.get", { id: "1" }), ctx, opts)).toBeNull()
+    expect(await app.handle(post("/apps/w1x/api/notes.get", { id: "1" }), ctx, opts)).toBeNull()
+
+    const doc = await (await app.handle(new Request("https://x.test/apps/w1/openapi.json"), ctx, opts))!.json()
+    expect(doc.servers).toEqual([{ url: "https://x.test/apps/w1" }])
+    expect(Object.keys(doc.paths)).toContain("/api/notes.get")
+    const llms = await (await app.handle(new Request("https://x.test/apps/w1/llms.txt"), ctx, opts))!.text()
+    expect(llms).toContain("POST https://x.test/apps/w1/api/<service>.<method>")
+  })
+
   test("fail(422) and fail(502) reach the caller with their status and message", async () => {
     const failing = createApp({
       auth,

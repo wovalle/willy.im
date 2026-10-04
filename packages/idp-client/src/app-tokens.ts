@@ -66,11 +66,7 @@ export function createAppTokens(options: AppTokensOptions) {
       if (pending) return pending
 
       const request = api
-        .request("post", "/api/v1/apps/{app}/tokens", {
-          params: { app },
-          body: { scopes: init.scopes, workspaceId: init.workspaceId },
-          signal: init.signal,
-        })
+        .call("app_tokens.mint", { scopes: init.scopes, workspaceId: init.workspaceId }, { app, signal: init.signal })
         .then(({ token, expiresAt }) => {
           const minted = { token, expiresAt }
           cache.set(key, { token: minted, refreshAt: Date.parse(expiresAt) - REFRESH_MARGIN_MS })

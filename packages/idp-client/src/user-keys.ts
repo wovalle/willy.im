@@ -2,9 +2,9 @@
  * End-user API keys, from the consuming app's side.
  *
  * The IdP is the key store: an app mints, lists, revokes and validates `wak_…`
- * keys through the management API, authenticated with its own scoped `wim_…`
- * key, and never persists a plaintext token or a hash of one. This module is
- * the sugar over those four calls, plus the two things every consumer would
+ * keys through the IdP's `user_keys` methods, authenticated with its own
+ * scoped `wim_…` key, and never persists a plaintext token or a hash of one.
+ * This module is the sugar over those four calls, plus the two things every consumer would
  * otherwise write badly by hand:
  *
  *  - a validation cache. `validate` is a network round trip, and API keys
@@ -145,11 +145,7 @@ export function createUserKeys(options: UserKeysOptions) {
   }
 
   async function fetchVerdict(token: string, signal?: AbortSignal) {
-    return api.request("post", "/api/v1/apps/{app}/user-keys/validate", {
-      params: { app },
-      body: { token },
-      signal,
-    })
+    return api.call("user_keys.validate", { token }, { app, signal })
   }
 
   /**
@@ -192,12 +188,8 @@ export function createUserKeys(options: UserKeysOptions) {
 
     /** The keys this app has minted, newest first. Optionally filtered. */
     async list(filter: ListFilter = {}): Promise<UserApiKey[]> {
-      const { keys } = await api.request("get", "/api/v1/apps/{app}/user-keys", {
-        params: { app },
-        query: { userId: filter.userId, workspaceId: filter.workspaceId },
-        signal: filter.signal,
-      })
-      return keys
+      const { signal, ...where } = filter
+      return (await api.call("user_keys.list", where, { app, signal })).keys
     },
 
     /**
@@ -208,11 +200,7 @@ export function createUserKeys(options: UserKeysOptions) {
      */
     async create(input: CreateUserApiKeyInput): Promise<MintedUserApiKey> {
       const { signal, ...body } = input
-      return api.request("post", "/api/v1/apps/{app}/user-keys", {
-        params: { app },
-        body,
-        signal,
-      })
+      return api.call("user_keys.mint", body, { app, signal })
     },
 
     /**
@@ -222,10 +210,7 @@ export function createUserKeys(options: UserKeysOptions) {
      * plaintext is in hand.
      */
     async revoke(id: string, init: { signal?: AbortSignal } = {}): Promise<{ ok: true }> {
-      return api.request("delete", "/api/v1/apps/{app}/user-keys/{id}", {
-        params: { app, id },
-        signal: init.signal,
-      })
+      return api.call("user_keys.revoke", { id }, { app, signal: init.signal })
     },
 
     /**

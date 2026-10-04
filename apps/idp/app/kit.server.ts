@@ -109,3 +109,39 @@ export const depsOf = (c: AppContext, request: Request): KitDeps => ({
 export async function requestContext(c: AppContext, request: Request, tenant: string | null) {
   return app.context(await principalFrom(request, c, c.services.auth), tenant, depsOf(c, request))
 }
+
+/** `/apps/<app>/` in front of the API or its documents: the app is the tenant. */
+const APP_PREFIX = /^\/apps\/([^/]+)(?=\/(?:api\/|openapi\.json$|llms\.txt$))/
+/**
+ * The IdP-level API and its documents. `/api/v1/*` and `/api/openapi.json`
+ * are the old REST API's until it's deleted.
+ */
+const IDP_PATH = /^\/(?:api\/(?!openapi\.json$)[a-z_]+\.[a-z_]+|openapi\.json|llms\.txt)$/
+
+/**
+ * kit's generated HTTP API, from the registry (replaces `/api/v1`):
+ *
+ *   POST /apps/<app>/api/<service>.<method>   an app's methods, in that app
+ *   POST /api/<service>.<method>              IdP-level methods
+ *   GET  [/apps/<app>]/openapi.json, /llms.txt  what this caller may call there
+ *
+ * Bearer only: a cookie never reaches it, so no cross-site form can call it as
+ * the signed-in admin; the console calls the same methods in process. Null for
+ * any other path, so React Router takes it.
+ */
+export async function serveApi(c: AppContext, request: Request): Promise<Response | null> {
+  const { pathname } = new URL(request.url)
+  const scoped = APP_PREFIX.exec(pathname)
+  if (!scoped && !IDP_PATH.test(pathname)) return null
+  const principal = request.headers.has("authorization")
+    ? await principalFrom(request, c, c.services.auth)
+    : null
+  try {
+    // An app the principal holds nothing in is a 404 here, before any method is looked up.
+    const ctx = await app.context(principal, scoped ? decodeURIComponent(scoped[1]) : null, depsOf(c, request))
+    return await app.handle(request, ctx, { basePath: scoped?.[0] })
+  } catch (e) {
+    if (e instanceof Response) return e
+    throw e
+  }
+}

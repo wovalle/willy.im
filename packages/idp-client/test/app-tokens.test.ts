@@ -60,7 +60,7 @@ describe("createAppTokens", () => {
       expiresAt: "2026-06-01T01:00:00.000Z",
     })
     expect(seen[0]?.method).toBe("POST")
-    expect(seen[0]?.url).toBe("https://idp.test/api/v1/apps/invoices/tokens")
+    expect(seen[0]?.url).toBe("https://idp.test/apps/invoices/api/app_tokens.mint")
     expect(seen[0]?.headers.get("authorization")).toBe("Bearer wim_admin")
     // Nothing narrowed: the IdP's default, ["*"], applies.
     expect(await seen[0]?.clone().json()).toEqual({})
