@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { createApplication, listAppMembers } from "../app/lib/admin.server"
+import { listAppMembers } from "../app/lib/admin.server"
 import type { AuthService } from "../app/lib/auth.server"
 import type { Caller } from "../app/lib/caller.server"
 import * as applications from "../app/routes/api/applications"
@@ -20,6 +20,7 @@ import {
   bootstrapAdminKey,
   createMember,
   createUser,
+  kitContext,
   mintApiKey,
   stubResources,
 } from "./helpers/fixtures"
@@ -76,12 +77,11 @@ describe("management API routes", () => {
     const bootstrap = await bootstrapAdminKey(h.ctx)
     adminToken = bootstrap.token
     root = bootstrap.caller
-    const created = await createApplication(h.ctx, root, {
+    const created = await (await kitContext(h.ctx, bootstrap.principal, null)).services.applications.register({
       name: "Acme",
       app: "acme",
       redirectUris: ["https://acme.test/cb"],
     })
-    if ("error" in created) throw new Error(created.error)
     acme = { clientId: created.clientId, app: created.app }
   })
   afterEach(() => h.close())
@@ -134,10 +134,10 @@ describe("management API routes", () => {
           body: { name: "Acme 2", app: "acme", redirectUris: ["https://acme.test/cb"] },
         }),
       })
-      expect(res).toEqual({ status: 409, body: { error: "app_taken" } })
+      expect(res).toEqual({ status: 409, body: { error: 'The app key "acme" is already taken.' } })
     })
 
-    it("422s a body the schema rejects", async () => {
+    it("400s a body the schema rejects, naming the fields", async () => {
       const res = await call(applications.action, {
         request: request("/api/v1/applications", {
           method: "POST",
@@ -145,8 +145,8 @@ describe("management API routes", () => {
           body: { name: "No key", redirectUris: [] },
         }),
       })
-      expect(res.status).toBe(422)
-      expect(res.body).toMatchObject({ error: "validation_error" })
+      expect(res.status).toBe(400)
+      expect(res.body).toMatchObject({ error: "invalid input", fields: expect.any(Object) })
     })
 
     it("405s a method the resource doesn't serve", async () => {
@@ -317,7 +317,7 @@ describe("management API routes", () => {
       })
       expect(res).toEqual({
         status: 422,
-        body: { error: "invalid_resource_type", detail: "http://bender.internal/x" },
+        body: { error: "The list URL of kirby:thread isn't callable: http://bender.internal/x" },
       })
     })
 
@@ -379,7 +379,7 @@ describe("management API routes", () => {
         }),
         params: { app: "ghost" },
       })
-      expect(res).toEqual({ status: 404, body: { error: "not_found" } })
+      expect(res).toEqual({ status: 404, body: { error: "No application ghost." } })
     })
 
     it("405s POST", async () => {

@@ -2,66 +2,50 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { eq } from "drizzle-orm"
 
 import * as schema from "../app/db/schema"
-import {
-  createApplication,
-  deleteApplication,
-  getApplication,
-  listApplications,
-  rotateApplicationSecret,
-  updateApplication,
-  updateApplicationPermissions,
-  updateApplicationRedirectUris,
-} from "../app/lib/admin.server"
+import { getApplication, listApplications } from "../app/lib/admin.server"
 import { listAuditForApp } from "../app/lib/audit.server"
-import type { AuthService } from "../app/lib/auth.server"
-import { resolveCaller, type Caller } from "../app/lib/caller.server"
+import type { IdpPrincipal } from "../app/lib/caller.server"
 import { hashClientSecret } from "../app/lib/client-secret.server"
-import { bootstrapAdminKey, createMember, createUser } from "./helpers/fixtures"
+import {
+  bootstrapAdminKey,
+  createMember,
+  createUser,
+  failureOf,
+  kitContext,
+  signedInPrincipal,
+} from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
- * Application lifecycle driven entirely by a bearer caller — the point of the
- * refactor. Nothing here touches a cookie session or a better-auth endpoint.
+ * The application lifecycle (`applications.*`, `catalog.declare`) driven by a
+ * bearer principal: nothing here touches a cookie session or a Better Auth
+ * endpoint.
  */
-
-/** The resolver only needs `api.getSession`; sessions aren't what's under test. */
-function authStub(user: { id: string; email: string } | null): AuthService {
-  return {
-    api: { getSession: async () => (user ? { user, session: {} } : null) },
-  } as unknown as AuthService
-}
-
-async function thrownStatus(fn: () => Promise<unknown>): Promise<number> {
-  try {
-    await fn()
-    return 0
-  } catch (err) {
-    if (err instanceof Response) return err.status
-    throw err
-  }
-}
-
 describe("application lifecycle", () => {
   let h: TestHarness
   /** An IdP-level admin key, resolved through the real front-door path. */
-  let root: Caller
+  let root: IdpPrincipal
 
   beforeEach(async () => {
     h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
-    root = (await bootstrapAdminKey(h.ctx)).caller
+    root = (await bootstrapAdminKey(h.ctx)).principal
   })
   afterEach(() => h.close())
 
-  const register = async (overrides: Partial<Parameters<typeof createApplication>[2]> = {}) => {
-    const res = await createApplication(h.ctx, root, {
+  /** The services of `principal` in `tenant` (acme unless given; null for the IdP level). */
+  const as = async (principal: IdpPrincipal = root, tenant: string | null = "acme") =>
+    (await kitContext(h.ctx, principal, tenant)).services
+
+  const register = async (
+    overrides: { app?: string; redirectUris?: string[]; firstAdminUserId?: string | null } = {},
+    principal: IdpPrincipal = root,
+  ) =>
+    (await as(principal, null)).applications.register({
       name: "Acme",
       app: "acme",
       redirectUris: ["https://acme.test/callback"],
       ...overrides,
     })
-    if ("error" in res) throw new Error(`unexpected ${res.error}`)
-    return res
-  }
 
   const storedSecret = async (clientId: string) => {
     const [row] = await h.ctx.db
@@ -71,7 +55,7 @@ describe("application lifecycle", () => {
     return row.clientSecret
   }
 
-  describe("createApplication", () => {
+  describe("applications.register", () => {
     it("registers a confidential web client the plugin would recognise", async () => {
       const { clientId, clientSecret, app } = await register()
 
@@ -90,49 +74,35 @@ describe("application lifecycle", () => {
       expect(row.responseTypes).toEqual(["code"])
       expect(row.requirePKCE).toBe(true)
 
-      const summary = await getApplication(h.ctx, clientId)
-      expect(summary).toMatchObject({ app: "acme", name: "Acme", disabled: false })
+      expect(await (await as()).applications.get()).toMatchObject({
+        clientId,
+        app: "acme",
+        name: "Acme",
+        disabled: false,
+      })
     })
 
-    it("refuses a second application on the same app key", async () => {
+    it("409s a second application on the same app key", async () => {
       await register()
-      expect(await createApplication(h.ctx, root, {
-        name: "Acme again",
-        app: "acme",
-        redirectUris: ["https://acme.test/callback"],
-      })).toEqual({ error: "app_taken" })
-
+      expect(await failureOf(register())).toEqual({
+        status: 409,
+        error: 'The app key "acme" is already taken.',
+      })
       expect(await listApplications(h.ctx)).toHaveLength(1)
     })
 
-    it("rejects a non-slug app key and an unusable redirect URI", async () => {
-      const bad = await createApplication(h.ctx, root, {
-        name: "Acme",
-        app: "Acme Corp",
-        redirectUris: ["https://acme.test/callback"],
+    it("rejects a non-slug app key (400) and an unusable redirect URI (422)", async () => {
+      const bad = await failureOf(register({ app: "Acme Corp" }))
+      expect(bad.status).toBe(400)
+      expect(await failureOf(register({ redirectUris: ["not-a-url"] }))).toEqual({
+        status: 422,
+        error: '"not-a-url" isn\'t a valid URL. Use an absolute URL like https://app.example.com/callback.',
       })
-      expect(bad).toMatchObject({ error: "invalid_app" })
-
-      const worse = await createApplication(h.ctx, root, {
-        name: "Acme",
-        app: "acme",
-        redirectUris: ["not-a-url"],
-      })
-      expect(worse).toMatchObject({ error: "invalid_redirect_uri", detail: "not-a-url" })
     })
 
     it("enrols the calling user as first admin by default", async () => {
       const boss = await createUser(h.ctx, { email: "super@willy.im" })
-      const session = (await resolveCaller(
-        new Request("https://idp.willy.im/"),
-        h.ctx,
-        authStub(boss),
-      ))!
-      const { app } = await createApplication(h.ctx, session, {
-        name: "Acme",
-        app: "acme",
-        redirectUris: ["https://acme.test/callback"],
-      }).then((r) => ("error" in r ? Promise.reject(new Error(r.error)) : r))
+      const { app } = await register({}, await signedInPrincipal(h.ctx, boss))
 
       const members = await h.ctx.db
         .select()
@@ -152,9 +122,9 @@ describe("application lifecycle", () => {
       expect(members).toMatchObject([{ userId: owner.id, role: "admin" }])
     })
 
-    it("leaves the app memberless when the token caller has no human behind it", async () => {
-      // The static admin token has no userId, so there is nobody to enrol — the
-      // app starts superadmin-managed until members are added explicitly.
+    it("leaves the app memberless when the caller has no human behind it", async () => {
+      // An admin key has no user, so there is nobody to enrol — the app starts
+      // superadmin-managed until members are added explicitly.
       await register()
       expect(
         await h.ctx.db
@@ -164,14 +134,14 @@ describe("application lifecycle", () => {
       ).toEqual([])
     })
 
-    it("audits the registration against the token", async () => {
+    it("audits the registration against the new app, naming the key", async () => {
       const { clientId } = await register()
       const [entry] = await listAuditForApp(h.ctx, "acme")
       expect(entry).toMatchObject({
         tableName: "oauth_client",
         operation: "create",
         rowId: clientId,
-        actor: `adminkey:${root.keyId}`,
+        actor: root.id,
         userId: null,
       })
     })
@@ -182,7 +152,7 @@ describe("application lifecycle", () => {
       const { clientId, clientSecret } = await register()
       const before = await storedSecret(clientId)
 
-      const rotated = await rotateApplicationSecret(h.ctx, root, clientId)
+      const rotated = await (await as()).applications.rotate_secret()
 
       expect(rotated.clientSecret).not.toBe(clientSecret)
       const after = await storedSecret(clientId)
@@ -192,101 +162,87 @@ describe("application lifecycle", () => {
       expect(await hashClientSecret(clientSecret)).not.toBe(after)
     })
 
-    it("replaces the redirect URIs", async () => {
+    it("patches name, redirects and signup in one go, leaving the rest", async () => {
       const { clientId } = await register()
-      await updateApplicationRedirectUris(h.ctx, root, clientId, ["https://acme.test/new"])
-
-      expect((await getApplication(h.ctx, clientId))!.redirectUris).toEqual([
-        "https://acme.test/new",
-      ])
-    })
-
-    it("patches name, redirects and signup in one go", async () => {
-      const { clientId } = await register()
-      const updated = await updateApplication(h.ctx, root, clientId, {
+      await (await as()).catalog.declare({ permissions: ["invoices:read"] })
+      const updated = await (await as()).applications.update({
         name: "Acme Inc",
         redirectUris: ["https://acme.test/cb"],
         allowSignup: true,
       })
 
       expect(updated).toMatchObject({
+        clientId,
         name: "Acme Inc",
         redirectUris: ["https://acme.test/cb"],
         allowSignup: true,
+        permissions: ["invoices:read"],
         app: "acme",
       })
     })
 
     it("replaces the product-permission catalog", async () => {
       const { clientId } = await register()
-      const next = await updateApplicationPermissions(h.ctx, root, clientId, {
+      const next = await (await as()).catalog.declare({
         permissions: ["invoices:read", "invoices:write", "invoices:read"],
         resourceTypes: [],
       })
 
-      expect(next).toEqual({
-        permissions: ["invoices:read", "invoices:write"],
-        resourceTypes: [],
-      })
+      expect(next).toEqual({ permissions: ["invoices:read", "invoices:write"], resourceTypes: [] })
       expect((await getApplication(h.ctx, clientId))!.permissions).toEqual([
         "invoices:read",
         "invoices:write",
       ])
     })
 
-    it("deletes the application", async () => {
+    it("422s a resource type whose list URL the IdP can't call", async () => {
+      await register()
+      const declare = (await as()).catalog.declare({
+        permissions: [],
+        resourceTypes: [{ type: "kirby:thread", list: "http://bender.test/list" }],
+      })
+      expect(await failureOf(declare)).toEqual({
+        status: 422,
+        error: "The list URL of kirby:thread isn't callable: http://bender.test/list",
+      })
+    })
+
+    it("deletes the application, and then it's a 404", async () => {
       const { clientId } = await register()
-      await deleteApplication(h.ctx, root, clientId)
+      expect(await (await as()).applications.delete()).toEqual({ ok: true })
 
       expect(await getApplication(h.ctx, clientId)).toBeNull()
+      expect((await failureOf((await as()).applications.get())).status).toBe(404)
     })
 
     it("audits every mutation with the caller's label", async () => {
-      const { clientId } = await register()
-      await rotateApplicationSecret(h.ctx, root, clientId)
-      await updateApplicationRedirectUris(h.ctx, root, clientId, ["https://acme.test/new"])
-      await deleteApplication(h.ctx, root, clientId)
+      await register()
+      const services = await as()
+      await services.applications.rotate_secret()
+      await services.applications.update({ redirectUris: ["https://acme.test/new"] })
+      await services.applications.delete()
 
       const entries = await listAuditForApp(h.ctx, "acme")
       expect(entries.map((e) => e.operation)).toEqual(["delete", "update", "update", "create"])
-      expect(entries.every((e) => e.actor === `adminkey:${root.keyId}`)).toBe(true)
+      expect(entries.every((e) => e.actor === root.id)).toBe(true)
       expect(entries.every((e) => e.tableName === "oauth_client")).toBe(true)
     })
   })
 
   describe("authorization", () => {
-    it("shuts out a signed-in user with no membership", async () => {
-      const { clientId } = await register()
+    it("shuts out a signed-in user with no membership: the app is a 404, registering a 403", async () => {
+      await register()
       const stranger = await createUser(h.ctx, { email: "stranger@elsewhere.test" })
-      const caller = (await resolveCaller(
-        new Request("https://idp.willy.im/"),
-        h.ctx,
-        authStub(stranger),
-      ))!
+      const principal = await signedInPrincipal(h.ctx, stranger)
 
-      expect(await thrownStatus(() => rotateApplicationSecret(h.ctx, caller, clientId))).toBe(403)
-      expect(
-        await thrownStatus(() => updateApplicationRedirectUris(h.ctx, caller, clientId, ["https://x.test/cb"])),
-      ).toBe(403)
-      expect(await thrownStatus(() => updateApplication(h.ctx, caller, clientId, { name: "Nope" }))).toBe(403)
-      expect(
-        await thrownStatus(() => updateApplicationPermissions(h.ctx, caller, clientId, ["x:read"])),
-      ).toBe(403)
-      expect(await thrownStatus(() => deleteApplication(h.ctx, caller, clientId))).toBe(403)
+      expect((await failureOf(as(principal))).status).toBe(404)
       // Registration is superadmin-only, whoever you are.
-      expect(
-        await thrownStatus(() =>
-          createApplication(h.ctx, caller, {
-            name: "Theirs",
-            app: "theirs",
-            redirectUris: ["https://theirs.test/cb"],
-          }),
-        ),
-      ).toBe(403)
+      expect((await failureOf(register({ app: "theirs" }, principal))).status).toBe(403)
+      expect((await failureOf((await as(principal, null)).applications.list())).status).toBe(403)
     })
 
-    it("lets app:update rotate but not delete", async () => {
-      const { clientId } = await register()
+    it("lets app:update rotate and edit the catalog, but not delete", async () => {
+      await register()
       const editor = await createUser(h.ctx, { email: "editor@acme.test" })
       await createMember(h.ctx, {
         app: "acme",
@@ -294,15 +250,13 @@ describe("application lifecycle", () => {
         role: "member",
         permissions: ["app:read", "app:update"],
       })
-      const caller = (await resolveCaller(
-        new Request("https://idp.willy.im/"),
-        h.ctx,
-        authStub(editor),
-      ))!
+      const services = await as(await signedInPrincipal(h.ctx, editor))
 
-      const rotated = await rotateApplicationSecret(h.ctx, caller, clientId)
-      expect(rotated.clientSecret).toMatch(/^[a-zA-Z]{32}$/)
-      expect(await thrownStatus(() => deleteApplication(h.ctx, caller, clientId))).toBe(403)
+      expect((await services.applications.rotate_secret()).clientSecret).toMatch(/^[a-zA-Z]{32}$/)
+      expect(await services.catalog.declare({ permissions: ["x:read"] })).toMatchObject({
+        permissions: ["x:read"],
+      })
+      expect((await failureOf(services.applications.delete())).status).toBe(403)
     })
   })
 })

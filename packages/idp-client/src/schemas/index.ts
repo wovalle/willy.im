@@ -546,6 +546,18 @@ export const methods = {
     output: LinkedIdentityCreatedSchema,
   },
   "identities.unlink": { scope: "idp", input: UnlinkIdentityInput, output: OkSchema },
+
+  "applications.list": { scope: "idp", input: undefined, output: ApplicationListSchema },
+  "applications.register": {
+    scope: "idp",
+    input: CreateApplicationInput,
+    output: ApplicationCreatedSchema,
+  },
+  "applications.get": { scope: "app", input: undefined, output: ApplicationSchema },
+  "applications.update": { scope: "app", input: UpdateApplicationInput, output: ApplicationSchema },
+  "applications.delete": { scope: "app", input: undefined, output: OkSchema },
+  "applications.rotate_secret": { scope: "app", input: undefined, output: ClientSecretSchema },
+  "catalog.declare": { scope: "app", input: SetAppPermissionsInput, output: AppPermissionsSchema },
 } as const satisfies Record<string, MethodDef>
 
 export type Methods = typeof methods

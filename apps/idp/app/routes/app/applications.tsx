@@ -3,9 +3,10 @@ import { Form, Link, useActionData, useNavigation } from "react-router"
 import { ChevronRight, Loader2, Plus } from "lucide-react"
 
 import type { Route } from "./+types/applications"
-import { createApplication, listApplications } from "~/lib/admin.server"
 import { requireConsoleCaller } from "~/lib/caller.server"
-import { firstInvalidRedirectUri, parseUriList } from "~/lib/validate"
+import { attempt, refused } from "~/lib/console.server"
+import { parseUriList } from "~/lib/validate"
+import { requestContext } from "~/kit.server"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
@@ -24,14 +25,14 @@ import { appContext } from "~/context"
 export async function loader({ request, context: router }: Route.LoaderArgs) {
   const context = router.get(appContext)
   await requireConsoleCaller(request, context, context.services.auth, { superadmin: true })
-  return { applications: await listApplications(context) }
+  const ctx = await requestContext(context, request, null)
+  return { applications: (await ctx.services.applications.list()).applications }
 }
 
 export async function action({ request, context: router }: Route.ActionArgs) {
   const context = router.get(appContext)
-  const caller = await requireConsoleCaller(request, context, context.services.auth, {
-    superadmin: true,
-  })
+  await requireConsoleCaller(request, context, context.services.auth, { superadmin: true })
+  const ctx = await requestContext(context, request, null)
   const form = await request.formData()
 
   const name = String(form.get("name") ?? "").trim()
@@ -41,20 +42,16 @@ export async function action({ request, context: router }: Route.ActionArgs) {
   if (!name || !app) return { error: "Name and app key are required.", field: !name ? "name" : "app" }
   if (redirectUris.length === 0)
     return { error: "Add at least one redirect URI.", field: "redirectUris" }
-  const invalid = firstInvalidRedirectUri(redirectUris)
-  if (invalid)
-    return { error: `"${invalid}" isn't a valid URL. Use an absolute URL like https://app.example.com/callback.`, field: "redirectUris" }
 
-  // The signed-in superadmin becomes the app's first admin (the service default).
-  const created = await createApplication(context, caller, { name, app, redirectUris })
-  if ("error" in created) {
-    if (created.error === "app_taken")
-      return { error: `The app key "${app}" is already taken.`, field: "app" }
-    if (created.error === "invalid_redirect_uri")
-      return { error: "Add at least one valid redirect URI.", field: "redirectUris" }
-    return { error: "App keys are lowercase letters, numbers and dashes.", field: "app" }
-  }
-  return { created }
+  // The signed-in superadmin becomes the app's first admin (the method's default).
+  const created = await attempt(() => ctx.services.applications.register({ name, app, redirectUris }))
+  if (!refused(created)) return { created }
+  const field = /redirect|URL/i.test(created.error)
+    ? "redirectUris"
+    : /app/i.test(created.error)
+      ? "app"
+      : "name"
+  return { ...created, field }
 }
 
 export default function AdminApplications({ loaderData }: Route.ComponentProps) {

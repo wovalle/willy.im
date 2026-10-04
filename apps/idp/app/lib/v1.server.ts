@@ -3,6 +3,7 @@ import type { RouterContextProvider } from "react-router"
 
 import { appContext } from "../context"
 import { app, depsOf } from "../kit.server"
+import { appKeyOf } from "./admin.server"
 import { principalFrom } from "./caller.server"
 
 /**
@@ -52,3 +53,14 @@ export async function v1(
 }
 
 const forbidden = () => Response.json({ error: "forbidden" }, { status: 403 })
+
+/** The app a client id is tagged with: the tenant its methods run in. */
+export const tenantOf = (args: {
+  params: { clientId: string }
+  context: Readonly<RouterContextProvider>
+}) => appKeyOf(args.context.get(appContext), args.params.clientId)
+
+/** An unknown client id is a 404 — after v1() authenticated, so a prober can't map ids. */
+export const missing = async (): Promise<never> => {
+  throw Response.json({ error: "not_found" }, { status: 404 })
+}

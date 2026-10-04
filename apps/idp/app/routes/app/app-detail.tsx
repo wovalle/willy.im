@@ -26,23 +26,15 @@ import {
 } from "lucide-react"
 
 import type { Route } from "./+types/app-detail"
-import {
-  deleteApplication,
-  getApplication,
-  impersonateAppMember,
-  rotateApplicationSecret,
-  updateApplicationMetadata,
-  updateApplicationPermissions,
-  updateApplicationRedirectUris,
-} from "~/lib/admin.server"
-import { appConfigSchema, type ResourceTypeDecl } from "~/lib/metadata"
+import { appKeyOf, impersonateAppMember } from "~/lib/admin.server"
+import type { ResourceTypeDecl } from "~/lib/metadata"
 import type { ResourceInstance } from "~/lib/resources.server"
 import { listAuditForApp } from "~/lib/audit.server"
 import { requireConsoleCaller } from "~/lib/caller.server"
 import { attempt, refused } from "~/lib/console.server"
 import { requestContext } from "~/kit.server"
 import { APP_PERMISSIONS, type AppPermission, type AppRole } from "~/lib/permissions"
-import { firstInvalidRedirectUri, parseUriList } from "~/lib/validate"
+import { parseUriList } from "~/lib/validate"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,9 +74,8 @@ export async function loader({ request, context: router, params }: Route.LoaderA
   // The gate is app-scoped, so the app has to be resolved before it can be
   // applied: any member holding app:read may open this page, not just IdP
   // superadmins.
-  const application = await getApplication(context, params.clientId)
-  if (!application) throw new Response("Application not found", { status: 404 })
-  const app = application.app ?? ""
+  const app = await appKeyOf(context, params.clientId)
+  if (!app) throw new Response("Application not found", { status: 404 })
   const caller = await requireConsoleCaller(request, context, context.services.auth, {
     app,
     permission: "app:read",
@@ -94,6 +85,7 @@ export async function loader({ request, context: router, params }: Route.LoaderA
   const permissions = await caller.permissionsFor(app)
   const ctx = await requestContext(context, request, app)
   const may = (permission: AppPermission) => permissions.includes(permission)
+  const application = await ctx.services.applications.get()
   // Each list is gated by its method's permission: asking without it would 403
   // the page for a member otherwise entitled to read it.
   const [workspaces, people, members, invitations, apiKeys, audit] = await Promise.all([
@@ -126,16 +118,19 @@ export async function action({ request, context: router, params }: Route.ActionA
   const caller = await requireConsoleCaller(request, context, context.services.auth)
   const auth = context.services.auth
   const clientId = params.clientId
+  const app = await appKeyOf(context, clientId)
+  if (!app) return { error: "This application has no app key yet." }
+  const ctx = await requestContext(context, request, app)
   const form = await request.formData()
   const intent = form.get("intent")
 
   if (intent === "delete") {
-    await deleteApplication(context, caller, clientId)
+    await ctx.services.applications.delete()
     return redirect("/")
   }
 
   if (intent === "rotate") {
-    const { clientSecret } = await rotateApplicationSecret(context, caller, clientId)
+    const { clientSecret } = await ctx.services.applications.rotate_secret()
     return { rotatedSecret: clientSecret }
   }
 
@@ -143,20 +138,11 @@ export async function action({ request, context: router, params }: Route.ActionA
     const redirectUris = parseUriList(String(form.get("redirectUris") ?? ""))
     if (redirectUris.length === 0)
       return { error: "Add at least one redirect URI.", field: "redirectUris" }
-    const invalid = firstInvalidRedirectUri(redirectUris)
-    if (invalid)
-      return {
-        error: `"${invalid}" isn't a valid URL. Use an absolute URL like https://app.example.com/callback.`,
-        field: "redirectUris",
-      }
-    await updateApplicationRedirectUris(context, caller, clientId, redirectUris)
-    return { ok: "redirects" }
+    const res = await attempt(() => ctx.services.applications.update({ redirectUris }), "redirectUris")
+    return refused(res) ? res : { ok: "redirects" }
   }
 
   if (intent === "impersonate") {
-    const application = await getApplication(context, clientId)
-    const app = application?.app
-    if (!app) return { error: "This application has no app key yet." }
     const res = await impersonateAppMember(context, caller, {
       app,
       userId: String(form.get("userId") ?? ""),
@@ -171,10 +157,6 @@ export async function action({ request, context: router, params }: Route.ActionA
   }
 
   if (intent === "create-api-key" || intent === "revoke-api-key") {
-    const application = await getApplication(context, clientId)
-    const app = application?.app
-    if (!app) return { error: "This application has no app key yet." }
-    const ctx = await requestContext(context, request, app)
 
     if (intent === "create-api-key") {
       const name = String(form.get("name") ?? "").trim()
@@ -207,9 +189,6 @@ export async function action({ request, context: router, params }: Route.ActionA
   }
 
   if (intent === "create-workspace") {
-    const app = (await getApplication(context, clientId))?.app
-    if (!app) return { error: "This application has no app key yet." }
-    const ctx = await requestContext(context, request, app)
     const name = String(form.get("name") ?? "").trim()
     const slug = String(form.get("slug") ?? "").trim()
     const res = await attempt(() => ctx.services.workspaces.create({ name, slug }), "ws-name")
@@ -226,10 +205,6 @@ export async function action({ request, context: router, params }: Route.ActionA
     intent === "revoke-invite" ||
     intent === "resend-invite"
   ) {
-    const application = await getApplication(context, clientId)
-    const app = application?.app
-    if (!app) return { error: "This application has no app key yet." }
-    const ctx = await requestContext(context, request, app)
     const role = String(form.get("role")) === "admin" ? "admin" : "member"
     const permissions = form.getAll("permissions").map(String).filter(Boolean)
     const productPermissions = form.getAll("productPermissions").map(String).filter(Boolean)
@@ -270,62 +245,35 @@ export async function action({ request, context: router, params }: Route.ActionA
   }
 
   if (intent === "update-app-metadata") {
-    const application = await getApplication(context, clientId)
-    const app = application?.app
-    if (!app) return { error: "This application has no app key yet." }
-    // The permission catalog is managed in its own section; preserve it here so
-    // toggling signup never touches it.
-    const parsed = appConfigSchema.safeParse({
-      allow_signup: form.get("allow_signup") === "on",
-      permissions: application.permissions,
-      resource_types: application.resourceTypes,
-    })
-    if (!parsed.success) return { error: "Invalid app settings.", field: "app-metadata" }
-    await updateApplicationMetadata(context, caller, clientId, parsed.data)
+    await ctx.services.applications.update({ allowSignup: form.get("allow_signup") === "on" })
     return { ok: "app-metadata" }
   }
 
   if (intent === "add-permission" || intent === "remove-permission") {
-    const application = await getApplication(context, clientId)
-    const app = application?.app
-    if (!app) return { error: "This application has no app key yet." }
-    const permissions = application.permissions
     // The console edits only the FLAT half of the catalog; resource types are
-    // declared by the app itself over the management API, so they ride through
-    // every write here untouched.
-    const resourceTypes = application.resourceTypes
-
+    // declared by the app itself over the API, so they ride through untouched.
+    const { permissions, resourceTypes } = await ctx.services.applications.get()
+    const value = String(form.get("permission") ?? "").trim()
     if (intent === "add-permission") {
-      const value = String(form.get("permission") ?? "").trim()
       if (!value) return { error: "Enter a permission.", field: "add-permission" }
       if (/\s/.test(value))
         return { error: "Permissions can't contain spaces.", field: "add-permission" }
       if (permissions.includes(value))
         return { error: `"${value}" is already declared.`, field: "add-permission" }
-      const res = await updateApplicationPermissions(context, caller, clientId, {
-        permissions: [...permissions, value],
-        resourceTypes,
-      })
-      if ("error" in res)
-        return {
-          error: `The app declares a resource type with an unusable list URL: ${res.detail}`,
-          field: "add-permission",
-        }
-      return { ok: "permission-added" }
     }
-
-    // remove-permission
-    const value = String(form.get("permission") ?? "")
-    const res = await updateApplicationPermissions(context, caller, clientId, {
-      permissions: permissions.filter((p) => p !== value),
-      resourceTypes,
-    })
-    if ("error" in res)
-      return {
-        error: `The app declares a resource type with an unusable list URL: ${res.detail}`,
-        field: "add-permission",
-      }
-    return { ok: "permission-removed" }
+    const res = await attempt(
+      () =>
+        ctx.services.catalog.declare({
+          permissions:
+            intent === "add-permission"
+              ? [...permissions, value]
+              : permissions.filter((p) => p !== value),
+          resourceTypes,
+        }),
+      "add-permission",
+    )
+    if (refused(res)) return res
+    return { ok: intent === "add-permission" ? "permission-added" : "permission-removed" }
   }
 
   return { error: "Unknown action" }
