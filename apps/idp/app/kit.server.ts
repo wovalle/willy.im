@@ -1,4 +1,6 @@
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
 import { createApp, type ContextInput } from "@willyim/kit"
+import { toMcpServer } from "@willyim/kit/mcp"
 
 import type { AppContext } from "./context"
 import { auditTrail, humanIdOf } from "./lib/audit.server"
@@ -140,6 +142,45 @@ export async function serveApi(c: AppContext, request: Request): Promise<Respons
     // An app the principal holds nothing in is a 404 here, before any method is looked up.
     const ctx = await app.context(principal, scoped ? decodeURIComponent(scoped[1]) : null, depsOf(c, request))
     return await app.handle(request, ctx, { basePath: scoped?.[0] })
+  } catch (e) {
+    if (e instanceof Response) return e
+    throw e
+  }
+}
+
+/** `/mcp` (IdP-level tools) or `/mcp/<app>` (one app's tools). */
+const MCP_PATH = /^\/mcp(?:\/([^/]+))?\/?$/
+
+/**
+ * MCP for agents: the same methods as tools (`<service>_<method>`), filtered to
+ * what the key may call where it is — `/mcp` lists the IdP-level ones (an admin
+ * key), `/mcp/<app>` one app's (an admin key, or a `wim_` key scoped to that
+ * app). Stateless Streamable HTTP, one server per request. Bearer only, like
+ * the HTTP API; no key is a 401 before kit is reached. Null for any other path.
+ */
+export async function serveMcp(c: AppContext, request: Request): Promise<Response | null> {
+  const match = MCP_PATH.exec(new URL(request.url).pathname)
+  if (!match) return null
+  const principal = request.headers.has("authorization")
+    ? await principalFrom(request, c, c.services.auth)
+    : null
+  if (!principal)
+    return Response.json(
+      { error: "Send `Authorization: Bearer <wim_ key>`." },
+      { status: 401, headers: { "www-authenticate": "Bearer" } },
+    )
+  try {
+    const tenant = match[1] ? decodeURIComponent(match[1]) : null
+    const ctx = await app.context(principal, tenant, depsOf(c, request))
+    const server = toMcpServer(app, ctx, {
+      instructions: `willy.im IdP${tenant ? `, app "${tenant}"` : " (IdP level)"}: the tools this key may call here.`,
+    })
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    })
+    await server.connect(transport)
+    return await transport.handleRequest(request)
   } catch (e) {
     if (e instanceof Response) return e
     throw e
