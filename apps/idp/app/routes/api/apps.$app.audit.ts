@@ -1,18 +1,10 @@
 import type { Route } from "./+types/apps.$app.audit"
-import { requireApiCaller } from "~/lib/caller.server"
-import { listAuditForApp } from "~/lib/audit.server"
-import { appContext } from "~/context"
+import { v1 } from "~/lib/v1.server"
 
-/** GET — recent audit entries for this app (newest first). Requires audit:read. */
-export async function loader({ request, context: router, params }: Route.LoaderArgs) {
-  const context = router.get(appContext)
-  await requireApiCaller(request, context, context.services.auth, {
-    app: params.app,
-    permission: "audit:read",
-  })
-  const url = new URL(request.url)
-  const limitParam = Number(url.searchParams.get("limit"))
-  const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 200) : 50
-  const entries = await listAuditForApp(context, params.app, limit)
-  return Response.json({ entries })
+/** GET — audit.list (?limit=, 1 to 200, default 50). */
+export async function loader(args: Route.LoaderArgs) {
+  const limit = Number(new URL(args.request.url).searchParams.get("limit"))
+  return v1(args, args.params.app, (ctx) =>
+    ctx.services.audit.list({ limit: Number.isFinite(limit) && limit > 0 ? Math.min(limit, 200) : 50 }),
+  )
 }

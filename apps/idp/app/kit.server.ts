@@ -8,6 +8,7 @@ import { appRbac } from "./lib/permissions"
 import type { ResourceLister } from "./lib/resources.server"
 import type { BaseServiceContext } from "./lib/services"
 import { app_tokens } from "./services/app-tokens"
+import { audit } from "./services/audit"
 import { applications, catalog } from "./services/applications"
 import { identities } from "./services/identities"
 import { admin_keys, management_keys } from "./services/keys"
@@ -69,6 +70,7 @@ const services = {
   applications,
   catalog,
   users,
+  audit,
 }
 
 export const app = createApp({

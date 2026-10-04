@@ -494,6 +494,10 @@ export const ImpersonationSchema = z.object({
     .describe("The impersonation session's Set-Cookie headers, for the admin's own browser"),
 })
 
+export const ListAuditInput = z.object({
+  limit: z.number().int().min(1).max(200).default(50).describe("Newest first; 1 to 200"),
+})
+
 export type MethodDef = {
   scope: "app" | "idp"
   input: z.ZodType | undefined
@@ -572,6 +576,8 @@ export const methods = {
   "users.list": { scope: "idp", input: undefined, output: UserListSchema },
   "users.find": { scope: "idp", input: FindUserInput, output: FoundUserSchema },
   "users.impersonate": { scope: "app", input: UserIdInput, output: ImpersonationSchema },
+
+  "audit.list": { scope: "app", input: ListAuditInput, output: AuditListSchema },
 } as const satisfies Record<string, MethodDef>
 
 export type Methods = typeof methods

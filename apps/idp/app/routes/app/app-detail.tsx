@@ -29,7 +29,6 @@ import type { Route } from "./+types/app-detail"
 import { appKeyOf } from "~/lib/admin.server"
 import type { ResourceTypeDecl } from "~/lib/metadata"
 import type { ResourceInstance } from "~/lib/resources.server"
-import { listAuditForApp } from "~/lib/audit.server"
 import { requireConsoleCaller } from "~/lib/caller.server"
 import { attempt, refused } from "~/lib/console.server"
 import { requestContext } from "~/kit.server"
@@ -89,12 +88,12 @@ export async function loader({ request, context: router, params }: Route.LoaderA
   // Each list is gated by its method's permission: asking without it would 403
   // the page for a member otherwise entitled to read it.
   const [workspaces, people, members, invitations, apiKeys, audit] = await Promise.all([
-    app && may("workspace:read") ? ctx.services.workspaces.list().then((r) => r.workspaces) : [],
-    app && may("workspace:read") ? ctx.services.workspaces.people().then((r) => r.people) : [],
-    app && may("member:read") ? ctx.services.members.list().then((r) => r.members) : [],
-    app && may("member:read") ? ctx.services.invitations.list().then((r) => r.invitations) : [],
-    app && may("apikey:read") ? ctx.services.management_keys.list().then((r) => r.keys) : [],
-    app ? listAuditForApp(context, app, 20) : Promise.resolve([]),
+    may("workspace:read") ? ctx.services.workspaces.list().then((r) => r.workspaces) : [],
+    may("workspace:read") ? ctx.services.workspaces.people().then((r) => r.people) : [],
+    may("member:read") ? ctx.services.members.list().then((r) => r.members) : [],
+    may("member:read") ? ctx.services.invitations.list().then((r) => r.invitations) : [],
+    may("apikey:read") ? ctx.services.management_keys.list().then((r) => r.keys) : [],
+    may("audit:read") ? ctx.services.audit.list({ limit: 20 }).then((r) => r.entries) : [],
   ])
   return {
     application,

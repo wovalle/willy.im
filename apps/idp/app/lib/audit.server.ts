@@ -1,5 +1,5 @@
 import { withAudit } from "@willyim/kit/audit/d1-runtime"
-import { and, desc, eq } from "drizzle-orm"
+import { desc, eq } from "drizzle-orm"
 
 import * as schema from "../db/schema"
 import type { BaseServiceContext } from "./services"
@@ -103,27 +103,6 @@ export async function listAuditForApp(
     .where(eq(schema.auditLog.application_id, app))
     .orderBy(desc(schema.auditLog.id))
     .limit(limit)
-  return rows.map(toEntry)
-}
-
-/** A single entity's history (e.g. one API key), newest first. */
-export async function listAuditForRow(
-  ctx: BaseServiceContext,
-  app: string,
-  table: string,
-  rowId: string,
-): Promise<AuditEntry[]> {
-  const rows = await ctx.db
-    .select()
-    .from(schema.auditLog)
-    .where(
-      and(
-        eq(schema.auditLog.application_id, app),
-        eq(schema.auditLog.table_name, table),
-        eq(schema.auditLog.row_id, rowId),
-      ),
-    )
-    .orderBy(desc(schema.auditLog.id))
   return rows.map(toEntry)
 }
 
