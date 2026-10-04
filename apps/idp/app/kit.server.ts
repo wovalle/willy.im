@@ -7,6 +7,7 @@ import { principalFrom } from "./lib/caller.server"
 import { appRbac } from "./lib/permissions"
 import type { ResourceLister } from "./lib/resources.server"
 import type { BaseServiceContext } from "./lib/services"
+import { app_tokens } from "./services/app-tokens"
 import { admin_keys, management_keys } from "./services/keys"
 import { invitations, members } from "./services/members"
 import { user_keys } from "./services/user-keys"
@@ -60,6 +61,7 @@ const services = {
   workspace_members,
   management_keys,
   admin_keys,
+  app_tokens,
 }
 
 export const app = createApp({

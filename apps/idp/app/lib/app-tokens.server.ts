@@ -1,108 +1,19 @@
-import { APP_TOKEN_TTL_S } from "@willyim/idp/schemas"
-import { and, eq, lt } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 
 import * as schema from "../db/schema"
-import { catalogOf, getApplicationByApp } from "./admin.server"
-import { generateToken, hashToken } from "./api-keys.server"
-import { recordAudit } from "./audit.server"
-import { assertSuperadmin, isAdminEmail, type Caller } from "./caller.server"
-import type { ResourceLister } from "./resources.server"
-import { resolveScopes, type ScopeResolution } from "./scopes.server"
+import { hashToken } from "./api-keys.server"
+import { isAdminEmail } from "./caller.server"
 import type { BaseServiceContext } from "./services"
 
 /**
  * App tokens — GitHub-App-style installation tokens. An IdP admin key is the
  * private key, and never goes to an app: a superadmin exchanges their authority
  * here for a `wat_` token bound to one app, living an hour at most. The app
- * validates it like an end-user key (`validateKey` answers `kind: "app"`) and
+ * validates it like an end-user key (`user_keys.validate` answers `kind: "app"`) and
  * treats it as the issuer acting in the app — `["*"]` unless narrowed at mint.
  */
 
 export const APP_TOKEN_PREFIX = "wat_"
-const DISPLAY_PREFIX_LEN = APP_TOKEN_PREFIX.length + 8
-
-export type CreateAppTokenResult =
-  | {
-      id: string
-      token: string
-      prefix: string
-      scopes: string[]
-      workspaceId: string | null
-      expiresAt: Date
-    }
-  | { error: "not_found" }
-  | Exclude<ScopeResolution, { ok: true }>
-
-/**
- * Mints a token for `app`. Returns the plaintext exactly once.
- *
- * Superadmin only: the token carries the caller's own authority inside the
- * app, so no permission an app could hand out may mint one. Scopes default to
- * `["*"]`; given ones resolve against the app's catalog the way user-key scopes
- * do (`"*"` aside, which no catalog declares) and are rejected, not dropped.
- */
-export async function createAppToken(
-  ctx: BaseServiceContext,
-  caller: Caller,
-  input: { app: string; scopes?: string[]; workspaceId?: string | null; expiresIn?: number },
-  deps: { resources: ResourceLister },
-): Promise<CreateAppTokenResult> {
-  assertSuperadmin(caller)
-  const application = await getApplicationByApp(ctx, input.app)
-  if (!application) return { error: "not_found" }
-
-  const requested = input.scopes ?? ["*"]
-  const isWildcard = (scope: string) => scope.trim() === "*"
-  const resolved = await resolveScopes(
-    requested.filter((s) => !isWildcard(s)),
-    input.app,
-    catalogOf(application),
-    deps.resources,
-  )
-  if ("error" in resolved) return resolved
-  const scopes = requested.some(isWildcard) ? ["*", ...resolved.scopes] : resolved.scopes
-
-  const token = generateToken(APP_TOKEN_PREFIX)
-  const keyHash = await hashToken(token)
-  const prefix = token.slice(0, DISPLAY_PREFIX_LEN)
-  const id = crypto.randomUUID()
-  const workspaceId = input.workspaceId ?? null
-  const expiresAt = new Date(Date.now() + (input.expiresIn ?? APP_TOKEN_TTL_S) * 1000)
-
-  await ctx.db.insert(schema.appToken).values({
-    id,
-    applicationId: input.app,
-    prefix,
-    keyHash,
-    scopes,
-    workspaceId,
-    // A superadmin is an admin key or an allowlisted human, so exactly one is set.
-    issuedByKeyId: caller.keyId,
-    issuedByUserId: caller.userId,
-    expiresAt,
-  })
-
-  // Housekeeping: a token a day past its expiry can't matter to anyone (the
-  // audit row of its issue stays). Best effort; minting never fails on it.
-  await ctx.db
-    .delete(schema.appToken)
-    .where(lt(schema.appToken.expiresAt, new Date(Date.now() - 86_400_000)))
-    .catch((err) =>
-      ctx.logger.warn("apptoken.prune_failed", {
-        error: err instanceof Error ? err.message : String(err),
-      }),
-    )
-  await recordAudit(ctx, {
-    actor: caller.actor,
-    table: "app_token",
-    operation: "issue",
-    applicationId: input.app,
-    rowId: id,
-    after: { scopes, workspaceId, expiresAt: expiresAt.toISOString() },
-  })
-
-  return { id, token, prefix, scopes, workspaceId, expiresAt }
-}
 
 export type AppTokenValidation =
   | {

@@ -699,7 +699,7 @@ describe("management API routes", () => {
     it("404s an app that isn't registered", async () => {
       expect(await mint({}, adminToken, "ghost")).toEqual({
         status: 404,
-        body: { error: "not_found" },
+        body: { error: "No application ghost." },
       })
     })
 
@@ -719,15 +719,15 @@ describe("management API routes", () => {
 
       expect(await mint({ scopes: ["invoices:read", "nope:read"] })).toEqual({
         status: 422,
-        body: { error: "unknown_scopes", detail: ["nope:read"] },
+        body: { error: "Not in this app's catalog: nope:read" },
       })
     })
 
-    it("422s an expiresIn outside 60–3600 seconds, and honours one inside", async () => {
+    it("400s an expiresIn outside 60–3600 seconds, naming the field, and honours one inside", async () => {
       for (const expiresIn of [59, 3601, 90.5]) {
         const res = await mint({ expiresIn })
-        expect(res.status).toBe(422)
-        expect(res.body).toMatchObject({ error: "validation_error" })
+        expect(res.status).toBe(400)
+        expect(res.body).toMatchObject({ error: "invalid input", fields: { expiresIn: [expect.any(String)] } })
       }
 
       const since = Date.now()
