@@ -1067,9 +1067,8 @@ function PermissionsCatalog({
             <p className="text-muted-foreground text-sm">
               Permission families over instances the app holds — a grant is{" "}
               <code className="font-mono text-xs">&lt;type&gt;:&lt;id&gt;</code>. Declared by the
-              app over{" "}
-              <code className="font-mono text-xs">PUT /api/v1/apps/{"{app}"}/permissions</code>;
-              instances are read from the app when granting.
+              app with <code className="font-mono text-xs">catalog.declare</code>; instances are
+              read from the app when granting.
             </p>
             <ul className="divide-border divide-y rounded-lg border">
               {resourceTypes.map((t) => {

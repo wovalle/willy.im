@@ -140,8 +140,8 @@ export async function createSession(
 }
 
 /** A Request carrying a bearer token, for the management-API gates. */
-export function bearerRequest(token: string, url = "https://idp.willy.im/api/v1/apps") {
-  return new Request(url, { headers: { authorization: `Bearer ${token}` } })
+export function bearerRequest(token: string) {
+  return new Request("https://idp.willy.im/", { headers: { authorization: `Bearer ${token}` } })
 }
 
 /** The resolver only reads `api.getSession`; a bearer caller never has one. */

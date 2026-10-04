@@ -125,16 +125,14 @@ describe("management api", () => {
       fetch: (async () => Response.json(body)) as typeof fetch,
     })
 
-  it("rejects a response that doesn't match the operation's schema", async () => {
-    await expect(api({ members: [{ userId: "u_1" }] }).request("get", "/api/v1/apps/{app}/members", {
-      params: { app: "acme" },
-    })).rejects.toThrow(/members\.0/)
+  it("rejects a response that doesn't match the method's schema", async () => {
+    await expect(
+      api({ members: [{ userId: "u_1" }] }).call("members.list", undefined, { app: "acme" }),
+    ).rejects.toThrow(/members\.0/)
   })
 
-  it("names the operation in the error", async () => {
-    await expect(
-      api({ wrong: true }).request("get", "/api/v1/users"),
-    ).rejects.toThrow(/GET \/api\/v1\/users/)
+  it("names the method in the error", async () => {
+    await expect(api({ wrong: true }).call("users.list", undefined)).rejects.toThrow(/users\.list/)
   })
 
   it("passes a well-formed response straight through", async () => {
@@ -143,8 +141,6 @@ describe("management api", () => {
         { userId: "u_1", email: "a@b.c", name: null, role: "admin", permissions: [], productPermissions: [] },
       ],
     }
-    expect(
-      await api(body).request("get", "/api/v1/apps/{app}/members", { params: { app: "acme" } }),
-    ).toEqual(body)
+    expect(await api(body).call("members.list", undefined, { app: "acme" })).toEqual(body)
   })
 })

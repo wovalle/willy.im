@@ -114,14 +114,11 @@ export async function requestContext(c: AppContext, request: Request, tenant: st
 
 /** `/apps/<app>/` in front of the API or its documents: the app is the tenant. */
 const APP_PREFIX = /^\/apps\/([^/]+)(?=\/(?:api\/|openapi\.json$|llms\.txt$))/
-/**
- * The IdP-level API and its documents. `/api/v1/*` and `/api/openapi.json`
- * are the old REST API's until it's deleted.
- */
-const IDP_PATH = /^\/(?:api\/(?!openapi\.json$)[a-z_]+\.[a-z_]+|openapi\.json|llms\.txt)$/
+/** The IdP-level API and its documents. */
+const IDP_PATH = /^\/(?:api\/[a-z_]+\.[a-z_]+|openapi\.json|llms\.txt)$/
 
 /**
- * kit's generated HTTP API, from the registry (replaces `/api/v1`):
+ * kit's generated HTTP API, from the registry:
  *
  *   POST /apps/<app>/api/<service>.<method>   an app's methods, in that app
  *   POST /api/<service>.<method>              IdP-level methods

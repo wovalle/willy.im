@@ -166,6 +166,18 @@ describe("app tokens", () => {
       expect(token.expiresAt).toBe("2026-06-01T00:01:00.000Z")
     })
 
+    it("400s an expiresIn outside 60–3600 seconds, naming the field, and mints nothing", async () => {
+      for (const expiresIn of [59, 3601, 90.5]) {
+        const refused = await mint({ expiresIn }).catch((e: unknown) => e)
+        expect(refused).toBeInstanceOf(Response)
+        expect((refused as Response).status).toBe(400)
+        expect(await (refused as Response).json()).toMatchObject({
+          fields: { expiresIn: [expect.any(String)] },
+        })
+      }
+      expect(await h.ctx.db.select().from(schema.appToken)).toEqual([])
+    })
+
     it("404s an app that isn't registered", async () => {
       expect(await failureOf(mint({ app: "ghost" }))).toEqual({ status: 404, error: "No application ghost." })
     })

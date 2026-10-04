@@ -116,8 +116,8 @@ describe("the generated HTTP API", () => {
     expect(await llms!.text()).toContain("### applications.register")
   })
 
-  it("leaves every other path to React Router, /api/v1 included", async () => {
-    for (const path of ["/api/v1/applications", "/api/openapi.json", "/apps/client_123", "/apps/acme/resources", "/"])
+  it("leaves every other path to React Router", async () => {
+    for (const path of ["/apps/client_123", "/apps/acme/resources", "/"])
       expect(await call(path, { token: admin })).toBeNull()
   })
 })

@@ -12,8 +12,8 @@ import type { BaseServiceContext } from "./services"
  * holds the IdP's knobs and the one hand-written event.
  *
  * Deviations from the package defaults, on purpose: auth *is* this product, so
- * failures are kept (`status` rides in the payload) and intent-less API
- * mutations get a method suffix so PATCH and DELETE on one route stay distinct.
+ * failures are kept (`status` rides in the payload) and intent-less mutations
+ * (API calls, auth verbs) carry their method as a suffix (`:post`).
  */
 export const LUCHY_TRACKER_OPTIONS = {
   apiKey: LUCHY_API_KEY,
@@ -22,7 +22,7 @@ export const LUCHY_TRACKER_OPTIONS = {
   // Consumer apps validate end-user API keys on (potentially) every request
   // they serve. That is key plumbing, not product usage — it already bumps
   // `lastUsedAt` on the key row, and here it would drown everything else.
-  ignoreRouteSuffixes: ["/user-keys/validate", "/user_keys.validate"],
+  ignoreRouteSuffixes: ["/user_keys.validate"],
 } satisfies Partial<RequestTrackerOptions>
 
 /**
