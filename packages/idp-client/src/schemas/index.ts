@@ -463,6 +463,20 @@ export const InvitationSchema = z.object({
 })
 export const InvitationListSchema = z.object({ invitations: z.array(InvitationSchema) })
 
+export const WorkspaceIdInput = z.object({ workspaceId: z.string().min(1) })
+export const SetWorkspaceMemberMethodInput = SetWorkspaceMemberInput.extend({
+  workspaceId: z.string().min(1),
+})
+export const RemoveWorkspaceMemberInput = z.object({
+  workspaceId: z.string().min(1),
+  userId: z.string().min(1),
+})
+export const WorkspacePeopleSchema = z.object({
+  people: z.array(
+    z.object({ email: z.string(), name: z.string().nullable(), workspace: z.string(), role: z.string() }),
+  ),
+})
+
 export type MethodDef = {
   scope: "app" | "idp"
   input: z.ZodType | undefined
@@ -486,6 +500,22 @@ export const methods = {
   "invitations.list": { scope: "app", input: undefined, output: InvitationListSchema },
   "invitations.resend": { scope: "app", input: IdInput, output: OkSchema },
   "invitations.revoke": { scope: "app", input: IdInput, output: OkSchema },
+
+  "workspaces.list": { scope: "app", input: undefined, output: WorkspaceListSchema },
+  "workspaces.create": { scope: "app", input: CreateWorkspaceInput, output: WorkspaceCreatedSchema },
+  "workspaces.people": { scope: "app", input: undefined, output: WorkspacePeopleSchema },
+  "workspaces.list_all": { scope: "idp", input: undefined, output: WorkspaceListSchema },
+  "workspace_members.list": {
+    scope: "app",
+    input: WorkspaceIdInput,
+    output: WorkspaceMemberListSchema,
+  },
+  "workspace_members.set": {
+    scope: "app",
+    input: SetWorkspaceMemberMethodInput,
+    output: WorkspaceMemberSchema,
+  },
+  "workspace_members.remove": { scope: "app", input: RemoveWorkspaceMemberInput, output: OkSchema },
 } as const satisfies Record<string, MethodDef>
 
 export type Methods = typeof methods

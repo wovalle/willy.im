@@ -506,40 +506,6 @@ export async function deleteApplication(
   })
 }
 
-/** Workspaces belonging to one application. */
-export async function listWorkspacesForApp(ctx: BaseServiceContext, app: string) {
-  return ctx.db
-    .select({
-      id: schema.organization.id,
-      name: schema.organization.name,
-      slug: schema.organization.slug,
-      createdAt: schema.organization.createdAt,
-    })
-    .from(schema.organization)
-    .where(eq(schema.organization.applicationId, app))
-    .orderBy(desc(schema.organization.createdAt))
-}
-
-/** People with access to an app — derived from membership in its workspaces. */
-export async function listPeopleForApp(ctx: BaseServiceContext, app: string) {
-  return ctx.db
-    .select({
-      email: schema.user.email,
-      name: schema.user.name,
-      workspace: schema.organization.slug,
-      role: schema.member.role,
-    })
-    .from(schema.member)
-    .innerJoin(
-      schema.organization,
-      and(
-        eq(schema.member.organizationId, schema.organization.id),
-        eq(schema.organization.applicationId, app),
-      ),
-    )
-    .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
-}
-
 export async function listUsers(ctx: BaseServiceContext) {
   return ctx.db
     .select({
@@ -584,62 +550,4 @@ export function resolveAvatars<T extends { id: string; image: string | null }>(
   origin: string,
 ): (T & { image: string })[] {
   return users.map((u) => ({ ...u, image: u.image || avatarUrl(origin, u.id) }))
-}
-
-export async function listWorkspaces(ctx: BaseServiceContext) {
-  return ctx.db
-    .select({
-      id: schema.organization.id,
-      name: schema.organization.name,
-      slug: schema.organization.slug,
-      applicationId: schema.organization.applicationId,
-      createdAt: schema.organization.createdAt,
-    })
-    .from(schema.organization)
-    .orderBy(desc(schema.organization.createdAt))
-}
-
-/**
- * Session-less workspace creation — the only workspace-creation path. Better
- * Auth's createOrganization needs a user session (it makes the caller the
- * owner); a scoped API key has no user, so the row is inserted directly.
- * Members are added separately (via the member endpoints / invitations). Slug
- * must be unique across all apps (the organization table enforces it).
- *
- * Requires `workspace:create` on the target app.
- */
-export async function createWorkspaceForApp(
-  ctx: BaseServiceContext,
-  caller: Caller,
-  input: { app: string; name: string; slug: string },
-): Promise<{ id: string; name: string; slug: string } | { error: string }> {
-  await assertCan(caller, input.app, "workspace:create")
-  const slug = input.slug.trim().toLowerCase()
-  const name = input.name.trim()
-  if (!name || !slug) return { error: "Workspace name and slug are required." }
-
-  const [clash] = await ctx.db
-    .select({ id: schema.organization.id })
-    .from(schema.organization)
-    .where(eq(schema.organization.slug, slug))
-    .limit(1)
-  if (clash) return { error: `Slug "${slug}" is already taken.` }
-
-  const id = crypto.randomUUID()
-  await ctx.db.insert(schema.organization).values({
-    id,
-    name,
-    slug,
-    applicationId: input.app,
-    createdAt: new Date(),
-  })
-  await recordAudit(ctx, {
-    actor: caller.actor,
-    table: "organization",
-    operation: "create",
-    applicationId: input.app,
-    rowId: id,
-    after: { name, slug },
-  })
-  return { id, name, slug }
 }

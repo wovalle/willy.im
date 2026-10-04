@@ -9,6 +9,7 @@ import type { ResourceLister } from "./lib/resources.server"
 import type { BaseServiceContext } from "./lib/services"
 import { invitations, members } from "./services/members"
 import { user_keys } from "./services/user-keys"
+import { workspace_members, workspaces } from "./services/workspaces"
 
 /**
  * The IdP as one @willyim/kit app: every management capability is a method,
@@ -50,7 +51,7 @@ const context = ({ principal, tenantId }: ContextInput, deps: KitDeps) => ({
   origin: new URL(deps.request.url).origin,
 })
 
-const services = { user_keys, members, invitations }
+const services = { user_keys, members, invitations, workspaces, workspace_members }
 
 export const app = createApp({
   name: "idp",

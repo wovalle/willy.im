@@ -1,13 +1,7 @@
 import type { Route } from "./+types/workspaces"
-import { listWorkspaces } from "~/lib/admin.server"
-import { requireApiCaller } from "~/lib/caller.server"
-import { appContext } from "~/context"
+import { v1 } from "~/lib/v1.server"
 
-export async function loader({ request, context: router }: Route.LoaderArgs) {
-  const context = router.get(appContext)
-  await requireApiCaller(request, context, context.services.auth, { superadmin: true })
-  const workspaces = await listWorkspaces(context)
-  return Response.json({
-    workspaces: workspaces.map((w) => ({ ...w, createdAt: new Date(w.createdAt).toISOString() })),
-  })
+/** GET — workspaces.list_all (superadmin). */
+export async function loader(args: Route.LoaderArgs) {
+  return v1(args, null, (ctx) => ctx.services.workspaces.list_all())
 }

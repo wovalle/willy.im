@@ -27,12 +27,9 @@ import {
 
 import type { Route } from "./+types/app-detail"
 import {
-  createWorkspaceForApp,
   deleteApplication,
   getApplication,
   impersonateAppMember,
-  listPeopleForApp,
-  listWorkspacesForApp,
   rotateApplicationSecret,
   updateApplicationMetadata,
   updateApplicationPermissions,
@@ -99,8 +96,8 @@ export async function loader({ request, context: router, params }: Route.LoaderA
   const ctx = await requestContext(context, request, app)
   const may = (permission: AppPermission) => permissions.includes(permission)
   const [workspaces, people, members, invitations, apiKeys, audit] = await Promise.all([
-    app ? listWorkspacesForApp(context, app) : Promise.resolve([]),
-    app ? listPeopleForApp(context, app) : Promise.resolve([]),
+    app && may("workspace:read") ? ctx.services.workspaces.list().then((r) => r.workspaces) : [],
+    app && may("workspace:read") ? ctx.services.workspaces.people().then((r) => r.people) : [],
     app && may("member:read") ? ctx.services.members.list().then((r) => r.members) : [],
     app && may("member:read") ? ctx.services.invitations.list().then((r) => r.invitations) : [],
     // Gated in the service: asking without apikey:read would 403 the page for a
@@ -207,13 +204,13 @@ export async function action({ request, context: router, params }: Route.ActionA
   }
 
   if (intent === "create-workspace") {
+    const app = (await getApplication(context, clientId))?.app
+    if (!app) return { error: "This application has no app key yet." }
+    const ctx = await requestContext(context, request, app)
     const name = String(form.get("name") ?? "").trim()
     const slug = String(form.get("slug") ?? "").trim()
-    const app = String(form.get("app") ?? "").trim()
-    if (!name || !slug) return { error: "Workspace name and slug are required.", field: "ws-name" }
-    const res = await createWorkspaceForApp(context, caller, { app, name, slug })
-    if ("error" in res) return { error: res.error, field: "ws-name" }
-    return { ok: "workspace" }
+    const res = await attempt(() => ctx.services.workspaces.create({ name, slug }), "ws-name")
+    return refused(res) ? res : { ok: "workspace" }
   }
 
   // Member-management intents. Resolved against the app's access catalog so

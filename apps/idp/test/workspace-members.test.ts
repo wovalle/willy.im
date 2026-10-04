@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import { workspaceClaimsFor } from "../app/lib/claims.server"
-import type { Caller } from "../app/lib/caller.server"
+import type { IdpPrincipal } from "../app/lib/caller.server"
+import { listAuditForApp } from "../app/lib/audit.server"
 import {
-  listWorkspaceMembers,
-  removeWorkspaceMember,
-  setWorkspaceMember,
-} from "../app/lib/workspace-members.server"
-import { createApplication, createUser, createWorkspace, fakeUserCaller } from "./helpers/fixtures"
+  bootstrapAdminKey,
+  createApplication,
+  createUser,
+  createWorkspace,
+  failureOf,
+  kitContext,
+  memberPrincipal,
+} from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
 /**
@@ -15,10 +19,10 @@ import { createTestHarness, type TestHarness } from "./helpers/harness"
  * existed nothing could write them, so apps that take their tenants from the
  * IdP saw nobody in any workspace.
  */
-describe("workspace members", () => {
+describe("workspace_members", () => {
   let h: TestHarness
-  let manager: Caller
-  let reader: Caller
+  let manager: IdpPrincipal
+  let reader: IdpPrincipal
   let ws: { id: string }
   let other: { id: string }
   let person: { id: string }
@@ -31,13 +35,15 @@ describe("workspace members", () => {
     other = await createWorkspace(h.ctx, { app: "kasso", slug: "kasso-ws" })
     person = await createUser(h.ctx, { email: "designer@romo.test" })
     const admin = await createUser(h.ctx, { email: "admin@romo.test" })
-    manager = fakeUserCaller({ userId: admin.id, app: "calque", permissions: ["member:manage", "member:read"] })
-    reader = fakeUserCaller({ userId: admin.id, app: "calque", permissions: ["member:read"] })
+    manager = memberPrincipal(admin.id, "calque", ["member:manage", "workspace:read"])
+    reader = memberPrincipal(admin.id, "calque", ["workspace:read"])
   })
   afterEach(() => h.close())
 
-  const set = (role: "owner" | "admin" | "member", as = manager, workspaceId = ws.id) =>
-    setWorkspaceMember(h.ctx, as, { app: "calque", workspaceId, email: "Designer@romo.test", role })
+  const as = async (principal: IdpPrincipal) =>
+    (await kitContext(h.ctx, principal, "calque")).services.workspace_members
+  const set = async (role: "owner" | "admin" | "member", by = manager, workspaceId = ws.id) =>
+    (await as(by)).set({ workspaceId, email: "Designer@romo.test", role })
 
   it("puts a user in a workspace; the workspaces claim carries it with the role", async () => {
     expect(await set("owner")).toMatchObject({ userId: person.id, role: "owner" })
@@ -51,33 +57,107 @@ describe("workspace members", () => {
     await set("member")
     await set("member")
     await set("admin")
-    const res = await listWorkspaceMembers(h.ctx, reader, { app: "calque", workspaceId: ws.id })
-    expect(res).toEqual({ members: [expect.objectContaining({ userId: person.id, role: "admin" })] })
+    expect(await (await as(reader)).list({ workspaceId: ws.id })).toEqual({
+      members: [expect.objectContaining({ userId: person.id, role: "admin" })],
+    })
+    const entries = await listAuditForApp(h.ctx, "calque")
+    expect(entries.map((e) => [e.tableName, e.operation])).toEqual([
+      ["member", "update"],
+      ["member", "create"],
+    ])
   })
 
-  it("removes a member", async () => {
+  it("removes a member, and 404s one who isn't there", async () => {
     await set("member")
-    expect(await removeWorkspaceMember(h.ctx, manager, { app: "calque", workspaceId: ws.id, userId: person.id })).toEqual({
-      ok: true,
-    })
+    const members = await as(manager)
+    expect(await members.remove({ workspaceId: ws.id, userId: person.id })).toEqual({ ok: true })
     expect(await workspaceClaimsFor(h.ctx.db, person.id, "calque")).toEqual([])
-    expect(
-      await removeWorkspaceMember(h.ctx, manager, { app: "calque", workspaceId: ws.id, userId: person.id }),
-    ).toMatchObject({ error: "not_a_member" })
+    expect(await failureOf(members.remove({ workspaceId: ws.id, userId: person.id }))).toEqual({
+      status: 404,
+      error: "They aren't in this workspace.",
+    })
   })
 
-  it("needs member:manage to write and member:read to list", async () => {
-    await expect(set("member", reader)).rejects.toMatchObject({ status: 403 })
-    const nobody = fakeUserCaller({ userId: person.id, app: "calque", permissions: [] })
-    await expect(listWorkspaceMembers(h.ctx, nobody, { app: "calque", workspaceId: ws.id })).rejects.toMatchObject({
-      status: 403,
-    })
+  it("needs member:manage to write and workspace:read to list", async () => {
+    expect((await failureOf(set("member", reader))).status).toBe(403)
+    const nobody = await as(memberPrincipal(person.id, "calque", []))
+    expect((await failureOf(nobody.list({ workspaceId: ws.id }))).status).toBe(403)
   })
 
   it("another app's workspace is unknown, and so is an email with no user", async () => {
-    expect(await set("member", manager, other.id)).toMatchObject({ error: "unknown_workspace" })
+    expect(await failureOf(set("member", manager, other.id))).toEqual({
+      status: 404,
+      error: "No such workspace in calque.",
+    })
+    const missing = (await as(manager)).set({
+      workspaceId: ws.id,
+      email: "nobody@x.test",
+      role: "member",
+    })
+    expect((await failureOf(missing)).status).toBe(404)
+  })
+})
+
+describe("workspaces", () => {
+  let h: TestHarness
+  let root: IdpPrincipal
+  beforeEach(async () => {
+    h = createTestHarness()
+    root = (await bootstrapAdminKey(h.ctx)).principal
+    await createApplication(h.ctx, { app: "calque" })
+    await createApplication(h.ctx, { app: "kasso" })
+  })
+  afterEach(() => h.close())
+
+  const workspaces = async (app: string | null, principal = root) =>
+    (await kitContext(h.ctx, principal, app)).services.workspaces
+
+  it("creates a workspace in the app, lists it there and nowhere else, and audits it", async () => {
+    const created = await (await workspaces("calque")).create({ name: " Romo ", slug: "romo" })
+    expect(created).toMatchObject({ name: "Romo", slug: "romo" })
+
+    expect((await (await workspaces("calque")).list()).workspaces).toEqual([
+      expect.objectContaining({ id: created.id, slug: "romo", applicationId: "calque" }),
+    ])
+    expect((await (await workspaces("kasso")).list()).workspaces).toEqual([])
+    expect((await listAuditForApp(h.ctx, "calque"))[0]).toMatchObject({
+      tableName: "organization",
+      operation: "create",
+      rowId: created.id,
+    })
+  })
+
+  it("409s a slug another app already took", async () => {
+    await createWorkspace(h.ctx, { app: "kasso", slug: "romo" })
+    expect(await failureOf((await workspaces("calque")).create({ name: "R", slug: "romo" }))).toEqual({
+      status: 409,
+      error: 'Slug "romo" is already taken.',
+    })
+  })
+
+  it("needs workspace:create to create one", async () => {
+    const reader = memberPrincipal("u1", "calque", ["workspace:read"])
     expect(
-      await setWorkspaceMember(h.ctx, manager, { app: "calque", workspaceId: ws.id, email: "nobody@x.test", role: "member" }),
-    ).toMatchObject({ error: "unknown_user" })
+      (await failureOf((await workspaces("calque", reader)).create({ name: "R", slug: "r" }))).status,
+    ).toBe(403)
+  })
+
+  it("lists people across the app's workspaces", async () => {
+    const romo = await createWorkspace(h.ctx, { app: "calque", slug: "romo" })
+    await createUser(h.ctx, { email: "designer@romo.test" })
+    const members = (await kitContext(h.ctx, root, "calque")).services.workspace_members
+    await members.set({ workspaceId: romo.id, email: "designer@romo.test", role: "owner" })
+    expect((await (await workspaces("calque")).people()).people).toEqual([
+      { email: "designer@romo.test", name: "designer@romo.test", workspace: "romo", role: "owner" },
+    ])
+  })
+
+  it("lists every app's workspaces at the IdP level, to superadmins only", async () => {
+    await createWorkspace(h.ctx, { app: "calque", slug: "a" })
+    await createWorkspace(h.ctx, { app: "kasso", slug: "b" })
+    expect((await (await workspaces(null)).list_all()).workspaces).toHaveLength(2)
+
+    const staff = { id: "user:u1", grants: [], memberships: [] }
+    expect((await failureOf((await workspaces(null, staff)).list_all())).status).toBe(403)
   })
 })
