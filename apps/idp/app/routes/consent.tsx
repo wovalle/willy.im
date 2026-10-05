@@ -1,13 +1,27 @@
 import { useState } from "react"
-import { useSearchParams } from "react-router"
 import { Check, Loader2, ShieldCheck } from "lucide-react"
 
+import type { Route } from "./+types/consent"
 import { authClient } from "~/lib/auth-client"
+import { consentClient } from "~/lib/consent.server"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card"
+import { appContext } from "~/context"
 
 export function meta() {
   return [{ title: "Authorize · willy.im" }]
+}
+
+// The plugin sends the user here with the authorization request on the query
+// (client_id, scope, redirect_uri, …, signed). client_id is an opaque id, so
+// the client is looked up and named by what it registered.
+export async function loader({ request, context: router }: Route.LoaderArgs) {
+  const context = router.get(appContext)
+  const params = new URL(request.url).searchParams
+  return {
+    client: await consentClient(context, params.get("client_id"), params.get("redirect_uri")),
+    scopes: (params.get("scope") ?? "").split(/\s+/).filter(Boolean),
+  }
 }
 
 const SCOPE_LABELS: Record<string, string> = {
@@ -17,13 +31,10 @@ const SCOPE_LABELS: Record<string, string> = {
   offline_access: "Stay signed in (refresh access)",
 }
 
-export default function Consent() {
-  const [params] = useSearchParams()
+export default function Consent({ loaderData }: Route.ComponentProps) {
+  const { client, scopes } = loaderData
   const [pending, setPending] = useState<null | "accept" | "deny">(null)
   const [error, setError] = useState<string | null>(null)
-
-  const clientId = params.get("client_id") ?? "An application"
-  const scopes = (params.get("scope") ?? "").split(/\s+/).filter(Boolean)
 
   async function decide(accept: boolean) {
     setError(null)
@@ -49,13 +60,23 @@ export default function Consent() {
     <main id="main" className="flex min-h-screen flex-col items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <div className="bg-primary/10 text-primary mb-2 flex size-10 items-center justify-center rounded-lg">
-            <ShieldCheck aria-hidden="true" className="size-5" />
-          </div>
+          {client.icon ? (
+            <img
+              src={client.icon}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="mb-2 size-10 rounded-lg object-contain"
+            />
+          ) : (
+            <div className="bg-primary/10 text-primary mb-2 flex size-10 items-center justify-center rounded-lg">
+              <ShieldCheck aria-hidden="true" className="size-5" />
+            </div>
+          )}
           <CardTitle>Authorize access</CardTitle>
           <CardDescription>
-            <span className="font-medium">{clientId}</span> wants to sign you in with your willy.im
-            account.
+            <span className="text-foreground font-medium">{client.name}</span> wants to sign you in
+            with your willy.im account.
+            {client.host ? <span className="mt-1 block text-xs">Returns you to {client.host}</span> : null}
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -106,6 +106,10 @@ function isCallableListUrl(raw: string) {
 const invalidRedirect = (uri: string) =>
   fail(422, `"${uri}" isn't a valid URL. Use an absolute URL like https://app.example.com/callback.`)
 
+// What a person sees on the consent screen and in the console. The schema's
+// min(1) lets "   " through; a registered app always has a real name.
+const blankName = () => fail(422, "Give the application a name.")
+
 export const applications = declareService((ctx) => {
   const current = () => registration(ctx)
 
@@ -133,6 +137,7 @@ export const applications = declareService((ctx) => {
       async (input) => {
         const app = input.app.trim().toLowerCase()
         const name = input.name.trim()
+        if (!name) blankName()
         const invalid = firstInvalidRedirectUri(input.redirectUris)
         if (invalid) invalidRedirect(invalid)
         // The key lives inside a JSON column, hence the scan.
@@ -210,6 +215,8 @@ export const applications = declareService((ctx) => {
       },
       async (patch) => {
         const app = await current()
+        const name = patch.name?.trim()
+        if (name === "") blankName()
         if (patch.redirectUris) {
           const invalid = firstInvalidRedirectUri(patch.redirectUris)
           if (invalid) invalidRedirect(invalid)
@@ -233,7 +240,7 @@ export const applications = declareService((ctx) => {
         await ctx.db
           .update(schema.oauthClient)
           .set({
-            ...(patch.name !== undefined && { name: patch.name }),
+            ...(name !== undefined && { name }),
             ...(patch.redirectUris !== undefined && { redirectUris: patch.redirectUris }),
             ...(metadataChanged && {
               metadata: serializeAppMetadata({

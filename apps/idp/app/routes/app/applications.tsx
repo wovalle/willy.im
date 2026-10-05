@@ -3,6 +3,7 @@ import { Form, Link, useActionData, useNavigation } from "react-router"
 import { ChevronRight, Loader2, Plus } from "lucide-react"
 
 import type { Route } from "./+types/applications"
+import { clientDisplayName } from "~/lib/client-display"
 import { attempt, consoleContext, refused } from "~/lib/console.server"
 import { parseUriList } from "~/lib/validate"
 import { Badge } from "~/components/ui/badge"
@@ -170,7 +171,7 @@ export default function AdminApplications({ loaderData }: Route.ComponentProps) 
                     to={`/apps/${a.clientId}`}
                     className="no-underline after:absolute after:inset-0"
                   >
-                    {a.name ?? "—"}
+                    {clientDisplayName(a)}
                   </Link>
                 </TableCell>
                 <TableCell>

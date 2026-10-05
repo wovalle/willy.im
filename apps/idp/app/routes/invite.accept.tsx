@@ -1,6 +1,8 @@
 import { Link, redirect } from "react-router"
 
 import type { Route } from "./+types/invite.accept"
+import { getApplicationByApp } from "~/lib/admin.server"
+import { clientDisplayName } from "~/lib/client-display"
 import { claimInvitationsForUser, getInvitationByToken } from "~/lib/members.server"
 import { trackServerEvent } from "~/lib/luchy.server"
 import { Button } from "~/components/ui/button"
@@ -39,9 +41,10 @@ export async function loader({ request, context: router }: Route.LoaderArgs) {
     throw redirect("/")
   }
 
+  const application = await getApplicationByApp(context, invite.applicationId)
   return {
     state: "ready" as const,
-    app: invite.applicationId,
+    app: application ? clientDisplayName(application) : invite.applicationId,
     role: invite.role,
     email: invite.email,
     signedInAs: session?.user.email ?? null,
