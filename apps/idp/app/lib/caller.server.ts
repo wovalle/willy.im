@@ -79,8 +79,11 @@ async function sessionPrincipal(
  * (`wak_`) or an app token (`wat_`): refused — never shrunk — once its creator
  * no longer holds what it carries. An admin key needs its creator still on the
  * superadmin allowlist; an app key needs the creator still a member of that app
- * whose permissions cover the key's. Keys minted by keys have no creator and
- * are judged by their own row.
+ * whose permissions cover the key's. A key minted by a key inherits that key's
+ * human (services/keys.ts), so a child key cannot outlive its root human.
+ * `minted_by_human` with a null creator means the creator was deleted (the FK
+ * nulls the column): refused. Only a key with no human anywhere up its chain —
+ * the bootstrap admin key — is judged by its own row alone.
  */
 async function creatorStillHolds(
   ctx: BaseServiceContext,
@@ -90,10 +93,11 @@ async function creatorStillHolds(
     ctx.logger.warn("apikey.creator_lost_access", { keyId: row.id, createdBy: row.createdByUserId, reason })
     return false
   }
+  if (!row.createdByUserId) return lost("creator_deleted")
   const [creator] = await ctx.db
     .select({ email: schema.user.email })
     .from(schema.user)
-    .where(eq(schema.user.id, row.createdByUserId!))
+    .where(eq(schema.user.id, row.createdByUserId))
     .limit(1)
   if (!creator) return lost("creator_deleted")
   if (isAdminEmail(ctx, creator.email)) return true
@@ -105,7 +109,7 @@ async function creatorStillHolds(
     .where(
       and(
         eq(schema.applicationMember.applicationId, row.applicationId),
-        eq(schema.applicationMember.userId, row.createdByUserId!),
+        eq(schema.applicationMember.userId, row.createdByUserId),
       ),
     )
     .limit(1)
@@ -133,6 +137,7 @@ async function keyPrincipal(ctx: BaseServiceContext, token: string): Promise<Idp
       expiresAt: schema.apiKey.expiresAt,
       revokedAt: schema.apiKey.revokedAt,
       createdByUserId: schema.apiKey.createdByUserId,
+      mintedByHuman: schema.apiKey.mintedByHuman,
     })
     .from(schema.apiKey)
     .where(eq(schema.apiKey.keyHash, keyHash))
@@ -141,7 +146,7 @@ async function keyPrincipal(ctx: BaseServiceContext, token: string): Promise<Idp
   if (!row) return null
   if (row.revokedAt) return null
   if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return null
-  if (row.createdByUserId && !(await creatorStillHolds(ctx, row))) return null
+  if (row.mintedByHuman && !(await creatorStillHolds(ctx, row))) return null
 
   // Best effort — a failed lastUsedAt update must not deny an otherwise-valid key.
   ctx.db

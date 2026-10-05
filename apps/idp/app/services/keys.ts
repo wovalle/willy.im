@@ -4,6 +4,7 @@ import { and, desc, eq, isNull } from "drizzle-orm"
 import * as schema from "../db/schema"
 import { generateToken, hashToken } from "../lib/api-keys.server"
 import { isAppPermission } from "../lib/permissions"
+import type { BaseServiceContext } from "../lib/services"
 import { io } from "./io"
 import { statusOf } from "./user-keys"
 
@@ -34,6 +35,31 @@ export const toKey = (r: KeyRow) => ({
   expiresAt: r.expiresAt?.toISOString() ?? null,
   revokedAt: r.revokedAt?.toISOString() ?? null,
 })
+
+/**
+ * Whose authority a new key carries. A human minting it: that human. A key
+ * minting it: that key's human, inherited — otherwise a member could mint a
+ * child key from their own key and the child would outlive their removal.
+ * A key with no human anywhere up its chain (the bootstrap admin key) stays
+ * machine-minted.
+ */
+async function creatorFor(ctx: {
+  db: BaseServiceContext["db"]
+  userId: string | null
+  keyId: string | null
+}): Promise<{ createdByUserId: string | null; mintedByHuman: boolean }> {
+  if (ctx.userId) return { createdByUserId: ctx.userId, mintedByHuman: true }
+  if (!ctx.keyId) return { createdByUserId: null, mintedByHuman: false }
+  const [parent] = await ctx.db
+    .select({ createdByUserId: schema.apiKey.createdByUserId, mintedByHuman: schema.apiKey.mintedByHuman })
+    .from(schema.apiKey)
+    .where(eq(schema.apiKey.id, ctx.keyId))
+    .limit(1)
+  return {
+    createdByUserId: parent?.createdByUserId ?? null,
+    mintedByHuman: parent?.mintedByHuman ?? false,
+  }
+}
 
 /** A fresh `wim_` token, what the row stores of it, and its id. */
 export async function newKey() {
@@ -87,8 +113,8 @@ export const management_keys = declareService((ctx) => ({
         prefix: key.prefix,
         keyHash: key.keyHash,
         permissions,
-        // Null for a key minting a key: no human behind it.
-        createdByUserId: ctx.userId,
+        // The human behind it, inherited when a key mints a key.
+        ...(await creatorFor(ctx)),
         expiresAt,
       })
       await ctx.audit.record({
@@ -170,7 +196,7 @@ export const admin_keys = declareService((ctx) => ({
         prefix: key.prefix,
         keyHash: key.keyHash,
         permissions: [],
-        createdByUserId: ctx.userId,
+        ...(await creatorFor(ctx)),
         expiresAt,
       })
       await ctx.audit.record({

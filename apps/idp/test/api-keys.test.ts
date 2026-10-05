@@ -232,7 +232,42 @@ describe("management keys follow their creator", () => {
     expect(await resolve(token)).toBeNull()
   })
 
-  it("keeps a key minted by a key (no human creator) judged by its own row", async () => {
+  it("is refused once the creator is deleted, though the FK nulls created_by_user_id", async () => {
+    const { user, principal } = await memberOf("m@acme.test", ["apikey:create", "member:invite"])
+    const { token } = await mintAs(principal, ["member:invite"])
+
+    await h.ctx.db.delete(schema.user).where(eq(schema.user.id, user.id))
+
+    expect(await resolve(token)).toBeNull()
+  })
+
+  it("makes a key minted by a key inherit its human, so the child dies with the parent's creator", async () => {
+    const { user, principal } = await memberOf("m@acme.test", ["apikey:create", "member:invite"])
+    const parent = await mintAs(principal, ["apikey:create", "member:invite"])
+    const child = await mintAs((await resolve(parent.token))!, ["member:invite"])
+    expect(await resolve(child.token)).not.toBeNull()
+
+    await h.ctx.db.delete(schema.applicationMember).where(eq(schema.applicationMember.userId, user.id))
+
+    expect(await resolve(parent.token)).toBeNull()
+    expect(await resolve(child.token)).toBeNull()
+  })
+
+  it("makes a child admin key die when the human behind its parent leaves the allowlist", async () => {
+    const boss = await createUser(h.ctx, { email: "super@willy.im" })
+    const parent = await (
+      await kitContext(h.ctx, await signedInPrincipal(h.ctx, boss), null)
+    ).services.admin_keys.mint({ name: "agent" })
+    const child = await (
+      await kitContext(h.ctx, (await resolve(parent.token))!, null)
+    ).services.admin_keys.mint({ name: "sub-agent" })
+    expect((await resolve(child.token))?.grants).toEqual(["*"])
+
+    process.env.ADMIN_EMAILS = "someone-else@willy.im"
+    expect(await resolve(child.token)).toBeNull()
+  })
+
+  it("judges a key with no human up its chain (the bootstrap admin key's children) by its own row", async () => {
     const root = (await bootstrapAdminKey(h.ctx)).principal
     const { token } = await mintAs(root, ["member:read"])
     expect((await resolve(token))?.memberships).toEqual([{ tenantId: "acme", grants: ["member:read"] }])

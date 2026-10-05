@@ -114,9 +114,16 @@ export const apiKey = sqliteTable(
     keyHash: text("key_hash").notNull(),
     // Granted IdP-management permissions (subset of APP_PERMISSIONS).
     permissions: text("permissions", { mode: "json" }).$type<string[]>().default([]),
+    // The human whose authority the key carries: who minted it, or — for a key
+    // minted by another key — that key's human, inherited down the chain.
     createdByUserId: text("created_by_user_id").references(() => user.id, {
       onDelete: "set null",
     }),
+    // A human is behind this key (directly or through its parent key). Kept
+    // apart from created_by_user_id because that column is nulled when the
+    // user is deleted: true with a null creator means "creator deleted", which
+    // the resolver refuses, not "machine-minted".
+    mintedByHuman: integer("minted_by_human", { mode: "boolean" }).notNull().default(false),
     lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
     // Null = never expires.
     expiresAt: integer("expires_at", { mode: "timestamp" }),
