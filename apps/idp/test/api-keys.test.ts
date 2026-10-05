@@ -1,14 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { eq } from "drizzle-orm"
 
+import * as schema from "../app/db/schema"
+import type { AuthService } from "../app/lib/auth.server"
 import { listAuditForApp } from "../app/lib/audit.server"
-import type { IdpPrincipal } from "../app/lib/caller.server"
+import { principalFrom, type IdpPrincipal } from "../app/lib/caller.server"
 import { APP_PERMISSIONS } from "../app/lib/permissions"
 import {
+  bearerRequest,
   bootstrapAdminKey,
+  createMember,
   createUser,
   failureOf,
   kitContext,
   memberPrincipal,
+  signedInPrincipal,
 } from "./helpers/fixtures"
 import { createTestHarness, type TestHarness } from "./helpers/harness"
 
@@ -149,5 +155,86 @@ describe("management_keys", () => {
       const powerless = memberPrincipal(creator.id, "acme", [])
       expect((await failureOf(mint({ permissions: [] }, powerless))).status).toBe(403)
     })
+  })
+})
+
+/**
+ * A key minted by a human is only as good as that human — the same rule as
+ * end-user keys (`wak_`) and app tokens (`wat_`). Removing or narrowing the
+ * creator must kill the keys they minted, or a removed member keeps managing
+ * the app through a key nobody remembers to revoke.
+ */
+describe("management keys follow their creator", () => {
+  let h: TestHarness
+  beforeEach(() => {
+    h = createTestHarness({ env: { ADMIN_EMAILS: "super@willy.im" } })
+  })
+  afterEach(() => h.close())
+
+  const resolve = (token: string) => principalFrom(bearerRequest(token), h.ctx, {} as AuthService)
+
+  /** A real member of acme holding `permissions`, and the services they act through. */
+  const memberOf = async (email: string, permissions: string[]) => {
+    const user = await createUser(h.ctx, { email })
+    await createMember(h.ctx, { app: "acme", userId: user.id, role: "member", permissions })
+    return { user, principal: await signedInPrincipal(h.ctx, user) }
+  }
+
+  const mintAs = async (principal: IdpPrincipal, permissions: string[]) =>
+    (await kitContext(h.ctx, principal, "acme")).services.management_keys.mint({
+      name: "minted by a human",
+      permissions,
+    })
+
+  it("works while the creator is a member holding its permissions", async () => {
+    const { principal } = await memberOf("m@acme.test", ["apikey:create", "member:invite"])
+    const { token } = await mintAs(principal, ["member:invite"])
+
+    expect((await resolve(token))?.memberships).toEqual([
+      { tenantId: "acme", grants: ["member:invite"] },
+    ])
+  })
+
+  it("is refused once the creator is removed from the app", async () => {
+    const { user, principal } = await memberOf("m@acme.test", ["apikey:create", "member:invite"])
+    const { token } = await mintAs(principal, ["member:invite"])
+
+    const admin = await createUser(h.ctx, { email: "admin@acme.test" })
+    await createMember(h.ctx, { app: "acme", userId: admin.id, role: "admin" })
+    await (await kitContext(h.ctx, await signedInPrincipal(h.ctx, admin), "acme")).services.members.remove({
+      userId: user.id,
+    })
+
+    expect(await resolve(token)).toBeNull()
+    expect(h.logs.some((l) => l.message === "apikey.creator_lost_access")).toBe(true)
+  })
+
+  it("is refused once the creator no longer holds a permission the key carries", async () => {
+    const { user, principal } = await memberOf("m@acme.test", ["apikey:create", "member:invite"])
+    const { token } = await mintAs(principal, ["member:invite"])
+
+    await h.ctx.db
+      .update(schema.applicationMember)
+      .set({ permissions: ["apikey:create"] })
+      .where(eq(schema.applicationMember.userId, user.id))
+
+    expect(await resolve(token)).toBeNull()
+  })
+
+  it("refuses an admin key once its human creator leaves the superadmin allowlist", async () => {
+    const boss = await createUser(h.ctx, { email: "super@willy.im" })
+    const { token } = await (
+      await kitContext(h.ctx, await signedInPrincipal(h.ctx, boss), null)
+    ).services.admin_keys.mint({ name: "agent" })
+    expect((await resolve(token))?.grants).toEqual(["*"])
+
+    process.env.ADMIN_EMAILS = "someone-else@willy.im"
+    expect(await resolve(token)).toBeNull()
+  })
+
+  it("keeps a key minted by a key (no human creator) judged by its own row", async () => {
+    const root = (await bootstrapAdminKey(h.ctx)).principal
+    const { token } = await mintAs(root, ["member:read"])
+    expect((await resolve(token))?.memberships).toEqual([{ tenantId: "acme", grants: ["member:read"] }])
   })
 })
