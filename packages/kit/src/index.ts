@@ -34,4 +34,5 @@ export type {
   Resource,
   Result,
   Services,
+  Surface,
 } from "./types.js"

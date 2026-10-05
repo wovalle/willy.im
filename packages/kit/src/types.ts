@@ -154,6 +154,13 @@ export type Result<T> =
   | { ok: true; value: T }
   | { ok: false; errors: Partial<Record<string, string[]>> }
 
+/**
+ * Where a call came from: `api` (`app.handle`), `tools` (`tools()` and MCP),
+ * `direct` (`ctx.services` on the context `app.context` returned: a loader, a
+ * script), `internal` (one operation calling another).
+ */
+export type Surface = "api" | "tools" | "direct" | "internal"
+
 /** What `onCall` receives, once per call to a method that exists in the context. */
 export type CallEvent<C = Context> = {
   service: string
@@ -166,6 +173,7 @@ export type CallEvent<C = Context> = {
    * over (the permission wasn't checked); false for a call that entered the app.
    */
   internal: boolean
+  surface: Surface
   ok: boolean
   /** What the call threw: a 403/400/404 `Response`, an `Error`, … */
   error?: unknown

@@ -18,6 +18,10 @@
       "types": "./dist/react.d.ts",
       "default": "./dist/react.js"
     },
+    "./log": {
+      "types": "./dist/log.d.ts",
+      "default": "./dist/log.js"
+    },
     "./idp": {
       "types": "./dist/idp/index.d.ts",
       "default": "./dist/idp/index.js"
@@ -99,6 +103,7 @@
     "directory": "packages/kit"
   },
   "dependencies": {
+    "@logtape/logtape": "^2.3.11",
     "@willyim/idp": "2.0.0"
   },
   "peerDependencies": {
@@ -129,6 +134,7 @@
     "@types/node": "^22.19.7",
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^1.0.0-beta.15-859cf75",
+    "esbuild": "^0.28.2",
     "miniflare": "^4.20260410.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4",

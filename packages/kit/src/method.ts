@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { getLogger } from "./log.js"
 import {
   META,
   type CallEvent,
@@ -8,7 +9,10 @@ import {
   type MethodMeta,
   type PublicMethod,
   type SchemaLike,
+  type Surface,
 } from "./types.js"
+
+const log = getLogger("kit")
 
 type Unbound = { [META]: MethodMeta; fn: (input?: unknown) => unknown }
 
@@ -69,7 +73,7 @@ export const available = (contract: Contract, ctx: unknown) => {
   try {
     return contract.when(ctx as never)
   } catch (e) {
-    console.error("kit: a `when` threw; the method is hidden", e)
+    log.error("when.threw", { error: e })
     return false
   }
 }
@@ -110,14 +114,15 @@ export const describeAccess = (access: Access) =>
 export const unknownMethod = (name: string) =>
   publicError(Response.json({ error: `no method ${name}; see /openapi.json` }, { status: 404 }))
 
-type Invoke = (raw?: unknown) => Promise<unknown>
+type Edge = Exclude<Surface, "direct" | "internal">
+type Invoke = (raw: unknown, surface: Edge) => Promise<unknown>
 
 /** Calls a bound method for an edge: the output comes back checked and stripped to the contract. */
-export const invoke = (bound: unknown, raw?: unknown): Promise<unknown> => {
+export const invoke = (bound: unknown, raw: unknown, surface: Edge): Promise<unknown> => {
   const edge = (bound as { [INVOKE]?: Invoke })[INVOKE]
   if (!edge)
     throw new Error("kit: an edge called a trusted method; pass it what app.context returns")
-  return edge(raw)
+  return edge(raw, surface)
 }
 
 // Awaited, so an audit write finishes before the response (Workers drop late work);
@@ -127,8 +132,31 @@ const report = async (onCall: OnCall | undefined, event: CallEvent<any>) => {
   try {
     await onCall(event)
   } catch (e) {
-    console.error(`kit: onCall threw for ${event.service}.${event.method}`, e)
+    log.error("onCall.threw", { call: `${event.service}.${event.method}`, error: e })
   }
+}
+
+/**
+ * The `onCall` an app gets when it passes none: one `call` line per call that
+ * entered the app (`debug` for internal ones), `warn` for a 4xx, `error` for a failure.
+ */
+export const logCall: OnCall = ({ service, method, ctx, surface, ok, error, ms }) => {
+  const status = error instanceof Response ? error.status : undefined
+  const level = ok
+    ? surface === "internal"
+      ? "debug"
+      : "info"
+    : status !== undefined && status < 500
+      ? "warn"
+      : "error"
+  log[level]("call", {
+    call: `${service}.${method}`,
+    surface,
+    actor: (ctx as { actor?: unknown } | undefined)?.actor ?? null,
+    ok,
+    ms: Math.round(ms),
+    ...(!ok && { error }),
+  })
 }
 
 /** One method bound to one context: what a call needs, shared by both of its entries. */
@@ -151,7 +179,7 @@ const checkOutput = ({ service, name }: Binding, schema: z.ZodType, result: unkn
 }
 
 // Edge calls (`/api`, `tools()`, MCP) return the output checked and stripped; internal ones, the raw value.
-async function run(b: Binding, raw: unknown, edge: boolean) {
+async function run(b: Binding, raw: unknown, edge?: Edge) {
   const { m, ctx, service, name, onCall, internal } = b
   const { contract } = m[META]
   if (!available(contract, ctx)) throw unknownMethod(`${service}.${name}`)
@@ -164,6 +192,7 @@ async function run(b: Binding, raw: unknown, edge: boolean) {
       ctx,
       input: value,
       internal,
+      surface: edge ?? (internal ? "internal" : "direct"),
       ok,
       ...(!ok && { error }),
       ms: performance.now() - started,
@@ -217,10 +246,11 @@ export function bind(
   internal: boolean,
 ): PublicMethod {
   const b: Binding = { m, ctx, service, name, onCall, internal }
-  const bound = Object.assign((raw?: unknown) => run(b, raw, false), {
+  const bound = Object.assign((raw?: unknown) => run(b, raw), {
     [META]: { contract: m[META].contract, service, method: name },
   })
-  if (!internal) Object.assign(bound, { [INVOKE]: (raw?: unknown) => run(b, raw, true) })
+  if (!internal)
+    Object.assign(bound, { [INVOKE]: (raw: unknown, surface: Edge) => run(b, raw, surface) })
   return bound as never
 }
 

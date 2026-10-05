@@ -88,7 +88,7 @@ export async function handle(
         ? await readJson(request)
         : undefined
     // `parsed` is the output stripped to the contract: an internal column never reaches an agent.
-    const parsed = await invoke(bound, body)
+    const parsed = await invoke(bound, body, "api")
     if (!output) return new Response(null, { status: 204 })
     return Response.json(parsed)
   } catch (e) {

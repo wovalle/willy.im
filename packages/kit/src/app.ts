@@ -1,5 +1,6 @@
 import { handle, type HandleOptions, type HandlerContext } from "./api.js"
-import type { OnCall } from "./method.js"
+import { defaultLogApp } from "./log.js"
+import { logCall, type OnCall } from "./method.js"
 import type { PermissionsResult } from "./permissions.js"
 import { bindService, linkViews, registry, type Factory } from "./registry.js"
 import type {
@@ -73,7 +74,10 @@ type AppConfig<A extends unknown[], B, S> = {
    */
   context: (kit: ContextInput, ...args: A) => B | Promise<B>
   services: S
-  /** Called once per call from every surface, with the outcome. For logs, metrics and tracing. */
+  /**
+   * Called once per call from every surface, with the outcome. For logs, metrics
+   * and tracing. Without one, kit logs a `call` line per call (README → Logging).
+   */
   onCall?: (event: CallEvent<KitFields & B & { services: any }>) => void | Promise<void>
   discovery?: DiscoveryOptions
 }
@@ -106,7 +110,7 @@ export function createApp<A extends unknown[], B, S extends Record<string, Facto
         factories: config.services,
         inner,
         ctx,
-        onCall: config.onCall as OnCall | undefined,
+        onCall: (config.onCall as OnCall | undefined) ?? logCall,
         built: new Map(),
         building: new Set(),
       }
@@ -116,6 +120,7 @@ export function createApp<A extends unknown[], B, S extends Record<string, Facto
     },
     handle: (request, ctx, options) => handle(app, request, ctx, options),
   }
+  defaultLogApp(config.name)
   validateDiscovery(config.discovery)
   registry(app) // fail fast: a factory that uses ctx while building, or a bad tool name
   return app

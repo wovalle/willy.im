@@ -163,15 +163,16 @@ method({
 ### `onCall`
 
 ```ts
-createApp({ ..., onCall: ({ service, method, ctx, input, internal, ok, error, ms }) => audit.log(...) })
+createApp({ ..., onCall: ({ service, method, ctx, input, internal, surface, ok, error, ms }) => audit.log(...) })
 ```
 
 Fires once per call, from every surface, with the outcome: denied, invalid, failed or done.
-`internal` is true for a call one operation made to another (see
+`surface` says where it came from (`api`, `tools`, `direct`, `internal`). `internal` is true for a call one operation made to another (see
 [Calls between operations](#calls-between-operations)), false for a call that entered the
 app; `ctx` is the context `app.context` returned either way. It's awaited before the call
 returns, so an audit write isn't lost when a Worker's response ends. A method hidden by
-`when` doesn't fire it. If `onCall` throws, the call still succeeds and the error is logged.
+`when` doesn't fire it. If `onCall` throws, the call still succeeds and the error is logged. Without an `onCall`, kit
+logs one `call` line per call ([Logging](#calls-are-logged-by-default)).
 
 ### Calls between operations
 
@@ -415,6 +416,118 @@ Rules for working in a kit app:
   and call `ctx.services` directly. In process the output isn't checked, so test an output
   contract through `tools()` or `app.handle`. Snapshot `/openapi.json` per caller to catch accidental exposure.
 
+## Logging: `@willyim/kit/log`
+
+One JSON line per event on stdout, on Bun, Node and Workers. Built on
+[LogTape](https://logtape.org) (zero dependencies).
+
+```ts
+import { configureLog, getLogger, withLogContext } from "@willyim/kit/log"
+
+configureLog({ app: "bender", level: env.LOG_LEVEL }) // once, at startup
+
+const log = getLogger("chat")
+log.info("turn.done", { thread, ms: Math.round(performance.now() - t0), tokens: usage.total })
+log.error("turn.failed", { thread, error })
+```
+
+```json
+{
+  "ts": "2026-10-05T04:22:12.419Z",
+  "level": "info",
+  "app": "bender",
+  "scope": "chat",
+  "msg": "turn.done",
+  "thread": "t1",
+  "ms": 812,
+  "tokens": 5120
+}
+```
+
+- **Shape:** `{ ts, level, app, scope, msg, ...fields }`. Fields never overwrite the first five
+  keys. A line is never split: a multi-line object in the logs is a bug.
+- **Levels:** `debug`, `info`, `warn`, `error`. `LOG_LEVEL` (or `level`) sets the lowest one
+  written; the default is `info`.
+- **Format:** JSON, or one coloured line when `NODE_ENV` is set and isn't `production`.
+  `LOG_FORMAT=json|pretty` overrides it. Workers always get JSON.
+- **Errors** become `{ message, stack, cause }` (plus `name` when it isn't `Error`, and any own
+  fields such as `code`); a thrown `Response` becomes `{ status }`. Pass an error as a field
+  (`{ error }`) or as an argument (`log.error("x.failed", err)`).
+- **Redaction, always on:** a key matching `token|secret|password|authorization|cookie|apikey`
+  is `[REDACTED]` at any depth (numbers and booleans are kept, so `inputTokens: 1200` stays),
+  and `wat_…` and `Bearer …` values are redacted inside any string, the message included.
+- **Correlation:** `log.with({ thread, session })` returns a logger whose lines carry those
+  fields. `withLogContext({ request: id }, () => handle(req))` adds them to every line logged
+  inside, across awaits, from any logger; it needs `AsyncLocalStorage` (Bun, Node, Workers with
+  `nodejs_compat`) and otherwise just runs the callback. Use `thread`, `session`, `run`,
+  `request` as the field names.
+- **`ILogger`:** every logger has `debug/info/log/warn/error(message, ...args)`, the shape apps
+  pass around. Plain objects in `args` merge into the fields, an `Error` becomes `error`,
+  anything else goes to `args`. `nullLogger` drops everything, for tests.
+- **No files, no rotation.** kit writes stdout (`console.log`) and nothing else. Keeping and
+  rotating logs is the platform's job: journald or docker's log driver on a server, Workers
+  Logs on Cloudflare. Don't add a file sink.
+- **Without `configureLog`**, the first line configures the defaults, with `createApp`'s `name`
+  as `app`.
+
+### Calls are logged by default
+
+An app that passes no `onCall` to `createApp` gets one `call` line per method call, scope `kit`:
+
+```json
+{
+  "ts": "…",
+  "level": "info",
+  "app": "notes",
+  "scope": "kit",
+  "msg": "call",
+  "call": "notes.get",
+  "surface": "api",
+  "actor": "user:u1",
+  "ok": true,
+  "ms": 3
+}
+```
+
+`surface` is `api` (`app.handle`), `tools` (`tools()` and MCP), `direct` (`ctx.services` in a
+loader or a script) or `internal` (one operation calling another). Calls that entered the app
+are `info`, internal ones `debug`; a 4xx is `warn` and anything else that failed is `error`,
+with the `error`. Pass your own `onCall` and it replaces this one; log from it with
+`getLogger` to keep the format. kit logs its own failures (a `when` or `onCall` that threw, a
+tool's internal error) at `error`, scope `kit`.
+
+### For agents: what to log
+
+- **Name events `scope` + dotted `event`:** `getLogger("chat").info("turn.done")`,
+  `getLogger("session").info("session.state", { from, to })`. The message is a fixed name, never
+  a sentence with values in it; values go in fields, so lines can be filtered by `msg`.
+- **Log** state transitions (`session.state`, `job.started`, `job.done`), every call to the
+  outside world with its `ms` and outcome (`github.fetch`, `llm.call`), and every failure with
+  its `error`.
+- **Don't log** per-poll heartbeats or loop ticks at `info` (`debug`, or nothing), request or
+  response bodies, prompts, secrets (redaction is a net, not a licence) or the same failure at
+  every layer it passes through: log it once where it's handled.
+- **Levels:** `debug` for noise you want only while debugging, `info` for events a person reads
+  later, `warn` for something wrong that recovered (a retry, a 4xx), `error` for a failure that
+  needs a look.
+- **Carry correlation ids:** `log.with({ thread, session })` once per unit of work, or
+  `withLogContext` around it, instead of repeating them on every line.
+- **Never `console.log`** in an app on kit: use a scoped logger.
+
+### Reading prod logs with `jq`
+
+`docker logs app 2>&1`, `journalctl -u app -o cat` or a Workers Logs export, piped into one of these.
+`-R` with `fromjson?` skips lines that aren't JSON (a crash, a dependency printing).
+
+```sh
+jq -cR 'fromjson? | select(.level == "error" or .level == "warn")'                  # problems
+jq -cR 'fromjson? | select(.scope == "chat")'                                        # one part of the app
+jq -cR 'fromjson? | select(.thread == "123" or .session == "s-47")'                  # one thread or session
+jq -cR 'fromjson? | select(.msg == "call" and .ok == false) | {ts, call, error: (.error.message // .error.status)}'
+jq -cRn '[inputs | fromjson? | select(.ms != null)] | sort_by(-.ms) | .[:20][] | {ms, scope, msg, call}'  # slowest
+jq -rR 'fromjson? | select(.error.stack) | "\(.ts) \(.scope) \(.msg): \(.error.message)\n\(.error.stack)"'  # stacks
+```
+
 ## Audit: `@willyim/kit/audit`
 
 Audit logging for Drizzle (formerly `@willyim/drizzle-audit`, same API). Needs `drizzle-orm >= 1`
@@ -496,6 +609,7 @@ Install only `@willyim/kit`:
 | `@willyim/kit`                                                                        | methods, services, the registry, discovery, HTTP, `tools()`, permissions, policies |
 | `@willyim/kit/mcp`                                                                    | `toMcpServer` (peer: `@modelcontextprotocol/sdk`)                                  |
 | `@willyim/kit/react`                                                                  | `createPermissionsHook`                                                            |
+| `@willyim/kit/log`                                                                    | `configureLog`, `getLogger`, `withLogContext`: JSON logs on LogTape                |
 | `@willyim/kit/idp` (`/drizzle`, `/react-router`, `/schemas`)                          | `@willyim/idp`                                                                     |
 | `@willyim/kit/audit` (`/context`, `/d1`, `/d1-runtime`, `/postgres`), bin `kit-audit` | Drizzle audit logging (peers: `drizzle-orm`, `drizzle-kit` for the CLI)            |
 
