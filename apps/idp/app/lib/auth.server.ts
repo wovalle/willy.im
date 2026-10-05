@@ -142,6 +142,11 @@ export function createAuthService(
       },
     },
     rateLimit: {
+      // Explicit: Better Auth otherwise defaults `enabled` to `NODE_ENV ===
+      // "production"`, and this Worker sets APP_ENV, not NODE_ENV — so the
+      // limiter would be off in our production. Turn it on regardless of the
+      // ambient NODE_ENV the bundle happens to see.
+      enabled: true,
       storage: "database",
     },
     // Better Auth catches whatever an endpoint throws and answers with it: an
@@ -318,12 +323,23 @@ export function createAuthService(
       // Workspaces = organizations, each scoped to one application via
       // applicationId. Membership + roles + invitations come for free; consumer
       // apps map roles -> permissions locally via packages/rbac.
+      //
+      // Workspaces are created and populated through our own kit methods
+      // (services/workspaces.ts: `workspace:create` / `member:manage`), which
+      // insert the rows directly. Better Auth's own organization endpoints are
+      // NOT a second, weaker door: left open, `allowUserToCreateOrganization`
+      // would let any signed-in user POST /auth/organization/create with an
+      // arbitrary `applicationId` and become `owner` of a workspace in any app
+      // (surfaced in that app's workspaces claim), bypassing the permission the
+      // kit methods require. So creation is disabled here, and `applicationId`
+      // is server-set only (`input: false`) — a client can neither create an
+      // organization nor choose or move its tenant.
       organization({
-        allowUserToCreateOrganization: true,
+        allowUserToCreateOrganization: false,
         schema: {
           organization: {
             additionalFields: {
-              applicationId: { type: "string", required: false, input: true },
+              applicationId: { type: "string", required: false, input: false },
             },
           },
         },

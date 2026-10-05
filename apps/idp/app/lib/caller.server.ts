@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 
 import * as schema from "../db/schema"
 import { hashToken } from "./api-keys.server"
@@ -75,6 +75,51 @@ async function sessionPrincipal(
 }
 
 /**
+ * A key minted by a human is only as good as that human, like an end-user key
+ * (`wak_`) or an app token (`wat_`): refused — never shrunk — once its creator
+ * no longer holds what it carries. An admin key needs its creator still on the
+ * superadmin allowlist; an app key needs the creator still a member of that app
+ * whose permissions cover the key's. A key minted by a key inherits that key's
+ * human (services/keys.ts), so a child key cannot outlive its root human.
+ * `minted_by_human` with a null creator means the creator was deleted (the FK
+ * nulls the column): refused. Only a key with no human anywhere up its chain —
+ * the bootstrap admin key — is judged by its own row alone.
+ */
+async function creatorStillHolds(
+  ctx: BaseServiceContext,
+  row: { id: string; applicationId: string | null; permissions: string[] | null; createdByUserId: string | null },
+): Promise<boolean> {
+  const lost = (reason: string) => {
+    ctx.logger.warn("apikey.creator_lost_access", { keyId: row.id, createdBy: row.createdByUserId, reason })
+    return false
+  }
+  if (!row.createdByUserId) return lost("creator_deleted")
+  const [creator] = await ctx.db
+    .select({ email: schema.user.email })
+    .from(schema.user)
+    .where(eq(schema.user.id, row.createdByUserId))
+    .limit(1)
+  if (!creator) return lost("creator_deleted")
+  if (isAdminEmail(ctx, creator.email)) return true
+  if (row.applicationId === null) return lost("not_an_admin")
+
+  const [member] = await ctx.db
+    .select({ role: schema.applicationMember.role, permissions: schema.applicationMember.permissions })
+    .from(schema.applicationMember)
+    .where(
+      and(
+        eq(schema.applicationMember.applicationId, row.applicationId),
+        eq(schema.applicationMember.userId, row.createdByUserId),
+      ),
+    )
+    .limit(1)
+  if (!member) return lost("not_a_member")
+  const held = resolvePermissions(member.role, member.permissions ?? [])
+  if (!appRbac.covers(held, (row.permissions ?? []).filter(isAppPermission))) return lost("permissions_not_held")
+  return true
+}
+
+/**
  * Resolves a `wim_` bearer token to a principal, or null if it is unknown,
  * revoked or expired. A null `applicationId` on the row means an IdP-level
  * admin key — a superadmin with a name, an expiry and a revoke switch
@@ -91,6 +136,8 @@ async function keyPrincipal(ctx: BaseServiceContext, token: string): Promise<Idp
       permissions: schema.apiKey.permissions,
       expiresAt: schema.apiKey.expiresAt,
       revokedAt: schema.apiKey.revokedAt,
+      createdByUserId: schema.apiKey.createdByUserId,
+      mintedByHuman: schema.apiKey.mintedByHuman,
     })
     .from(schema.apiKey)
     .where(eq(schema.apiKey.keyHash, keyHash))
@@ -99,6 +146,7 @@ async function keyPrincipal(ctx: BaseServiceContext, token: string): Promise<Idp
   if (!row) return null
   if (row.revokedAt) return null
   if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) return null
+  if (row.mintedByHuman && !(await creatorStillHolds(ctx, row))) return null
 
   // Best effort — a failed lastUsedAt update must not deny an otherwise-valid key.
   ctx.db

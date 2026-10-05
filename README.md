@@ -46,6 +46,6 @@ npm run packages:test
 npx changeset                # describe a change to a package; required to release it
 ```
 
-CI (`.github/workflows/ci.yml`) builds, typechecks and tests every package on each PR.
+CI (`.github/workflows/ci.yml`) builds, typechecks and tests every package, and typechecks and tests the IdP (`apps/idp`), on each PR.
 `release.yml` runs on `main`: pending changesets become a "Version Packages" PR, and merging
 it publishes to npm. See [`.changeset/README.md`](.changeset/README.md).

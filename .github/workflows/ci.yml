@@ -35,3 +35,24 @@ jobs:
 
       - name: Test
         run: npm run packages:test
+
+  idp:
+    name: Typecheck and test the IdP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      # Also builds better-sqlite3, which the IdP's tests run D1's SQLite on.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck --workspace=idp
+
+      - name: Test
+        run: npm run test --workspace=idp

@@ -35,6 +35,44 @@ const registration = async (ctx: Parameters<typeof getApplicationByApp>[0] & { a
   (await getApplicationByApp(ctx, ctx.app)) ?? fail(404, `No application ${ctx.app}.`)
 
 /**
+ * Of `wanted`, the resource URIs already declared by an application OTHER than
+ * `selfApp`. A resource URI maps to exactly one owning app (claims.server
+ * `appForResource`), so declaring one another app already holds is refused.
+ */
+async function resourcesOwnedByOtherApps(
+  ctx: Parameters<typeof listApplications>[0],
+  selfApp: string | null,
+  wanted: string[],
+): Promise<string[]> {
+  const want = new Set(wanted)
+  const taken = new Set<string>()
+  for (const a of await listApplications(ctx)) {
+    if (a.app === selfApp) continue
+    for (const r of a.resources) if (want.has(r)) taken.add(r)
+  }
+  return [...taken]
+}
+
+/**
+ * Of `wanted`, the resource-type list URLs already used by an application OTHER
+ * than `selfApp`. The IdP mints a token whose `aud` is this URL and GETs it, so
+ * a list URL must belong to the app that declares it and no other.
+ */
+async function listUrlsOwnedByOtherApps(
+  ctx: Parameters<typeof listApplications>[0],
+  selfApp: string | null,
+  wanted: string[],
+): Promise<string[]> {
+  const want = new Set(wanted)
+  const taken = new Set<string>()
+  for (const a of await listApplications(ctx)) {
+    if (a.app === selfApp) continue
+    for (const t of a.resourceTypes) if (want.has(t.list)) taken.add(t.list)
+  }
+  return [...taken]
+}
+
+/**
  * A resource is an audience a token will be minted FOR, so it has to be an
  * absolute https URI with no fragment (RFC 8707 §2) — anything looser and a
  * token could be minted for a string no resource server will ever match.
@@ -180,6 +218,17 @@ export const applications = declareService((ctx) => {
         const badResource = resources?.find((r) => !isResourceUri(r))
         if (badResource) fail(422, `"${badResource}" isn't an absolute https URI without a fragment.`)
 
+        // A resource URI is the audience of this app's access tokens, and
+        // `appForResource` maps an audience back to exactly one owning app. If two
+        // apps could declare the same URI, a token for it could be stamped with
+        // the wrong app's permissions. So a resource already claimed by ANOTHER
+        // app is refused here, at the only place it is written.
+        if (resources?.length) {
+          const taken = await resourcesOwnedByOtherApps(ctx, app.app, resources)
+          if (taken.length)
+            fail(409, `Already claimed by another application: ${taken.join(", ")}.`)
+        }
+
         const metadataChanged = patch.allowSignup !== undefined || resources !== undefined
         await ctx.db
           .update(schema.oauthClient)
@@ -273,6 +322,18 @@ export const catalog = declareService((ctx) => ({
         if (!isCallableListUrl(t.list)) fail(422, `The list URL of ${t.type} isn't callable: ${t.list}`)
         resourceTypes.push({ type: t.type, label: t.label?.trim() || t.type, list: t.list.trim() })
       }
+      // The IdP signs a short-lived JWT with `aud` = a type's list URL and GETs
+      // it to read that type's instances. If another app could declare a list
+      // URL pointing at a DIFFERENT app's endpoint, it would make the IdP mint a
+      // token for — and hand it the instances of — an endpoint it doesn't own.
+      // A list URL already used by another app is therefore refused here.
+      const foreignList = await listUrlsOwnedByOtherApps(
+        ctx,
+        app.app,
+        resourceTypes.map((t) => t.list),
+      )
+      if (foreignList.length)
+        fail(409, `A list URL is already used by another application: ${foreignList.join(", ")}.`)
       await ctx.db
         .update(schema.oauthClient)
         .set({
