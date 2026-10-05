@@ -27,6 +27,7 @@ import {
 
 import type { Route } from "./+types/app-detail"
 import { appKeyOf } from "~/lib/admin.server"
+import { clientDisplayName } from "~/lib/client-display"
 import type { ResourceTypeDecl } from "~/lib/metadata"
 import type { ResourceInstance } from "~/lib/resources.server"
 import type { Context } from "@willyim/kit"
@@ -284,7 +285,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
           </BreadcrumbList>
         </Breadcrumb>
         <h1 className="text-xl font-semibold tracking-tight">
-          {application.name ?? application.clientId}
+          {clientDisplayName(application)}
         </h1>
       </div>
 
@@ -793,7 +794,7 @@ export default function AppDetail({ loaderData }: Route.ComponentProps) {
             <AlertDialogTrigger render={<Button variant="destructive">Delete application</Button>} />
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete {application.name ?? "this application"}?</AlertDialogTitle>
+                <AlertDialogTitle>Delete {clientDisplayName(application)}?</AlertDialogTitle>
                 <AlertDialogDescription>
                   This permanently removes the OAuth client. Any app using it will fail to sign in.
                   This can't be undone.

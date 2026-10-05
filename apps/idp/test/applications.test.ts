@@ -37,7 +37,7 @@ describe("application lifecycle", () => {
     (await kitContext(h.ctx, principal, tenant)).services
 
   const register = async (
-    overrides: { app?: string; redirectUris?: string[]; firstAdminUserId?: string | null } = {},
+    overrides: { name?: string; app?: string; redirectUris?: string[]; firstAdminUserId?: string | null } = {},
     principal: IdpPrincipal = root,
   ) =>
     (await as(principal, null)).applications.register({
@@ -98,6 +98,17 @@ describe("application lifecycle", () => {
         status: 422,
         error: '"not-a-url" isn\'t a valid URL. Use an absolute URL like https://app.example.com/callback.',
       })
+    })
+
+    it("refuses a blank name on register and update (422) — it is what the consent screen shows", async () => {
+      const blank = { status: 422, error: "Give the application a name." }
+      expect(await failureOf(register({ name: "   " }))).toEqual(blank)
+      expect(await listApplications(h.ctx)).toHaveLength(0)
+
+      await register({ name: "  Acme  " })
+      expect((await listApplications(h.ctx))[0].name).toBe("Acme")
+      expect(await failureOf((await as()).applications.update({ name: " " }))).toEqual(blank)
+      expect((await (await as()).applications.update({ name: " Acme 2 " })).name).toBe("Acme 2")
     })
 
     it("enrols the calling user as first admin by default", async () => {
