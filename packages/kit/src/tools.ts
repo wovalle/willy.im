@@ -4,6 +4,7 @@ import { jsonSchema, type JsonSchema } from "./discovery.js"
 import { splitImages, type KitImage } from "./image.js"
 import { available, invalidFields, invoke, isPublicError, permitted, toSchema } from "./method.js"
 import type { PermissionChecker } from "./permissions.js"
+import { getLogger } from "./log.js"
 import { checkedServices, registry, type RegistryEntry } from "./registry.js"
 import type { Hints } from "./types.js"
 
@@ -71,7 +72,7 @@ async function failure(err: unknown, tool: string): Promise<KitResult> {
     }
   }
   const id = crypto.randomUUID().slice(0, 8)
-  console.error(`kit: ${tool} failed (error ${id})`, err)
+  getLogger("kit").error("tool.failed", { tool, id, error: err })
   return { ok: false, message: `internal error (${id})` }
 }
 
@@ -117,7 +118,11 @@ function toTool(e: RegistryEntry, ctx: ToolContext): KitTool {
     call: async (args) => {
       try {
         const value = (args ?? {}) as Record<string, unknown>
-        const parsed = await invoke(bound, input ? (wrapped ? value.input : value) : undefined)
+        const parsed = await invoke(
+          bound,
+          input ? (wrapped ? value.input : value) : undefined,
+          "tools",
+        )
         if (!output) return { ok: true, data: undefined, images: [] }
         const { data, images } = splitImages(parsed)
         return { ok: true, data: toJson(data), images }
