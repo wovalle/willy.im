@@ -78,15 +78,20 @@ describe("Better Auth configuration", () => {
       await createApplication(h.ctx, { app: "bender" })
       const headers = await sessionHeaders(auth, user.id)
 
-      const res = await auth.handler(
-        new Request("http://localhost:5173/auth/organization/create", {
-          method: "POST",
+      // Through `auth.api` rather than `auth.handler`: the handler path also
+      // seeds oauth_resource rows in the background, which would outlive this
+      // test's database. The endpoint and its authorization are the same.
+      const failure = await auth.api
+        .createOrganization({
           headers,
-          body: JSON.stringify({ name: "pwn", slug: `pwn-${Date.now()}`, applicationId: "bender" }),
-        }),
-      )
+          body: { name: "pwn", slug: `pwn-${Date.now()}`, applicationId: "bender" } as never,
+        })
+        .then(
+          () => null,
+          (e: { statusCode?: number }) => e,
+        )
 
-      expect(res.status).toBeGreaterThanOrEqual(400)
+      expect(failure?.statusCode).toBeGreaterThanOrEqual(400)
       const orgs = await h.ctx.db.select().from(schema.organization)
       expect(orgs).toHaveLength(0)
     })
