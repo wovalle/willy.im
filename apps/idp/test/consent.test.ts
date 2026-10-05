@@ -3,7 +3,11 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import * as consent from "../app/routes/consent"
+import * as inviteAccept from "../app/routes/invite.accept"
 import * as schema from "../app/db/schema"
+import type { AuthService } from "../app/lib/auth.server"
+import { clientDisplayName } from "../app/lib/client-display"
+import { createApplication } from "./helpers/fixtures"
 import { createTestHarness, routerContext, type TestHarness } from "./helpers/harness"
 
 /**
@@ -98,5 +102,40 @@ describe("consent screen", () => {
     const clientId = await seedClient({ name: "Acme", redirectUris: ["https://acme.test/cb"] })
     const { loaderData } = await render({ client_id: clientId, redirect_uri: "https://evil.test/cb" })
     expect(loaderData.client.host).toBe("acme.test")
+  })
+})
+
+describe("clientDisplayName (console list, app header, invite page)", () => {
+  it("is the trimmed name, else the client's host, else a generic label — never the client_id", () => {
+    expect(clientDisplayName({ name: "  Acme  ", redirectUris: ["https://acme.test/cb"] })).toBe("Acme")
+    expect(clientDisplayName({ name: " ", uri: "https://www.acme.test", redirectUris: ["https://cb.acme.test/x"] })).toBe(
+      "www.acme.test",
+    )
+    expect(clientDisplayName({ name: null, redirectUris: ["https://claude.ai/api/mcp/auth_callback"] })).toBe("claude.ai")
+    expect(clientDisplayName({ name: null, redirectUris: ["myapp://callback"] })).toBe("An application")
+  })
+})
+
+describe("invite page", () => {
+  let h: TestHarness
+  beforeEach(() => {
+    h = createTestHarness()
+  })
+  afterEach(() => h.close())
+
+  it("names the app by its registered name, not its key", async () => {
+    await createApplication(h.ctx, { app: "acme", name: "Acme Invoices" })
+    await h.ctx.db.insert(schema.applicationInvitation).values({
+      applicationId: "acme",
+      email: "friend@example.com",
+      token: "tok",
+      expiresAt: new Date(Date.now() + 86_400_000),
+    })
+    const auth = { api: { getSession: async () => null } } as unknown as AuthService
+    const data = await inviteAccept.loader({
+      request: new Request("https://idp.willy.im/invite/accept?token=tok"),
+      context: routerContext({ ...h.ctx, services: { auth } }),
+    } as never)
+    expect(data).toMatchObject({ state: "ready", app: "Acme Invoices" })
   })
 })
