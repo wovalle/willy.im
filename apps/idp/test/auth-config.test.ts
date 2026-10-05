@@ -21,12 +21,15 @@ describe("Better Auth configuration", () => {
    * Worker sets APP_ENV, not NODE_ENV — so the limiter must be turned on
    * explicitly or it is off in the deployed IdP.
    */
-  it("enables rate limiting regardless of NODE_ENV", () => {
+  it("enables rate limiting regardless of NODE_ENV", async () => {
     const previous = process.env.NODE_ENV
     delete process.env.NODE_ENV
     try {
       const auth = createAuthService(h.ctx, "http://localhost:5173")
       expect((auth.options.rateLimit as { enabled?: boolean }).enabled).toBe(true)
+      // Plugin init (oauth_resource seeding) starts with the service; let it
+      // finish before afterEach closes the database under it.
+      await auth.$context
     } finally {
       if (previous !== undefined) process.env.NODE_ENV = previous
     }
@@ -78,9 +81,6 @@ describe("Better Auth configuration", () => {
       await createApplication(h.ctx, { app: "bender" })
       const headers = await sessionHeaders(auth, user.id)
 
-      // Through `auth.api` rather than `auth.handler`: the handler path also
-      // seeds oauth_resource rows in the background, which would outlive this
-      // test's database. The endpoint and its authorization are the same.
       const failure = await auth.api
         .createOrganization({
           headers,
