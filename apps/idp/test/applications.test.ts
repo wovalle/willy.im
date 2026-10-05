@@ -306,4 +306,53 @@ describe("application lifecycle", () => {
       expect((await failureOf(membersOnly.applications.get())).status).toBe(403)
     })
   })
+
+  /**
+   * A resource URI is the audience of an app's access tokens, and the token
+   * endpoint maps an audience back to exactly ONE owning app. Two apps declaring
+   * the same URI would let a token be minted with the wrong app's permissions,
+   * so the second declaration is refused. Same for a resource-type's list URL,
+   * which the IdP signs a token for and GETs.
+   */
+  describe("cross-tenant resource claims", () => {
+    beforeEach(async () => {
+      await register()
+      await register({ app: "other", redirectUris: ["https://other.test/callback"] })
+    })
+
+    it("refuses a resource URI already declared by another app", async () => {
+      const uri = "https://acme.test/mcp"
+      await (await as(root, "acme")).applications.update({ resources: [uri] })
+
+      const clash = await failureOf(
+        (await as(root, "other")).applications.update({ resources: [uri] }),
+      )
+      expect(clash.status).toBe(409)
+      // The second app did not take the URI.
+      expect((await (await as(root, "other")).applications.get()).resources).not.toContain(uri)
+    })
+
+    it("lets an app re-declare its own resource URI (idempotent)", async () => {
+      const uri = "https://acme.test/mcp"
+      await (await as(root, "acme")).applications.update({ resources: [uri] })
+      await (await as(root, "acme")).applications.update({ resources: [uri] })
+      expect((await (await as(root, "acme")).applications.get()).resources).toEqual([uri])
+    })
+
+    it("refuses a resource-type list URL already used by another app", async () => {
+      const list = "https://acme.test/idp/resources/thread"
+      await (await as(root, "acme")).catalog.declare({
+        permissions: [],
+        resourceTypes: [{ type: "thread", label: "Thread", list }],
+      })
+
+      const clash = await failureOf(
+        (await as(root, "other")).catalog.declare({
+          permissions: [],
+          resourceTypes: [{ type: "thread", label: "Thread", list }],
+        }),
+      )
+      expect(clash.status).toBe(409)
+    })
+  })
 })
