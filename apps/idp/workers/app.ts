@@ -41,7 +41,7 @@ async function cachedAudiences(ctx: Pick<BaseServiceContext, "db">) {
 }
 import { createBaseContext } from "../app/lib/services"
 import { sentryOptions } from "../app/lib/error-reporting.server"
-import { createIdpRequestTracker } from "../app/lib/luchy.server"
+import { trackRequest } from "../app/lib/luchy.server"
 import { createResourceLister } from "../app/lib/resources.server"
 
 const requestHandler = createRequestHandler(
@@ -78,23 +78,22 @@ const handler = {
       logger: baseCtx.logger,
     })
 
-    // Analytics (Luchy). Every mutation in the IdP is either a form POST whose
-    // `intent` field names it, or an API call or auth verb whose path names it —
-    // so the event is DERIVED from the request instead of being emitted by hand
-    // per route. `luchy/react-router` owns the mechanics;
-    // `begin` must run before React Router consumes the body.
-    const finishTracking = createIdpRequestTracker(baseCtx, auth).begin(request)
-
     try {
       const appCtx = { cloudflare: { env, ctx }, ...baseCtx, services: { auth, resources } }
       // kit's generated API (/api/<service>.<method>, /apps/<app>/api/…) and MCP
       // (/mcp, /mcp/<app>) first; everything else is React Router's.
       const context = new RouterContextProvider()
       context.set(appContext, appCtx)
-      const response =
-        (await serveApi(appCtx, request)) ??
-        (await serveMcp(appCtx, request)) ??
-        (await requestHandler(request, context))
+      // Analytics (Luchy) wraps the whole dispatch so API and MCP mutations
+      // are events too, and the root loader's `getLuchy` finds its state.
+      const response = await trackRequest(
+        request,
+        context,
+        async () =>
+          (await serveApi(appCtx, request)) ??
+          (await serveMcp(appCtx, request)) ??
+          (await requestHandler(request, context)),
+      )
       baseCtx.logger.debug("request.end", {
         method: request.method,
         path: url.pathname,
@@ -102,7 +101,6 @@ const handler = {
         location: response.headers.get("location") ?? undefined,
         ms: Date.now() - started,
       })
-      finishTracking(response, ctx)
       return response
     } catch (err) {
       baseCtx.logger.error("request.error", {

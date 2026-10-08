@@ -37,6 +37,11 @@ const appEnvSchema = z.object({
   // GlitchTip (bugs.romo.fyi, project `idp`) DSN — a Worker secret. Unset or
   // empty ⇒ nothing is reported (local dev, tests). See error-reporting.server.ts.
   GLITCHTIP_DSN: z.string().optional(),
+
+  // Luchy (project idp.willy.im) secret key, `lsk_…` — a Worker secret. Signs
+  // the identity on events and pageviews and authenticates person-profile
+  // updates. Unset ⇒ events still ship in production, but anonymous.
+  LUCHY_SECRET_KEY: z.string().optional(),
 }).superRefine((env, ctx) => {
   if (env.APP_ENV !== "production") return
   if (env.BETTER_AUTH_SECRET === DEV_SECRET || env.BETTER_AUTH_SECRET.length < 32) {

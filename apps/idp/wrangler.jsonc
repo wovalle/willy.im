@@ -29,6 +29,9 @@
     // Error reporting goes to GlitchTip (bugs.romo.fyi, org kasso, project idp)
     // when the Worker secret GLITCHTIP_DSN is set —
     // `wrangler secret put GLITCHTIP_DSN`. Unset ⇒ nothing is reported.
+    // Luchy (project idp.willy.im) signs identities with the Worker secret
+    // LUCHY_SECRET_KEY — `wrangler secret put LUCHY_SECRET_KEY`. Unset ⇒
+    // events are anonymous.
   },
   // The deployed Worker version; the Sentry SDK reports it as the release.
   "version_metadata": {

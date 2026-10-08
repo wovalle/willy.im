@@ -1,8 +1,21 @@
-import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router"
+import {
+  isRouteErrorResponse,
+  Links,
+  Meta,
+  Outlet,
+  Scripts,
+  ScrollRestoration,
+  useRouteLoaderData,
+} from "react-router"
+import { getLuchy, LuchyScript } from "luchy/react-router"
 
 import type { Route } from "./+types/root"
 import "./app.css"
-import { LUCHY_API_KEY, LUCHY_ENDPOINT, LUCHY_SCRIPT_SRC } from "./lib/luchy"
+
+/** The browser script's config, with the request's identity already signed. */
+export async function loader({ context }: Route.LoaderArgs) {
+  return { luchy: await getLuchy(context) }
+}
 
 export const links: Route.LinksFunction = () => [
   {
@@ -13,6 +26,7 @@ export const links: Route.LinksFunction = () => [
 ]
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const data = useRouteLoaderData<typeof loader>("root")
   return (
     <html lang="en" className="dark">
       <head>
@@ -31,13 +45,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {children}
         <ScrollRestoration />
         <Scripts />
-        {import.meta.env.PROD && (
-          <script
-            src={LUCHY_SCRIPT_SRC}
-            data-api-key={LUCHY_API_KEY}
-            data-endpoint={LUCHY_ENDPOINT}
-          ></script>
-        )}
+        {import.meta.env.PROD && data && <LuchyScript {...data.luchy} />}
       </body>
     </html>
   )

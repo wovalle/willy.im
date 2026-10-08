@@ -26,18 +26,20 @@ export async function loader({ request, context: router }: Route.LoaderArgs) {
   // Already signed in as the invited email — claim now and land on the console.
   if (session && session.user.email.toLowerCase() === invite.email) {
     await claimInvitationsForUser(context, session.user)
-    // Invitation acceptance is a GET side effect, so the Worker's mutation
-    // sniffer never sees it — the one event emitted by hand.
-    if (context.getAppEnv("APP_ENV") === "production") {
-      context.cloudflare.ctx.waitUntil(
-        trackServerEvent({
+    // Invitation acceptance is a GET side effect, so the Luchy middleware
+    // never sees it — the one event emitted by hand.
+    context.cloudflare.ctx.waitUntil(
+      trackServerEvent(
+        context,
+        {
           name: "invite/accept:claim",
           pathname: "/invite/accept",
           userAgent: request.headers.get("user-agent") ?? undefined,
-          payload: { user: session.user.id, app: invite.applicationId },
-        }),
-      )
-    }
+          payload: { app: invite.applicationId },
+        },
+        { user: session.user.id, actor: session.session.impersonatedBy ?? undefined },
+      ),
+    )
     throw redirect("/")
   }
 
