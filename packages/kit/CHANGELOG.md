@@ -1,5 +1,12 @@
 # @willyim/kit
 
+## 0.7.0
+
+### Minor Changes
+
+- baca78d: MCP Apps: `createApp({ views })` declares HTML views and a contract's `ui: { view, visibility? }` renders a method's result in one. `toMcpTool` emits `_meta.ui.resourceUri` (`ui://<app>/<view>`) and `visibility`; `toMcpServer` serves the caller's views through `resources/list` and `resources/read` as `text/html;profile=mcp-app`; `KitTool.ui` passes the view through to other runtimes. An unknown view fails at `createApp`, in types and at run time.
+- 0e51f09: Add `@willyim/kit/log`: structured JSON logs on LogTape for Bun, Node and Workers (`configureLog`, `getLogger`, `withLogContext`), with `LOG_LEVEL`, redaction and error serialization. An app without `onCall` now logs one `call` line per method call, and `CallEvent` gains `surface` (`api`, `tools`, `direct`, `internal`).
+
 ## 0.6.1
 
 ### Patch Changes
