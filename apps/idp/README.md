@@ -165,6 +165,18 @@ Worker secret `GLITCHTIP_DSN`; unset means nothing is sent. Cookies, request
 bodies and sensitive query values (`code`, `email`, `state`, …) are not sent
 (`app/lib/error-reporting.server.ts`).
 
+## Analytics
+
+Luchy, project `idp.willy.im`. The Worker wraps every request in
+`luchy/react-router`'s middleware (`app/lib/luchy.server.ts`), so each mutation
+— console form intents, API and MCP calls, auth verbs — becomes a server event,
+and the root loader hands `<LuchyScript>` a signed identity: the signed-in user
+(`actor` = the admin while impersonating) with `name`/`email` as profile traits,
+or a bearer key by its audit label. Events ship only when `APP_ENV` is
+`production`. The secret key is the Worker secret `LUCHY_SECRET_KEY`
+(`wrangler secret put LUCHY_SECRET_KEY`); unset means events still ship, but
+anonymous.
+
 ## Develop
 
 ```bash
