@@ -42,7 +42,8 @@ export function method<
   I extends SchemaLike | undefined = undefined,
   O extends SchemaLike | undefined = undefined,
   F extends (...args: FnArgs<I>) => any = (...args: FnArgs<I>) => any,
->(contract: Contract<I, O>, fn: F): Method<I, O, F> {
+  V extends string = never,
+>(contract: Contract<I, O, V>, fn: F): Method<I, O, F, V> {
   const unbound = () => {
     throw new Error("kit: call public methods through ctx.services")
   }

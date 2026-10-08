@@ -35,4 +35,7 @@ export type {
   Result,
   Services,
   Surface,
+  Ui,
+  UiVisibility,
+  View,
 } from "./types.js"

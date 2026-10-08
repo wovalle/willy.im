@@ -6,7 +6,7 @@ import { available, invalidFields, invoke, isPublicError, permitted, toSchema } 
 import type { PermissionChecker } from "./permissions.js"
 import { getLogger } from "./log.js"
 import { checkedServices, registry, type RegistryEntry } from "./registry.js"
-import type { Hints } from "./types.js"
+import type { Hints, UiVisibility } from "./types.js"
 
 export type KitResult =
   | { ok: true; data: unknown; images: KitImage[] }
@@ -32,6 +32,11 @@ export type KitTool = {
   /** The output as zod. */
   outputZod?: z.ZodType
   hints?: Hints
+  /**
+   * MCP Apps: the view (`createApp({ views })`) that renders the result, and its
+   * `ui://<app>/<view>` URI. A runtime with its own UI can render `app.config.views[view]`.
+   */
+  ui?: { view: string; resourceUri: string; visibility?: UiVisibility[] }
   /**
    * Runs the method through the context's services (so `when`, the permission,
    * the input, the output check and `onCall` all apply) and never throws: data
@@ -93,8 +98,11 @@ export function wrapSchema(key: string, schema: JsonSchema, required: boolean): 
 export const optionalIn = (s: z.ZodType) => s._zod.optin === "optional"
 export const optionalOut = (s: z.ZodType) => s._zod.optout === "optional"
 
-function toTool(e: RegistryEntry, ctx: ToolContext): KitTool {
-  const { summary, description, input, output, hints } = e.contract
+/** A view's URI: `ui://<app>/<view>`. */
+export const viewUri = (app: KitApp, view: string) => `ui://${app.config.name ?? "kit"}/${view}`
+
+function toTool(app: KitApp, e: RegistryEntry, ctx: ToolContext): KitTool {
+  const { summary, description, input, output, hints, ui } = e.contract
   const bound = checkedServices(ctx.services)[e.service][e.method]
   const inputZod = input ? toSchema(input) : undefined
   const wrapped = inputZod !== undefined && !isZodObject(inputZod)
@@ -115,6 +123,7 @@ function toTool(e: RegistryEntry, ctx: ToolContext): KitTool {
         : (inputZod as z.ZodObject),
     ...(output && { outputSchema: jsonSchema(output, "output"), outputZod }),
     ...(hints && { hints }),
+    ...(ui && { ui: { ...ui, resourceUri: viewUri(app, ui.view) } }),
     call: async (args) => {
       try {
         const value = (args ?? {}) as Record<string, unknown>
@@ -147,5 +156,5 @@ function toTool(e: RegistryEntry, ctx: ToolContext): KitTool {
 export function tools(app: KitApp, ctx: ToolContext): KitTool[] {
   return registry(app)
     .filter((e) => available(e.contract, ctx) && permitted(ctx.caller, e.contract.permission))
-    .map((e) => toTool(e, ctx))
+    .map((e) => toTool(app, e, ctx))
 }

@@ -10,6 +10,8 @@ import type {
   ContractErrors,
   KitFields,
   Principal,
+  View,
+  ViewErrors,
 } from "./types.js"
 
 /** A service: a factory from the context to plain methods and `method(...)`s. */
@@ -60,7 +62,12 @@ export type DiscoveryOptions = {
   }
 }
 
-type AppConfig<A extends unknown[], B, S> = {
+// And for a method whose `ui.view` isn't a declared view.
+type ViewCheck<S, V> = [ViewErrors<S, keyof V>] extends [never]
+  ? unknown
+  : { "kit: unknown view": ViewErrors<S, keyof V> }
+
+type AppConfig<A extends unknown[], B, S, V = Record<string, View>> = {
   /** The app's name: the title of its OpenAPI document and llms.txt, and the MCP server name. */
   name?: string
   /** One paragraph for discovery: what the app is for. */
@@ -80,6 +87,11 @@ type AppConfig<A extends unknown[], B, S> = {
    */
   onCall?: (event: CallEvent<KitFields & B & { services: any }>) => void | Promise<void>
   discovery?: DiscoveryOptions
+  /**
+   * MCP Apps: HTML views, by name. A method shows its result in one with
+   * `ui: { view }`; MCP serves each as `ui://<name>/<view>`.
+   */
+  views?: V
 }
 
 /**
@@ -92,10 +104,16 @@ type AppConfig<A extends unknown[], B, S> = {
  * as trusted: a call one operation makes to another skips the permission, which
  * the call that entered the app has passed. `app.context` returns the checked one.
  */
-export function createApp<A extends unknown[], B, S extends Record<string, Factory>>(
-  config: AppConfig<A, B, S> & ContractCheck<S> & OwnFieldsCheck<B>,
-) {
-  const app: App<A, AppConfig<A, B, S> & ContractCheck<S> & OwnFieldsCheck<B>> = {
+export function createApp<
+  A extends unknown[],
+  B,
+  S extends Record<string, Factory>,
+  V extends Record<string, View> = {},
+>(config: AppConfig<A, B, S, V> & ContractCheck<S> & OwnFieldsCheck<B> & ViewCheck<S, V>) {
+  const app: App<
+    A,
+    AppConfig<A, B, S, V> & ContractCheck<S> & OwnFieldsCheck<B> & ViewCheck<S, V>
+  > = {
     config,
     context: async (principal, tenantId, ...args) => {
       // Before the app's builder runs: a tenant the principal can't see is a 404.
@@ -122,7 +140,12 @@ export function createApp<A extends unknown[], B, S extends Record<string, Facto
   }
   defaultLogApp(config.name)
   validateDiscovery(config.discovery)
-  registry(app) // fail fast: a factory that uses ctx while building, or a bad tool name
+  // fail fast: a factory that uses ctx while building, a bad tool name, an unknown view
+  for (const e of registry(app)) {
+    const view = e.contract.ui?.view
+    if (view !== undefined && !Object.hasOwn(config.views ?? {}, view))
+      throw new Error(`kit: ${e.name} renders view "${view}", which views doesn't declare`)
+  }
   return app
 }
 
@@ -239,5 +262,6 @@ export type KitApp = {
     description?: string
     services: Record<string, Factory>
     discovery?: DiscoveryOptions
+    views?: Record<string, View>
   }
 }

@@ -93,9 +93,40 @@ export type Hints = {
   idempotent?: boolean
 }
 
+/** Who may call a tool that has a view: the model, the view itself, or both (the default). */
+export type UiVisibility = "model" | "app"
+
+/** MCP Apps: the view a host renders this method's result in. */
+export type Ui<V extends string = string> = {
+  /** A key of `createApp({ views })`. */
+  view: V
+  /** Omitted: `["model", "app"]`. `["app"]` hides the tool from the model; only the view calls it. */
+  visibility?: UiVisibility[]
+}
+
+/** MCP Apps: a self-contained HTML page a host renders in a sandboxed iframe. */
+export type View = {
+  /** The page, or a function that builds it (called on each `resources/read`). */
+  html: string | (() => string | Promise<string>)
+  /** Origins the page may reach. Omitted: none. */
+  csp?: {
+    /** fetch/XHR/WebSocket (`connect-src`). */
+    connectDomains?: string[]
+    /** Scripts, styles, images, fonts, media. */
+    resourceDomains?: string[]
+    /** Nested iframes (`frame-src`). */
+    frameDomains?: string[]
+    /** `base-uri`. */
+    baseUriDomains?: string[]
+  }
+  /** Ask the host for a visible border and background. Omitted: the host decides. */
+  prefersBorder?: boolean
+}
+
 export type Contract<
   I extends SchemaLike | undefined = SchemaLike | undefined,
   O extends SchemaLike | undefined = SchemaLike | undefined,
+  V extends string = string,
 > = {
   /** One line for an agent choosing a method: a verb, and what comes back. */
   summary: string
@@ -116,13 +147,15 @@ export type Contract<
   hints?: Hints
   /** The public tool name. Defaults to `<service>_<method>`. */
   name?: string
+  /** MCP Apps: render the result in one of the app's `views`. */
+  ui?: Ui<V>
 }
 
 export const META: unique symbol = Symbol.for("kit.method")
 
 /** What a public method carries for the adapters and discovery. */
-export type MethodMeta<I = unknown, O = unknown> = {
-  contract: Contract & { input?: I; output?: O }
+export type MethodMeta<I = unknown, O = unknown, V extends string = string> = {
+  contract: Contract & { input?: I; output?: O; ui?: Ui<V> }
   /** Set when the service is built. */
   service: string
   method: string
@@ -145,14 +178,13 @@ export type PublicMethod<I = any, O = any, R = any> = {
  * evaluates a body's return type. `PublicMethod<I, O, ReturnType<F>>` would, and
  * services calling each other become circular.
  */
-export type Method<I, O, F extends (...args: any[]) => any> = {
+export type Method<I, O, F extends (...args: any[]) => any, V extends string = never> = {
   (...args: CallArgs<I>): Promise<Awaited<ReturnType<F>>>
-  readonly [META]: MethodMeta<I, O>
+  readonly [META]: MethodMeta<I, O, V>
 }
 
 export type Result<T> =
-  | { ok: true; value: T }
-  | { ok: false; errors: Partial<Record<string, string[]>> }
+  { ok: true; value: T } | { ok: false; errors: Partial<Record<string, string[]>> }
 
 /**
  * Where a call came from: `api` (`app.handle`), `tools` (`tools()` and MCP),
@@ -215,5 +247,21 @@ type Mismatch<Name extends string, M> = M extends { [META]: MethodMeta<any, infe
 export type ContractErrors<S> = {
   [G in keyof S & string]: {
     [K in keyof Methods<S[G]> & string]: Mismatch<`${G}.${K}`, Methods<S[G]>[K]>
+  }[keyof Methods<S[G]> & string]
+}[keyof S & string]
+
+// One message per method whose `ui.view` isn't one of the app's views.
+type UnknownView<Name extends string, M, K> = M extends { [META]: MethodMeta<any, any, infer V> }
+  ? [V] extends [never]
+    ? never
+    : [V] extends [K]
+      ? never
+      : `${Name} renders view "${V}", which createApp's views doesn't declare`
+  : never
+
+/** Checked at `createApp`, like `ContractErrors`. */
+export type ViewErrors<S, K> = {
+  [G in keyof S & string]: {
+    [K2 in keyof Methods<S[G]> & string]: UnknownView<`${G}.${K2}`, Methods<S[G]>[K2], K>
   }[keyof Methods<S[G]> & string]
 }[keyof S & string]

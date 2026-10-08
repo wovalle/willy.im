@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { beforeEach, describe, expect, test } from "vitest"
 import { z } from "zod"
-import { createApp, declareService, method, type Grant } from "../src/index.js"
+import { createApp, declareService, method, tools, type Grant } from "../src/index.js"
 import { toMcpServer, type McpOptions } from "../src/mcp.js"
 import { app, auth, context, ctxFor, member, reset } from "./fixture.js"
 
@@ -133,5 +133,138 @@ describe("MCP", () => {
       "Reply in the thread.",
     )
     expect((await connect(["notes:*"], null, { instructions })).getInstructions()).toBeUndefined()
+  })
+})
+
+describe("MCP Apps", () => {
+  const board = createApp({
+    name: "board",
+    auth,
+    context,
+    services: {
+      cards: declareService(() => ({
+        show: method(
+          {
+            summary: "Show a card.",
+            permission: "notes:read",
+            output: { id: z.string() },
+            ui: { view: "card" },
+          },
+          async () => ({ id: "1" }),
+        ),
+        refresh: method(
+          {
+            summary: "Refresh the board.",
+            permission: "notes:write",
+            ui: { view: "board", visibility: ["app"] },
+          },
+          async () => {},
+        ),
+        plain: method({ summary: "No view.", permission: "notes:read" }, async () => {}),
+      })),
+    },
+    views: {
+      card: { html: "<p>card</p>", prefersBorder: true },
+      board: {
+        html: async () => "<p>board</p>",
+        csp: { connectDomains: ["https://api.example.com"] },
+      },
+      unused: { html: "<p>unused</p>" },
+    },
+  })
+
+  async function connectBoard(grants: Grant[]) {
+    const server = toMcpServer(board, await board.context(member("w1", grants), "w1"))
+    const [a, b] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: "test", version: "1" })
+    await Promise.all([server.connect(a), client.connect(b)])
+    return client
+  }
+
+  test("a tool with a view carries _meta.ui.resourceUri and its visibility; one without is unchanged", async () => {
+    const { tools } = await (await connectBoard(["notes:*"])).listTools()
+    const byName = Object.fromEntries(tools.map((t) => [t.name, t]))
+    expect(byName.cards_show._meta).toEqual({ ui: { resourceUri: "ui://board/card" } })
+    expect(byName.cards_refresh._meta).toEqual({
+      ui: { resourceUri: "ui://board/board", visibility: ["app"] },
+    })
+    expect(byName.cards_plain._meta).toBeUndefined()
+  })
+
+  test("tools() passes the view through for runtimes that render natively", async () => {
+    const list = tools(board, await board.context(member("w1", ["notes:*"]), "w1"))
+    expect(list.find((t) => t.name === "cards_refresh")!.ui).toEqual({
+      view: "board",
+      resourceUri: "ui://board/board",
+      visibility: ["app"],
+    })
+    expect(list.find((t) => t.name === "cards_plain")!.ui).toBeUndefined()
+  })
+
+  test("resources/list shows the views of the caller's tools, with their _meta.ui", async () => {
+    const { resources } = await (await connectBoard(["notes:*"])).listResources()
+    expect(resources).toEqual([
+      {
+        uri: "ui://board/card",
+        name: "card",
+        mimeType: "text/html;profile=mcp-app",
+        _meta: { ui: { prefersBorder: true } },
+      },
+      {
+        uri: "ui://board/board",
+        name: "board",
+        mimeType: "text/html;profile=mcp-app",
+        _meta: { ui: { csp: { connectDomains: ["https://api.example.com"] } } },
+      },
+    ])
+  })
+
+  test("resources/read serves the view's HTML, from a string or a function", async () => {
+    const client = await connectBoard(["notes:*"])
+    expect((await client.readResource({ uri: "ui://board/card" })).contents).toEqual([
+      {
+        uri: "ui://board/card",
+        mimeType: "text/html;profile=mcp-app",
+        text: "<p>card</p>",
+        _meta: { ui: { prefersBorder: true } },
+      },
+    ])
+    expect((await client.readResource({ uri: "ui://board/board" })).contents).toMatchObject([
+      { text: "<p>board</p>" },
+    ])
+  })
+
+  test("a view whose tools the caller can't see is neither listed nor readable", async () => {
+    const client = await connectBoard(["notes:read"])
+    const { resources } = await client.listResources()
+    expect(resources.map((r) => r.uri)).toEqual(["ui://board/card"])
+    const hidden = await client.readResource({ uri: "ui://board/board" }).catch((e) => e)
+    expect(hidden.code).toBe(-32002)
+    expect(hidden.message).toContain("Unknown resource: ui://board/board")
+  })
+
+  test("an unknown or unreferenced view is the same unknown-resource error", async () => {
+    const client = await connectBoard(["notes:*"])
+    const unused = await client.readResource({ uri: "ui://board/unused" }).catch((e) => e)
+    const missing = await client.readResource({ uri: "ui://board/nope" }).catch((e) => e)
+    expect(unused.message).toContain("Unknown resource: ui://board/unused")
+    expect(missing.message).toContain("Unknown resource: ui://board/nope")
+  })
+
+  test("an app without views has no resources capability", async () => {
+    const client = await connect(["notes:*"])
+    expect(client.getServerCapabilities()?.resources).toBeUndefined()
+  })
+
+  test("createApp throws on a method whose view isn't declared", () => {
+    const services = {
+      x: declareService(() => ({
+        y: method({ summary: "y", permission: "notes:read", ui: { view: "nope" } }, async () => {}),
+      })),
+    }
+    // @ts-expect-error "x.y renders view "nope", which createApp's views doesn't declare"
+    expect(() => createApp({ auth, context, services })).toThrow(
+      'kit: x.y renders view "nope", which views doesn\'t declare',
+    )
   })
 })
