@@ -103,7 +103,7 @@ for (const t of tools(app, ctx)) runtime.register(t.name, t.description, t.input
 
 | Concept       | What it is                                                                                                                                                                                                 |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **App**       | `createApp({ name, description, auth, context, services, onCall?, discovery?: { anonymous?, auth? } })`. Holds every service.                                                                              |
+| **App**       | `createApp({ name, description, auth, context, services, onCall?, discovery?: { anonymous?, auth? }, views? })`. Holds every service.                                                                      |
 | **Principal** | `{ id, grants, memberships: [{ tenantId, grants }], actor? }`: who is calling, as plain data you build per request. Cron and queues are a principal too.                                                   |
 | **Context**   | `app.context(principal, tenantId, ...args)`, once per request, MCP session, agent turn or cron run: `caller`, `tenantId`, `actor`, whatever your builder adds, and its services, each built on first read. |
 | **Register**  | The `declare module "@willyim/kit"` block. It gives `ctx`, grants and `ctx.services` their types everywhere.                                                                                               |
@@ -124,6 +124,7 @@ method({
   when: (ctx) => ctx.thread !== null,  // optional: where it exists; omit for everywhere
   hints: { readOnly: false, destructive: false, idempotent: true }, // optional, MCP annotations
   name: "note_create",                 // optional tool name; default service_method
+  ui: { view: "note" },                // optional: MCP Apps view for the result (see MCP Apps)
 }, async (input) => { ... })
 ```
 
@@ -263,6 +264,45 @@ wrapped as `{ result }`. Failures are `isError` results with
 the message and any invalid fields. A tool outside the caller's list, forbidden or
 nonexistent, is the same `Unknown tool` error. Build one server per request or session.
 Unauthenticated MCP never reaches kit: your transport answers 401 + `WWW-Authenticate` first.
+
+### MCP Apps
+
+A method can show its result in a view: an HTML page an MCP Apps host (Claude, ChatGPT,
+VS Code) renders in a sandboxed iframe and feeds the tool's `structuredContent`. Declare the
+views on the app and point methods at them:
+
+```ts
+const app = createApp({
+  name: "notes",
+  auth, context, services,
+  views: {
+    note: {
+      html: noteHtml,                  // a self-contained page, or () => string | Promise<string>
+      csp: { connectDomains: ["https://api.example.com"] }, // optional; also resourceDomains, frameDomains, baseUriDomains
+      prefersBorder: true,             // optional
+    },
+  },
+})
+
+method({
+  summary: "Show a note.",
+  permission: "notes:read",
+  input: { id: z.string() },
+  output: Note,
+  ui: { view: "note", visibility: ["model", "app"] }, // visibility optional; ["app"]: only the view calls it
+}, async ({ id }) => { ... })
+```
+
+- **Tools:** `tools/list` gives the tool `_meta.ui.resourceUri: "ui://<app name>/<view>"`, plus
+  `_meta.ui.visibility` when set. Tools without `ui` are unchanged.
+- **Resources:** with `views`, the server advertises `resources`. `resources/list` lists only the
+  views of tools the caller sees; `resources/read` returns the HTML as
+  `text/html;profile=mcp-app`, with `_meta.ui.csp` / `prefersBorder` when set. Any other URI,
+  including a view whose tools the caller can't see, is the same `Unknown resource` error (-32002).
+- **Checked:** a `ui.view` that isn't in `views` fails to type-check at `createApp`, and throws there.
+- **Other runtimes:** `tools()` passes `ui: { view, resourceUri, visibility? }` through; render
+  `app.config.views[view]` yourself. kit doesn't depend on `@modelcontextprotocol/ext-apps`; the
+  page itself can use its `App` client to talk to the host.
 
 ## Principals and tenants
 
