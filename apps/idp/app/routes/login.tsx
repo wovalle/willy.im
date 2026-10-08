@@ -2,9 +2,10 @@ import { useState } from "react"
 import { useSearchParams } from "react-router"
 import { Fingerprint, Loader2, Mail } from "lucide-react"
 
-import { authClient } from "~/lib/auth-client"
+import { authClient, plainAuthClient } from "~/lib/auth-client"
 import { clientLog } from "~/lib/log"
 import { safeNext } from "~/lib/next-url"
+import { staleAuthorizeUrl } from "~/lib/oauth-query"
 import { Button } from "~/components/ui/button"
 import {
   Card,
@@ -32,11 +33,18 @@ export default function Login() {
 
   const busy = pending !== null
 
+  // An OIDC authorization's signed query expires ten minutes after the redirect
+  // here; past that, every request carrying it fails. Sign in without it then,
+  // and restart the authorization afterwards (continueAfterSignIn).
+  function client() {
+    return staleAuthorizeUrl(window.location.search) ? plainAuthClient : authClient
+  }
+
   async function sendCode(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setPending("email")
-    const { error } = await authClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" })
+    const { error } = await client().emailOtp.sendVerificationOtp({ email, type: "sign-in" })
     setPending(null)
     if (error) return setError(error.message ?? "Couldn't send the code.")
     setStep("otp")
@@ -49,7 +57,9 @@ export default function Login() {
   // sent on the destination request — a client transition races the cookie and
   // bounces back to /login.
   function continueAfterSignIn(data: unknown) {
-    const url = (data as { url?: string } | null)?.url
+    // An expired one is restarted instead: the session now exists, so
+    // /authorize goes straight on to consent or back to the client.
+    const url = (data as { url?: string } | null)?.url ?? staleAuthorizeUrl(window.location.search)
     // An OIDC resume URL outranks `next`: that flow is mid-handshake and has a
     // signed query to hand back, while `next` is only ever a convenience.
     const next = safeNext(window.location.search)
@@ -61,7 +71,7 @@ export default function Login() {
     e.preventDefault()
     setError(null)
     setPending("otp")
-    const { data, error } = await authClient.signIn.emailOtp({ email, otp: code })
+    const { data, error } = await client().signIn.emailOtp({ email, otp: code })
     setPending(null)
     if (error) return setError(error.message ?? "Invalid or expired code.")
     continueAfterSignIn(data)
@@ -75,7 +85,7 @@ export default function Login() {
       webauthnAvailable: typeof window.PublicKeyCredential !== "undefined",
     })
     try {
-      const res = await authClient.signIn.passkey()
+      const res = await client().signIn.passkey()
       clientLog.info("passkey.signin.result", {
         hasData: !!res?.data,
         data: res?.data,

@@ -4,6 +4,7 @@ import { Check, Loader2, ShieldCheck } from "lucide-react"
 import type { Route } from "./+types/consent"
 import { authClient } from "~/lib/auth-client"
 import { consentClient } from "~/lib/consent.server"
+import { staleAuthorizeUrl } from "~/lib/oauth-query"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card"
 import { appContext } from "~/context"
@@ -39,6 +40,10 @@ export default function Consent({ loaderData }: Route.ComponentProps) {
   async function decide(accept: boolean) {
     setError(null)
     setPending(accept ? "accept" : "deny")
+    // The signed query has expired, so the server would reject this decision.
+    // Restart the authorization: it lands back here with a fresh one.
+    const restart = staleAuthorizeUrl(window.location.search)
+    if (restart) return window.location.assign(restart)
     try {
       const { data, error } = await authClient.oauth2.consent({ accept })
       // fetch clients receive { redirect: true, url }; the OpenAPI shape calls it redirect_uri.

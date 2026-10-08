@@ -9,3 +9,14 @@ export const authClient = createAuthClient({
   // and exposes oauth2.consent for the consent page.
   plugins: [emailOTPClient(), passkeyClient(), oauthProviderClient()],
 })
+
+/**
+ * The same client without the signed authorize query. For signing in when
+ * that query has expired: the server would reject every request carrying it,
+ * so sign in plainly and restart the authorize request afterwards
+ * (see `staleAuthorizeUrl`).
+ */
+export const plainAuthClient = createAuthClient({
+  basePath: "/auth",
+  plugins: [emailOTPClient(), passkeyClient()],
+})
