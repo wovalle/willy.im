@@ -2,8 +2,9 @@ import { useState } from "react"
 import { Check, Loader2, ShieldCheck } from "lucide-react"
 
 import type { Route } from "./+types/consent"
-import { authClient } from "~/lib/auth-client"
+import { authClient, authErrorText } from "~/lib/auth-client"
 import { consentClient } from "~/lib/consent.server"
+import { signedQueryExpired } from "~/lib/oauth-query"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card"
 import { appContext } from "~/context"
@@ -38,6 +39,12 @@ export default function Consent({ loaderData }: Route.ComponentProps) {
 
   async function decide(accept: boolean) {
     setError(null)
+    // Past its expiry the server rejects this decision (see oauth-query.ts), and
+    // the app's half of the handshake is as stale: it has to start over.
+    if (signedQueryExpired(window.location.search)) {
+      setError(`This request expired. Go back to ${client.name} and sign in again.`)
+      return
+    }
     setPending(accept ? "accept" : "deny")
     try {
       const { data, error } = await authClient.oauth2.consent({ accept })
@@ -46,7 +53,7 @@ export default function Consent({ loaderData }: Route.ComponentProps) {
       const redirectUri = d?.url ?? d?.redirect_uri
       if (error || !redirectUri) {
         setPending(null)
-        setError(error?.message ?? "Couldn't complete authorization.")
+        setError(error ? authErrorText(error, "Couldn't complete authorization.") : "Couldn't complete authorization.")
         return
       }
       window.location.href = redirectUri
