@@ -10,13 +10,16 @@ export const authClient = createAuthClient({
   plugins: [emailOTPClient(), passkeyClient(), oauthProviderClient()],
 })
 
+type AuthError = { message?: string; error?: string; code?: string; status?: number; statusText?: string }
+
 /**
- * The same client without the signed authorize query. For signing in when
- * that query has expired: the server would reject every request carrying it,
- * so sign in plainly and restart the authorize request afterwards
- * (see `staleAuthorizeUrl`).
+ * What to tell a person about a failed auth call. Some errors carry no
+ * `message` (the oauth-provider's `{ error: "invalid_signature" }`), and a bare
+ * fallback then hides the cause — so the code and status ride along.
  */
-export const plainAuthClient = createAuthClient({
-  basePath: "/auth",
-  plugins: [emailOTPClient(), passkeyClient()],
-})
+export function authErrorText(error: AuthError, fallback: string): string {
+  if (error.message) return error.message
+  if (error.error === "invalid_signature") return "This sign-in request expired. Reload the page and try again."
+  const detail = error.code ?? error.error ?? [error.status, error.statusText].filter(Boolean).join(" ")
+  return detail ? `${fallback} (${detail})` : fallback
+}

@@ -1,11 +1,15 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router"
 import { Fingerprint, Loader2, Mail } from "lucide-react"
 
-import { authClient, plainAuthClient } from "~/lib/auth-client"
+import type { Route } from "./+types/login"
+import { authClient, authErrorText } from "~/lib/auth-client"
+import { consentClient } from "~/lib/consent.server"
+import { UNNAMED_CLIENT } from "~/lib/client-display"
 import { clientLog } from "~/lib/log"
 import { safeNext } from "~/lib/next-url"
-import { staleAuthorizeUrl } from "~/lib/oauth-query"
+import { dropExpiredSignedQuery } from "~/lib/oauth-query"
+import { appContext } from "~/context"
 import { Button } from "~/components/ui/button"
 import {
   Card,
@@ -21,9 +25,19 @@ export function meta() {
   return [{ title: "Sign in · willy.im" }]
 }
 
+// Mid-OIDC, the plugin sends the user here with the authorize request on the
+// query; name the app, for when that request expires (see oauth-query.ts).
+export async function loader({ request, context: router }: Route.LoaderArgs) {
+  const params = new URL(request.url).searchParams
+  if (!params.has("sig")) return { appName: null }
+  const client = await consentClient(router.get(appContext), params.get("client_id"), params.get("redirect_uri"))
+  return { appName: client.name === UNNAMED_CLIENT ? null : client.name }
+}
+
 type Step = "email" | "otp"
 
-export default function Login() {
+export default function Login({ loaderData }: Route.ComponentProps) {
+  const { appName } = loaderData
   const [searchParams] = useSearchParams()
   const [step, setStep] = useState<Step>("email")
   const [email, setEmail] = useState(() => searchParams.get("email") ?? "")
@@ -31,22 +45,32 @@ export default function Login() {
   const [pending, setPending] = useState<null | "email" | "otp" | "passkey">(null)
   const [error, setError] = useState<string | null>(null)
 
+  const [expired, setExpired] = useState(false)
+
   const busy = pending !== null
 
-  // An OIDC authorization's signed query expires ten minutes after the redirect
-  // here; past that, every request carrying it fails. Sign in without it then,
-  // and restart the authorization afterwards (continueAfterSignIn).
-  function client() {
-    return staleAuthorizeUrl(window.location.search) ? plainAuthClient : authClient
+  // An authorize request expires ten minutes after the redirect here, and every
+  // auth call carrying it fails from then on. Drop it as soon as it does —
+  // on load, when the tab comes back, and right before each call — so the page
+  // keeps working as a plain sign-in.
+  function dropExpired() {
+    if (dropExpiredSignedQuery()) setExpired(true)
   }
+
+  useEffect(() => {
+    dropExpired()
+    document.addEventListener("visibilitychange", dropExpired)
+    return () => document.removeEventListener("visibilitychange", dropExpired)
+  }, [])
 
   async function sendCode(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setPending("email")
-    const { error } = await client().emailOtp.sendVerificationOtp({ email, type: "sign-in" })
+    dropExpired()
+    const { error } = await authClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" })
     setPending(null)
-    if (error) return setError(error.message ?? "Couldn't send the code.")
+    if (error) return setError(authErrorText(error, "Couldn't send the code."))
     setStep("otp")
   }
 
@@ -57,9 +81,7 @@ export default function Login() {
   // sent on the destination request — a client transition races the cookie and
   // bounces back to /login.
   function continueAfterSignIn(data: unknown) {
-    // An expired one is restarted instead: the session now exists, so
-    // /authorize goes straight on to consent or back to the client.
-    const url = (data as { url?: string } | null)?.url ?? staleAuthorizeUrl(window.location.search)
+    const url = (data as { url?: string } | null)?.url
     // An OIDC resume URL outranks `next`: that flow is mid-handshake and has a
     // signed query to hand back, while `next` is only ever a convenience.
     const next = safeNext(window.location.search)
@@ -71,28 +93,30 @@ export default function Login() {
     e.preventDefault()
     setError(null)
     setPending("otp")
-    const { data, error } = await client().signIn.emailOtp({ email, otp: code })
+    dropExpired()
+    const { data, error } = await authClient.signIn.emailOtp({ email, otp: code })
     setPending(null)
-    if (error) return setError(error.message ?? "Invalid or expired code.")
+    if (error) return setError(authErrorText(error, "Invalid or expired code."))
     continueAfterSignIn(data)
   }
 
   async function signInWithPasskey() {
     setError(null)
     setPending("passkey")
+    dropExpired()
     clientLog.info("passkey.signin.start", {
       origin: window.location.origin,
       webauthnAvailable: typeof window.PublicKeyCredential !== "undefined",
     })
     try {
-      const res = await client().signIn.passkey()
+      const res = await authClient.signIn.passkey()
       clientLog.info("passkey.signin.result", {
         hasData: !!res?.data,
         data: res?.data,
         error: res?.error ? { status: res.error.status, message: res.error.message } : null,
       })
       if (res?.error) {
-        setError(res.error.message ?? "Passkey sign-in failed.")
+        setError(authErrorText(res.error, "Passkey sign-in failed."))
         return
       }
       // Confirm a session actually exists before navigating (the real bug suspect).
@@ -122,6 +146,12 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          {expired ? (
+            <p className="text-muted-foreground text-sm" role="status">
+              Your sign-in request from {appName ?? "the app"} expired. Sign in here, then start again
+              from {appName ?? "the app"}.
+            </p>
+          ) : null}
           {step === "email" ? (
             <>
               <form onSubmit={sendCode} className="flex flex-col gap-3">
