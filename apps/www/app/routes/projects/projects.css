@@ -1,0 +1,603 @@
+/* Product pages (/kit, /idp). Their own look, separate from the personal site. */
+
+.proj,
+.proj * {
+  transition: none;
+}
+
+.proj {
+  --bg: #fbfbfa;
+  --surface: #ffffff;
+  --ink: #141414;
+  --ink-2: #5c5c5a;
+  --line: #e6e6e3;
+  --code-bg: #f3f3f1;
+  --accent: #2459d6;
+  --mark: #dfe8fc;
+  --kw: #8a3ab9;
+  --st: #186a42;
+  --ok: #1f7a4d;
+  --err: #b42318;
+  --sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, monospace;
+
+  flex-grow: 1;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 1rem/1.6 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  caret-color: var(--accent);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  .proj {
+    --bg: #111110;
+    --surface: #181817;
+    --ink: #ededec;
+    --ink-2: #a1a19d;
+    --line: #2a2a28;
+    --code-bg: #1d1d1c;
+    --accent: #7ea2f0;
+    --mark: #1f2d4d;
+    --kw: #c99bea;
+    --st: #7fc8a0;
+    --ok: #7fc8a0;
+    --err: #f2877c;
+    color-scheme: dark;
+  }
+}
+
+.proj ::selection {
+  background: var(--mark);
+}
+.proj a {
+  color: inherit;
+  text-decoration-color: color-mix(in oklab, var(--ink-2) 50%, transparent);
+  text-underline-offset: 0.2em;
+}
+.proj a:hover {
+  color: inherit;
+  text-decoration-color: currentColor;
+}
+.proj :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.proj code,
+.proj pre {
+  font-family: var(--mono);
+}
+
+.proj .wrap {
+  width: min(880px, 100% - 3rem);
+  margin-inline: auto;
+}
+
+/* header */
+.proj .top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-block: 1.5rem;
+}
+.proj .brand {
+  text-decoration: none;
+  font-weight: 500;
+}
+.proj .brand span {
+  color: var(--ink-2);
+  font-weight: 400;
+}
+.proj .top nav {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.95rem;
+}
+.proj .top nav a {
+  text-decoration: none;
+  color: var(--ink-2);
+}
+.proj .top nav a:hover {
+  color: var(--ink);
+}
+
+/* hero */
+.proj .hero {
+  padding-block: 6rem 4rem;
+}
+.proj h1 {
+  margin: 0 0 1.25rem;
+  font-weight: 600;
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+.proj .lede {
+  margin: 0 0 2rem;
+  font-size: 1.2rem;
+  color: var(--ink-2);
+  max-width: 34em;
+  text-wrap: pretty;
+}
+.proj .meta {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  color: var(--ink-2);
+  font-size: 0.88rem;
+}
+
+/* actions */
+.proj .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+.proj .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.75rem;
+  padding: 0 1.1rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font: 500 0.95rem var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+.proj .btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+.proj .btn-dark {
+  background: var(--ink);
+  color: var(--bg);
+}
+.proj .btn-dark:hover {
+  color: var(--bg);
+  background: color-mix(in oklab, var(--ink) 82%, var(--bg));
+}
+.proj .btn-line {
+  border-color: var(--line);
+  background: var(--surface);
+}
+.proj .btn-line:hover {
+  border-color: color-mix(in oklab, var(--ink-2) 45%, var(--line));
+}
+.proj .install {
+  display: inline-flex;
+  align-items: center;
+  height: 2.75rem;
+  padding: 0 0.35rem 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font: 400 0.9rem var(--mono);
+  max-width: 100%;
+}
+.proj .install .p {
+  color: var(--ink-2);
+  opacity: 0.6;
+  margin-right: 0.6rem;
+}
+.proj .install > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.proj .copy {
+  flex: none;
+  height: 2rem;
+  padding: 0 0.6rem;
+  margin-left: 0.5rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font: 500 0.82rem var(--sans);
+  cursor: pointer;
+}
+.proj .copy:hover {
+  background: var(--code-bg);
+  color: var(--ink);
+}
+
+/* code */
+.proj pre.code {
+  margin: 0;
+  padding: 1.25rem 1.5rem;
+  background: var(--code-bg);
+  border-radius: 10px;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+.proj .kw {
+  color: var(--kw);
+}
+.proj .st {
+  color: var(--st);
+}
+.proj .mark {
+  background: var(--mark);
+  border-radius: 3px;
+  box-shadow: 0 0 0 3px var(--mark);
+}
+.proj .caption {
+  margin: 0.6rem 0 0;
+  color: var(--ink-2);
+  font-size: 0.85rem;
+}
+
+/* sections */
+.proj section {
+  padding-block: 4rem;
+  border-top: 1px solid var(--line);
+}
+.proj section.first {
+  border-top: 0;
+  padding-top: 0;
+}
+.proj h2 {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+  font-size: 1.6rem;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.proj h3 {
+  margin: 0 0 0.5rem;
+  font-weight: 500;
+  font-size: 1rem;
+}
+.proj .sub {
+  margin: 0 0 2rem;
+  color: var(--ink-2);
+  max-width: 36em;
+}
+.proj p code,
+.proj li code,
+.proj td code {
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 0.12em 0.35em;
+  border-radius: 4px;
+}
+
+/* rows: a name on the left, detail on the right */
+.proj .rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.proj .rows li {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 0.15rem 1.5rem;
+  padding-block: 1rem;
+  border-top: 1px solid var(--line);
+}
+.proj .rows li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.proj .rows.narrow li {
+  grid-template-columns: 5.5rem 1fr;
+}
+.proj .rows .name {
+  font-weight: 500;
+  grid-row: span 2;
+}
+.proj .rows code.call {
+  font-size: 0.9rem;
+  background: none;
+  padding: 0;
+}
+.proj .rows .desc {
+  color: var(--ink-2);
+  font-size: 0.95rem;
+}
+
+/* bordered demo panel */
+.proj .demo {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.proj .tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.proj .tabs button {
+  padding: 0.35rem 0.8rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font: 400 0.9rem var(--sans);
+  color: var(--ink-2);
+  transition: background-color 0.15s, color 0.15s;
+}
+.proj .tabs button:hover {
+  color: var(--ink);
+}
+.proj .tabs button[aria-checked="true"] {
+  background: var(--code-bg);
+  color: var(--ink);
+  font-weight: 500;
+}
+.proj .demo pre {
+  margin: 0;
+  padding: 1.25rem 1.5rem;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  min-height: 12.5em;
+  overflow-x: auto;
+}
+.proj .result {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding: 0.9rem 1.5rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.proj .result code {
+  font-size: 0.86rem;
+}
+.proj .status {
+  font-family: var(--mono);
+  font-weight: 500;
+}
+.proj .status.ok {
+  color: var(--ok);
+}
+.proj .status.err {
+  color: var(--err);
+}
+.proj .result .note {
+  color: var(--ink-2);
+}
+
+/* tables */
+.proj table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.proj td {
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+.proj tr:last-child td {
+  border-bottom: 1px solid var(--line);
+}
+.proj td:first-child {
+  width: 40%;
+  padding-right: 1.5rem;
+}
+.proj td:first-child code {
+  background: none;
+  padding: 0;
+  font-size: 0.9rem;
+}
+.proj td:last-child {
+  color: var(--ink-2);
+}
+
+/* idp hero: a sign-in box beside the token it produces */
+.proj .pair {
+  display: grid;
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.proj .signin {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 1.5rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.12);
+}
+.proj .signin .app {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+  font-weight: 500;
+}
+.proj .signin .logo {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 7px;
+  background: var(--ink);
+  color: var(--bg);
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.proj .signin label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+  margin-bottom: 0.35rem;
+}
+.proj .signin .field {
+  height: 2.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 0.75rem;
+  display: flex;
+  align-items: center;
+  font-size: 0.92rem;
+  margin-bottom: 0.75rem;
+}
+.proj .signin .btn {
+  width: 100%;
+  justify-content: center;
+  height: 2.5rem;
+  font-size: 0.9rem;
+}
+.proj .signin .or {
+  text-align: center;
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  margin: 0.6rem 0;
+}
+.proj .signin .fine {
+  margin: 1rem 0 0;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+/* roadmap */
+.proj .roadmap {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2rem;
+}
+.proj .roadmap ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.proj .roadmap li {
+  padding-block: 0.45rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.95rem;
+  color: var(--ink-2);
+}
+.proj .roadmap h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.proj .dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.proj .dot.wip {
+  background: #c98a12;
+}
+.proj .dot.later {
+  background: var(--line);
+  box-shadow: inset 0 0 0 1px var(--ink-2);
+}
+
+/* numbered steps */
+.proj .steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.proj .steps li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  gap: 0.25rem 1rem;
+  padding-block: 1rem;
+  border-top: 1px solid var(--line);
+}
+.proj .steps li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.proj .steps li > *,
+.proj .rows li > *,
+.proj .pair > * {
+  min-width: 0;
+}
+.proj .steps .desc {
+  color: var(--ink-2);
+  font-size: 0.95rem;
+}
+.proj .steps li::before {
+  content: counter(step);
+  font: 500 0.9rem var(--mono);
+  color: var(--ink-2);
+  grid-row: span 2;
+  padding-top: 0.1rem;
+}
+.proj .steps pre {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  overflow-x: auto;
+}
+
+/* footer */
+.proj .end {
+  padding-block: 4rem 3rem;
+  border-top: 1px solid var(--line);
+}
+.proj .end h2 {
+  margin-bottom: 1.5rem;
+}
+.proj .colophon {
+  margin-top: 3rem;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 700px) {
+  .proj .pair,
+  .proj .roadmap {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .proj .wrap {
+    width: calc(100% - 2.5rem);
+  }
+  .proj .hero {
+    padding-block: 3.5rem 3rem;
+  }
+  .proj .top nav a.opt {
+    display: none;
+  }
+  .proj .rows li,
+  .proj .rows.narrow li {
+    grid-template-columns: 1fr;
+  }
+  .proj .rows .name {
+    grid-row: auto;
+  }
+  .proj .rows code.call {
+    overflow-wrap: anywhere;
+  }
+  .proj pre.code,
+  .proj .demo pre {
+    font-size: 0.78rem;
+    padding-inline: 1rem;
+  }
+  .proj td {
+    display: block;
+    width: auto !important;
+    border: 0 !important;
+    padding: 0;
+  }
+  .proj tr {
+    display: block;
+    padding-block: 0.85rem;
+    border-top: 1px solid var(--line);
+  }
+  .proj tr:last-child {
+    border-bottom: 1px solid var(--line);
+  }
+}

@@ -4,11 +4,9 @@ import { Link } from "react-router"
 import type { Route } from "./+types/index.page"
 
 import { PageSection } from "~/components/layout/page-section"
-import type { SimpleRepository } from "~/modules/github/github.types"
 import { createPageMeta, siteConfig } from "~/static"
 import { PostCard } from "./post-card"
-import { RepositoryCard } from "./repository-card"
-import { appContext } from "~/context"
+import { ProjectCard } from "./project-card"
 
 export const meta: Route.MetaFunction = () => {
   return [
@@ -33,22 +31,16 @@ export const meta: Route.MetaFunction = () => {
   ]
 }
 
-export const loader = async ({ context: router }: Route.LoaderArgs) => {
-  const context = router.get(appContext)
+export const loader = async () => {
   const posts = allPosts.slice(0, 2)
-
-  const githubData = await context.services.github.getFromCache()
 
   return {
     featuredPosts: posts,
-    repos: githubData.repositories.slice(0, 4),
   }
 }
 
 export default function Index({ loaderData }: Route.ComponentProps) {
-  const { featuredPosts, repos } = loaderData
-
-  const RepoCards = repos.map((r: SimpleRepository) => <RepositoryCard key={r.url} repo={r} />)
+  const { featuredPosts } = loaderData
 
   const PostCards = featuredPosts.map((p: any) => (
     <PostCard
@@ -115,7 +107,18 @@ export default function Index({ loaderData }: Route.ComponentProps) {
       </PageSection>
 
       <PageSection title="what i've been working on" subtitle="open source projects" id="code">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{RepoCards}</div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <ProjectCard
+            to="/kit"
+            name="kit"
+            description="Write a capability once as a typed method. Call it from your UI, an HTTP API, MCP and any agent, with permissions built into the contract."
+          />
+          <ProjectCard
+            to="/idp"
+            name="idp"
+            description="An open-source OAuth 2.1 and OpenID Connect provider on Cloudflare Workers. One identity, workspaces and permissions for all my apps."
+          />
+        </div>
       </PageSection>
     </article>
   )

@@ -101,6 +101,7 @@ export type PageMetaOptions = {
   description: string
   path?: string
   image?: string
+  imageAlt?: string
   type?: "website" | "article"
   publishedTime?: string
   modifiedTime?: string
@@ -111,6 +112,7 @@ export function createPageMeta({
   description,
   path = "/",
   image = siteConfig.imageUrl,
+  imageAlt,
   type = "website",
   publishedTime,
   modifiedTime,
@@ -130,7 +132,11 @@ export function createPageMeta({
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
     { name: "twitter:image", content: image },
+    { name: "twitter:creator", content: siteConfig.twitter },
   ]
+  if (imageAlt) {
+    meta.push({ property: "og:image:alt", content: imageAlt }, { name: "twitter:image:alt", content: imageAlt })
+  }
   if (publishedTime && type === "article") {
     meta.push({ property: "article:published_time", content: publishedTime })
   }

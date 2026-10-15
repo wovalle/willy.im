@@ -22,4 +22,6 @@ export default [
     route("artifacts/:id/edit", "routes/artifacts/edit.tsx"),
   ]),
   route("links", "routes/links.tsx"),
+  route("kit", "routes/kit.tsx"),
+  route("idp", "routes/idp.tsx"),
 ] satisfies RouteConfig

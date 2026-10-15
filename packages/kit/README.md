@@ -2,6 +2,8 @@
 
 **Write a capability once. Call it from your UI, your HTTP API, MCP and any agent.**
 
+Website: [willy.im/kit](https://willy.im/kit)
+
 You declare services made of typed methods. Each method has a contract: what it does, who
 may call it, where it exists, what goes in and what comes out. kit binds every method to the
 caller of a request and serves the same methods to:

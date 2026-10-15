@@ -5,6 +5,8 @@ add "Sign in with willy.im" instead of building their own auth, and the IdP owns
 the user's identity, profile, and access. The goal: **delete account-handling code
 from every other project** and centralize it here.
 
+Website: [willy.im/idp](https://willy.im/idp)
+
 React Router 7 + Cloudflare Workers + D1 + Better Auth.
 
 ## Principles

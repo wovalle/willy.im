@@ -2,6 +2,7 @@
   "name": "@willyim/kit",
   "version": "0.7.0",
   "description": "Write a capability once as a typed method; serve it to your UI, an HTTP API, MCP and any agent runtime",
+  "homepage": "https://willy.im/kit",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
