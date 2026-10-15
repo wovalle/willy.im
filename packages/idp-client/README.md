@@ -2,6 +2,8 @@
 
 Login for apps that don't own identity.
 
+Website: [willy.im/idp](https://willy.im/idp)
+
 The [willy.im IdP](https://idp.willy.im) is the single source of truth for who
 someone is and what they may do. An app installing this package runs no auth
 framework: it owns one session table, which is a _handle_ to IdP truth rather

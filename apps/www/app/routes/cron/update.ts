@@ -7,15 +7,15 @@ import { appContext } from "~/context"
 
 const updateSchema = z.object({
   services: z
-    .array(z.enum(["github", "youtube", "spotify", "goodreads"]))
+    .array(z.enum(["youtube", "spotify", "goodreads"]))
     .optional()
-    .default(["github", "youtube", "spotify", "goodreads"]),
+    .default(["youtube", "spotify", "goodreads"]),
 })
 
 export const action = async ({ context: router, request }: Route.ActionArgs) => {
   const context = router.get(appContext)
   try {
-    let requestedServices: string[] = ["github", "youtube", "spotify", "goodreads"] // Default to all
+    let requestedServices: string[] = ["youtube", "spotify", "goodreads"] // Default to all
 
     if (request.method === "POST") {
       const body = await request.json()
@@ -37,46 +37,9 @@ export const action = async ({ context: router, request }: Route.ActionArgs) => 
     }
 
     const results = {
-      github: { success: false, count: 0, error: null as string | null },
       youtube: { success: false, count: 0, error: null as string | null },
       spotify: { success: false, count: 0, error: null as string | null },
       goodreads: { success: false, count: 0, error: null as string | null },
-    }
-
-    // Update GitHub repositories
-    if (requestedServices.includes("github")) {
-      try {
-        const repositories = await context.services.github.getRepositories({
-          username: "wovalle",
-        })
-
-        const githubData = {
-          repositories,
-          updatedAt: new Date().toISOString(),
-          totalRepositories: repositories.length,
-        }
-
-        await context.db
-          .insert(kv)
-          .values({
-            id: "github.data",
-            value: githubData,
-          })
-          .onConflictDoUpdate({
-            target: kv.id,
-            set: {
-              value: githubData,
-            },
-          })
-
-        results.github = { success: true, count: repositories.length, error: null }
-        context.logger.info(
-          `Updated GitHub repositories: ${repositories.length} repositories stored`,
-        )
-      } catch (error) {
-        results.github.error = error instanceof Error ? error.message : "Unknown error"
-        context.logger.error("Error updating GitHub repositories:", error)
-      }
     }
 
     // Update YouTube liked videos (last 30)

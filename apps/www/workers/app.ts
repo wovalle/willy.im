@@ -4,12 +4,10 @@ import { appContext } from "../app/context"
 import { getAppEnv } from "../app/lib/env"
 import { createAuthService } from "../app/lib/auth.server"
 import { createBaseContext, type BaseServiceContext } from "../app/lib/services"
-import { createGithubService } from "../app/modules/github/github.server"
 import { createGoodreadsService } from "../app/modules/goodreads/goodreads.server"
 import { createSpotifyService } from "../app/modules/spotify/spotify.server"
 import { createYoutubeService } from "../app/modules/youtube/youtube.server"
 
-import { updateGithub } from "./tasks/github"
 import { updateYoutube } from "./tasks/youtube"
 import { updateSpotify } from "./tasks/spotify"
 import { updateGoodreads } from "./tasks/goodreads"
@@ -30,7 +28,6 @@ export default {
       ...baseCtx,
       services: {
         auth: createAuthService(baseCtx),
-        github: createGithubService(baseCtx),
         youtube: createYoutubeService(baseCtx),
         spotify: createSpotifyService(baseCtx),
         goodreads: createGoodreadsService(baseCtx),
@@ -46,16 +43,12 @@ export default {
 
     logger.info(`[scheduled] Cron triggered: "${event.cron}" at ${new Date(event.scheduledTime).toISOString()}`)
 
-    const results = await runTasks(
-      {
-        github: updateGithub,
-        youtube: updateYoutube,
-        spotify: updateSpotify,
-        goodreads: updateGoodreads,
-      },
-      baseCtx,
-      logger,
-    )
+    const tasks = {
+      youtube: updateYoutube,
+      spotify: updateSpotify,
+      goodreads: updateGoodreads,
+    }
+    const results = await runTasks(tasks, baseCtx, logger)
 
     const totalDuration = Date.now() - startTime
     const successCount = Object.values(results).filter((r) => r.success).length
@@ -63,7 +56,7 @@ export default {
     const totalItems = Object.values(results).reduce((sum, r) => sum + r.count, 0)
 
     logger.info(
-      `[scheduled] Completed in ${totalDuration}ms — ${successCount}/4 services succeeded, ${failedCount} failed, ${totalItems} total items updated`,
+      `[scheduled] Completed in ${totalDuration}ms — ${successCount}/${Object.keys(tasks).length} services succeeded, ${failedCount} failed, ${totalItems} total items updated`,
     )
 
     for (const [service, result] of Object.entries(results)) {

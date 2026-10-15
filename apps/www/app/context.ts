@@ -4,7 +4,6 @@ import type { DrizzleClient } from "./db/drizzle"
 import type { AuthService } from "./lib/auth.server"
 import type { getAppEnv } from "./lib/env"
 import type { ILogger } from "./lib/services"
-import type { GithubService } from "./modules/github/github.server"
 import type { GoodreadsService } from "./modules/goodreads/goodreads.server"
 import type { SpotifyService } from "./modules/spotify/spotify.server"
 import type { YoutubeService } from "./modules/youtube/youtube.server"
@@ -20,7 +19,6 @@ export type AppContext = {
   getAppEnv: typeof getAppEnv
   services: {
     auth: AuthService
-    github: GithubService
     youtube: YoutubeService
     spotify: SpotifyService
     goodreads: GoodreadsService
