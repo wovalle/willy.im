@@ -4,10 +4,12 @@ export {
   createAttachAuditTriggerSql,
   createAttachAuditTriggersSql,
   createAuditAddContextColumnsSql,
+  createAuditDropOperationCheckSql,
   createAuditInstallSql,
 } from "./sql.js"
-export { setAuditContext, withAuditedTransaction } from "./runtime.js"
-export type { AuditContextOptions } from "./runtime.js"
+export { recordAuditEvent, setAuditContext, withAuditedTransaction } from "./runtime.js"
+export type { AuditContextOptions, RecordAuditEventOptions } from "./runtime.js"
+export type { AuditEvent } from "../audit-event.js"
 
 export type {
   AuditContextColumn,

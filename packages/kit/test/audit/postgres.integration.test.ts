@@ -7,10 +7,13 @@ import { drizzle } from "drizzle-orm/pglite"
 import { integer, pgTable, text } from "drizzle-orm/pg-core"
 
 import {
+  createAttachAuditTriggerSql,
   createAttachAuditTriggersSql,
   createAuditAddContextColumnsSql,
+  createAuditDropOperationCheckSql,
   createAuditInstallSql,
   pgAuditLogTable,
+  recordAuditEvent,
   withAuditedTransaction,
 } from "../../src/audit/postgres/index.js"
 
@@ -24,7 +27,30 @@ const invoices = pgTable("invoices", {
   amount: integer("amount").notNull(),
 })
 
+const sessions = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  last_seen_at: text("last_seen_at"),
+  hits: integer("hits").notNull().default(0),
+})
+
 const auditLogs = pgAuditLogTable()
+
+async function setupSessions(target: Parameters<typeof createAttachAuditTriggerSql>[0]) {
+  const client = new PGlite()
+  const db = drizzle({ client })
+  await client.exec(createAuditInstallSql())
+  await client.exec(`
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      last_seen_at TEXT,
+      hits INTEGER NOT NULL DEFAULT 0
+    );
+  `)
+  await client.exec(createAttachAuditTriggerSql(target))
+  return { client, db }
+}
 
 test("postgres auditing works end to end", async () => {
   const client = new PGlite()
@@ -493,12 +519,247 @@ test("install + attach SQL is idempotent — re-applying does not break or doubl
 
     const triggers = await client.query<{ tgname: string }>(
       `SELECT tgname FROM pg_trigger
-       WHERE tgrelid = 'users'::regclass AND NOT tgisinternal`,
+       WHERE tgrelid = 'users'::regclass AND NOT tgisinternal
+       ORDER BY tgname`,
     )
     assert.deepEqual(
       triggers.rows.map((r) => r.tgname),
-      ["users_audit"],
+      ["users_audit", "users_audit_update"],
     )
+  } finally {
+    await client.close()
+  }
+})
+
+test("ignoreColumns skips UPDATEs that touch only ignored columns", async () => {
+  const { client, db } = await setupSessions({
+    table: "sessions",
+    ignoreColumns: ["last_seen_at", "hits", "hits"],
+  })
+
+  try {
+    await db.insert(sessions).values({ id: "s1", name: "Ada" })
+    // Heartbeat: only ignored columns change.
+    await db
+      .update(sessions)
+      .set({ last_seen_at: "t1", hits: 1 })
+      .where(eq(sessions.id, "s1"))
+    // No-op on ignored columns plus a real change.
+    await db
+      .update(sessions)
+      .set({ name: "Ada Lovelace", last_seen_at: "t2" })
+      .where(eq(sessions.id, "s1"))
+    await db.delete(sessions).where(eq(sessions.id, "s1"))
+
+    const logs = await db.select().from(auditLogs).orderBy(asc(auditLogs.id))
+    assert.deepEqual(
+      logs.map((l) => l.operation),
+      ["INSERT", "UPDATE", "DELETE"],
+    )
+    assert.deepEqual(logs[1]?.old_data, { id: "s1", name: "Ada", last_seen_at: "t1", hits: 1 })
+    assert.deepEqual(logs[1]?.new_data, {
+      id: "s1",
+      name: "Ada Lovelace",
+      last_seen_at: "t2",
+      hits: 1,
+    })
+  } finally {
+    await client.close()
+  }
+})
+
+test("onlyColumns logs only UPDATEs that change a listed column", async () => {
+  const { client, db } = await setupSessions({ table: "sessions", onlyColumns: ["name"] })
+
+  try {
+    await db.insert(sessions).values({ id: "s1", name: "Ada" })
+    await db
+      .update(sessions)
+      .set({ last_seen_at: "t1", hits: 1 })
+      .where(eq(sessions.id, "s1"))
+    await db
+      .update(sessions)
+      .set({ name: "Ada Lovelace", last_seen_at: "t2" })
+      .where(eq(sessions.id, "s1"))
+    await db.delete(sessions).where(eq(sessions.id, "s1"))
+
+    const logs = await db.select().from(auditLogs).orderBy(asc(auditLogs.id))
+    assert.deepEqual(
+      logs.map((l) => l.operation),
+      ["INSERT", "UPDATE", "DELETE"],
+    )
+    assert.equal((logs[1]?.new_data as Record<string, unknown>).last_seen_at, "t2")
+  } finally {
+    await client.close()
+  }
+})
+
+test("onlyColumns with several columns logs a change to any of them, NULL-safe", async () => {
+  const { client, db } = await setupSessions({
+    table: "sessions",
+    onlyColumns: ["name", "last_seen_at"],
+  })
+
+  try {
+    await db.insert(sessions).values({ id: "s1", name: "Ada" })
+    await db.update(sessions).set({ hits: 1 }).where(eq(sessions.id, "s1"))
+    await db.update(sessions).set({ last_seen_at: "t1" }).where(eq(sessions.id, "s1"))
+
+    const logs = await db.select().from(auditLogs).orderBy(asc(auditLogs.id))
+    assert.deepEqual(
+      logs.map((l) => l.operation),
+      ["INSERT", "UPDATE"],
+    )
+  } finally {
+    await client.close()
+  }
+})
+
+test("ignoreColumns / onlyColumns validation", () => {
+  assert.throws(
+    () =>
+      createAttachAuditTriggerSql({
+        table: "sessions",
+        ignoreColumns: ["hits"],
+        onlyColumns: ["name"],
+      }),
+    /mutually exclusive/,
+  )
+  assert.throws(
+    () => createAttachAuditTriggerSql({ table: "sessions", ignoreColumns: [] }),
+    /ignoreColumns must contain at least one column/,
+  )
+  assert.throws(
+    () => createAttachAuditTriggerSql({ table: "sessions", onlyColumns: [] }),
+    /onlyColumns must contain at least one column/,
+  )
+  assert.throws(
+    () => createAttachAuditTriggerSql({ table: "sessions", onlyColumns: [" "] }),
+    /onlyColumns\[\] must not be empty/,
+  )
+})
+
+test("ignoreColumns quotes awkward column names safely", async () => {
+  const client = new PGlite()
+  const db = drizzle({ client })
+
+  try {
+    await client.exec(createAuditInstallSql())
+    await client.exec(`CREATE TABLE odd (id TEXT PRIMARY KEY, "it's, ""odd""" TEXT, name TEXT);`)
+    await client.exec(
+      createAttachAuditTriggerSql({ table: "odd", ignoreColumns: [`it's, "odd"`] }),
+    )
+
+    await client.exec(`INSERT INTO odd (id, name) VALUES ('o1', 'a');`)
+    await client.exec(`UPDATE odd SET "it's, ""odd""" = 'x' WHERE id = 'o1';`)
+    await client.exec(`UPDATE odd SET name = 'b' WHERE id = 'o1';`)
+
+    const logs = await db.select().from(auditLogs).orderBy(asc(auditLogs.id))
+    assert.deepEqual(
+      logs.map((l) => l.operation),
+      ["INSERT", "UPDATE"],
+    )
+  } finally {
+    await client.close()
+  }
+})
+
+test("recordAuditEvent logs a custom event with the transaction's context", async () => {
+  const client = new PGlite()
+  const contextColumns = [{ column: "workspace_id" }]
+  const auditLogsWithCtx = pgAuditLogTable({ contextColumns })
+  const db = drizzle({ client })
+
+  try {
+    await client.exec(createAuditInstallSql({ contextColumns }))
+
+    await withAuditedTransaction(
+      db,
+      "user_1",
+      async (tx) => {
+        await recordAuditEvent(
+          tx,
+          { table: "member", operation: "invite", rowId: "m1", newData: { email: "a@b.c" } },
+          { contextColumns },
+        )
+      },
+      { context: { workspace_id: "ws_1" } },
+    )
+    await recordAuditEvent(db, { table: "api_key", operation: "revoke" })
+
+    const logs = await db.select().from(auditLogsWithCtx).orderBy(asc(auditLogsWithCtx.id))
+    assert.equal(logs.length, 2)
+    const invite = logs[0] as Record<string, unknown>
+    assert.equal(invite.table_name, "member")
+    assert.equal(invite.operation, "invite")
+    assert.equal(invite.row_id, "m1")
+    assert.equal(invite.user_id, "user_1")
+    assert.equal(invite.workspace_id, "ws_1")
+    assert.equal(invite.old_data, null)
+    assert.deepEqual(invite.new_data, { email: "a@b.c" })
+
+    const revoke = logs[1] as Record<string, unknown>
+    assert.equal(revoke.operation, "revoke")
+    assert.equal(revoke.row_id, null)
+    assert.equal(revoke.user_id, null)
+    assert.equal(revoke.workspace_id, null)
+    assert.equal(revoke.new_data, null)
+  } finally {
+    await client.close()
+  }
+})
+
+test("recordAuditEvent rolls back with its transaction and validates input", async () => {
+  const client = new PGlite()
+  const db = drizzle({ client })
+
+  try {
+    await client.exec(createAuditInstallSql())
+
+    await assert.rejects(
+      withAuditedTransaction(db, "user_1", async (tx) => {
+        await recordAuditEvent(tx, { table: "member", operation: "invite" })
+        throw new Error("boom")
+      }),
+      /boom/,
+    )
+    await assert.rejects(recordAuditEvent(db, { table: " ", operation: "invite" }), /table/)
+    await assert.rejects(recordAuditEvent(db, { table: "member", operation: "" }), /operation/)
+
+    const logs = await db.select().from(auditLogs)
+    assert.equal(logs.length, 0)
+  } finally {
+    await client.close()
+  }
+})
+
+test("createAuditDropOperationCheckSql lets an old install accept custom operations", async () => {
+  const client = new PGlite()
+  const db = drizzle({ client })
+
+  try {
+    // Table as installed before custom events existed.
+    await client.exec(`
+      CREATE TABLE audit_logs (
+        id BIGSERIAL PRIMARY KEY,
+        table_name TEXT NOT NULL,
+        operation TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+        row_id TEXT,
+        user_id TEXT,
+        old_data JSONB,
+        new_data JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `)
+    await assert.rejects(recordAuditEvent(db, { table: "member", operation: "invite" }))
+
+    await client.exec(createAuditDropOperationCheckSql())
+    await client.exec(createAuditDropOperationCheckSql())
+    await recordAuditEvent(db, { table: "member", operation: "invite" })
+
+    const logs = await db.select().from(auditLogs)
+    assert.equal(logs.length, 1)
+    assert.equal(logs[0]?.operation, "invite")
   } finally {
     await client.close()
   }

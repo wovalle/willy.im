@@ -33,4 +33,8 @@ export type AuditTriggerTarget = {
   schema?: string
   rowIdColumn?: string
   triggerName?: string
+  /** UPDATEs that change only these columns are not logged. Logged rows still include them. */
+  ignoreColumns?: string[]
+  /** Only UPDATEs that change at least one of these columns are logged. Mutually exclusive with ignoreColumns. */
+  onlyColumns?: string[]
 }

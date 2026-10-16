@@ -1,6 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 
-import { setAuditContext, type AuditContextOptions } from "../postgres/runtime.js"
+import type { AuditEvent } from "../audit-event.js"
+import {
+  recordAuditEvent,
+  setAuditContext,
+  type AuditContextOptions,
+  type RecordAuditEventOptions,
+} from "../postgres/runtime.js"
 import type {
   AuditSqlExecutor,
   AuditTransactionCapable,
@@ -181,5 +187,20 @@ export async function ensureAuditedTx<
     } finally {
       cell.tx = null
     }
+  })
+}
+
+/**
+ * Log one custom event (see `recordAuditEvent`) inside the ambient audited
+ * transaction, opening one if none is open. `contextKey` doubles as the actor
+ * GUC, so a custom key is both written and read.
+ */
+export async function recordAudit<TTransaction extends AuditSqlExecutor>(
+  db: AuditTransactionCapable<TTransaction>,
+  event: AuditEvent,
+  options?: RecordAuditEventOptions,
+): Promise<void> {
+  await ensureAuditedTx(db, (tx) => recordAuditEvent(tx, event, options), {
+    actorKey: options?.contextKey,
   })
 }

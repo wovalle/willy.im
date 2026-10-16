@@ -4,13 +4,13 @@ import type {
   AuditTriggerTarget,
 } from "./types.js"
 
-const DEFAULT_AUDIT_SCHEMA = "public"
-const DEFAULT_AUDIT_TABLE = "audit_logs"
-const DEFAULT_CONTEXT_KEY = "app.user_id"
+export const DEFAULT_AUDIT_SCHEMA = "public"
+export const DEFAULT_AUDIT_TABLE = "audit_logs"
+export const DEFAULT_CONTEXT_KEY = "app.user_id"
 const DEFAULT_TRIGGER_FUNCTION = "drizzle_audit_trigger"
 const DEFAULT_ROW_ID_COLUMN = "id"
 
-function quoteIdent(value: string) {
+export function quoteIdent(value: string) {
   return `"${value.replaceAll('"', '""')}"`
 }
 
@@ -18,7 +18,7 @@ function quoteLiteral(value: string) {
   return `'${value.replaceAll("'", "''")}'`
 }
 
-function qualifyName(name: string, schema?: string) {
+export function qualifyName(name: string, schema?: string) {
   if (!schema) {
     return quoteIdent(name)
   }
@@ -26,7 +26,7 @@ function qualifyName(name: string, schema?: string) {
   return `${quoteIdent(schema)}.${quoteIdent(name)}`
 }
 
-function assertNonEmpty(value: string, label: string) {
+export function assertNonEmpty(value: string, label: string) {
   if (value.trim().length === 0) {
     throw new Error(`${label} must not be empty`)
   }
@@ -44,7 +44,7 @@ type ResolvedContextColumn = {
  * Normalizes the context columns from the install options, de-duplicating by
  * column name and applying defaults for `sessionKey` / `index`.
  */
-function normalizeContextColumns(
+export function normalizeContextColumns(
   options: { contextColumns?: AuditContextColumn[] },
 ): ResolvedContextColumn[] {
   const resolved: ResolvedContextColumn[] = []
@@ -66,6 +66,67 @@ function normalizeContextColumns(
   }
 
   return resolved
+}
+
+type UpdateFilter = {
+  mode: "ignore" | "only"
+  columns: string[]
+}
+
+function normalizeColumnList(columns: string[], label: string): string[] {
+  if (columns.length === 0) {
+    throw new Error(`${label} must contain at least one column name`)
+  }
+  const resolved: string[] = []
+  for (const entry of columns) {
+    const column = entry.trim()
+    if (!column) {
+      throw new Error(`${label}[] must not be empty`)
+    }
+    if (resolved.includes(column)) {
+      continue
+    }
+    resolved.push(column)
+  }
+
+  return resolved
+}
+
+/** Validates a target's `ignoreColumns` / `onlyColumns`, returning the UPDATE filter if one is set. */
+function resolveUpdateFilter(target: AuditTriggerTarget): UpdateFilter | null {
+  if (target.ignoreColumns && target.onlyColumns) {
+    throw new Error("ignoreColumns and onlyColumns are mutually exclusive")
+  }
+  if (target.ignoreColumns) {
+    return { mode: "ignore", columns: normalizeColumnList(target.ignoreColumns, "ignoreColumns") }
+  }
+  if (target.onlyColumns) {
+    return { mode: "only", columns: normalizeColumnList(target.onlyColumns, "onlyColumns") }
+  }
+
+  return null
+}
+
+/**
+ * Builds the `WHEN` clause of the UPDATE trigger. The trigger function is shared
+ * across tables, so the per-table filter lives on the trigger, not in the function.
+ */
+function buildUpdateWhenSql(filter: UpdateFilter | null): string {
+  if (!filter) {
+    return ""
+  }
+  if (filter.mode === "ignore") {
+    const ignored = `ARRAY[${filter.columns.map(quoteLiteral).join(", ")}]::text[]`
+    return `\nWHEN ((to_jsonb(OLD) - ${ignored}) IS DISTINCT FROM (to_jsonb(NEW) - ${ignored}))`
+  }
+  if (filter.columns.length === 1) {
+    const column = quoteIdent(filter.columns[0]!)
+    return `\nWHEN (OLD.${column} IS DISTINCT FROM NEW.${column})`
+  }
+  const oldColumns = filter.columns.map((c) => `OLD.${quoteIdent(c)}`).join(", ")
+  const newColumns = filter.columns.map((c) => `NEW.${quoteIdent(c)}`).join(", ")
+
+  return `\nWHEN ((${oldColumns}) IS DISTINCT FROM (${newColumns}))`
 }
 
 function buildTriggerFunctionSql(
@@ -174,7 +235,7 @@ export function createAuditInstallSql(options: AuditInstallOptions = {}) {
   const tableColumns = [
     "id BIGSERIAL PRIMARY KEY",
     "table_name TEXT NOT NULL",
-    "operation TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE'))",
+    "operation TEXT NOT NULL",
     "row_id TEXT",
     "user_id TEXT",
     ...contextColumns.map((col) => quoteIdent(col.column) + " TEXT"),
@@ -212,6 +273,11 @@ CREATE TABLE IF NOT EXISTS ${qualifiedAuditTable} (
   ].join("\n\n")
 }
 
+/**
+ * Generates SQL to attach the audit triggers to one table: `<triggerName>` for
+ * INSERT and DELETE, and `<triggerName>_update` for UPDATE. The UPDATE trigger
+ * carries a `WHEN` clause when the target sets `ignoreColumns` or `onlyColumns`.
+ */
 export function createAttachAuditTriggerSql(
   target: AuditTriggerTarget,
   options: AuditInstallOptions = {},
@@ -235,16 +301,27 @@ export function createAttachAuditTriggerSql(
     "triggerFunctionName",
   )
 
+  const updateWhen = buildUpdateWhenSql(resolveUpdateFilter(target))
+
   const qualifiedTable = qualifyName(table, schema)
   const qualifiedTriggerFunction = qualifyName(triggerFunctionName, auditSchema)
+  const updateTriggerName = `${triggerName}_update`
 
   return `
 DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)} ON ${qualifiedTable};
 
 CREATE TRIGGER ${quoteIdent(triggerName)}
-AFTER INSERT OR UPDATE OR DELETE
+AFTER INSERT OR DELETE
 ON ${qualifiedTable}
 FOR EACH ROW
+EXECUTE FUNCTION ${qualifiedTriggerFunction}(${quoteLiteral(rowIdColumn)});
+
+DROP TRIGGER IF EXISTS ${quoteIdent(updateTriggerName)} ON ${qualifiedTable};
+
+CREATE TRIGGER ${quoteIdent(updateTriggerName)}
+AFTER UPDATE
+ON ${qualifiedTable}
+FOR EACH ROW${updateWhen}
 EXECUTE FUNCTION ${qualifiedTriggerFunction}(${quoteLiteral(rowIdColumn)});
 `.trim()
 }
@@ -316,4 +393,24 @@ export function createAuditAddContextColumnsSql(options: AuditInstallOptions = {
       contextColumns,
     ),
   ].join("\n\n")
+}
+
+/**
+ * Generates SQL to drop the `operation IN ('INSERT', 'UPDATE', 'DELETE')` CHECK
+ * so the audit table accepts custom operations (see `recordAuditEvent`). Use in a
+ * migration when the table was installed before custom events existed.
+ */
+export function createAuditDropOperationCheckSql(
+  options: Pick<AuditInstallOptions, "auditSchema" | "auditTable"> = {},
+) {
+  const auditSchema = assertNonEmpty(
+    options.auditSchema ?? DEFAULT_AUDIT_SCHEMA,
+    "auditSchema",
+  )
+  const auditTable = assertNonEmpty(
+    options.auditTable ?? DEFAULT_AUDIT_TABLE,
+    "auditTable",
+  )
+
+  return `ALTER TABLE ${qualifyName(auditTable, auditSchema)} DROP CONSTRAINT IF EXISTS ${quoteIdent(`${auditTable}_operation_check`)};`
 }

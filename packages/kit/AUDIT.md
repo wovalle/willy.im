@@ -42,6 +42,8 @@ await withAuditedTransaction(db, currentUser.id, async (tx) => {
 ```
 
 Postgres triggers capture full row snapshots (`old_data`/`new_data` as JSONB) automatically.
+Each audited table gets two triggers sharing one trigger function: `<table>_audit` for INSERT
+and DELETE, and `<table>_audit_update` for UPDATE (where [update filters](#update-filters) go).
 
 ### D1/SQLite — App-Level Wrapper
 
@@ -183,6 +185,95 @@ withD1AuditedTransaction(db, "user_1", (tx) => { /* ... */ }, {
 })
 ```
 
+## Update Filters
+
+Some columns change constantly and mean nothing (a `last_seen_at` heartbeat, a hit
+counter). Set one of two filters per table so those UPDATEs don't flood the log:
+
+```ts
+createAttachAuditTriggersSql([
+  // Skip UPDATEs that change only these columns
+  { table: "sessions", ignoreColumns: ["last_seen_at", "hits"] },
+  // Log only UPDATEs that change at least one of these columns
+  { table: "invoices", rowIdColumn: "invoice_id", onlyColumns: ["status", "amount"] },
+])
+```
+
+- The filters are mutually exclusive, and each must name at least one column.
+- They only decide **whether** an UPDATE is logged. A logged row still carries the
+  full snapshot, ignored columns included.
+- INSERT and DELETE are always logged.
+- Comparisons are NULL-safe: `NULL` → value counts as a change.
+
+**Postgres.** The filter is a `WHEN` clause on the `<table>_audit_update` trigger
+(`ignoreColumns` compares `to_jsonb(OLD) - ignored` against `to_jsonb(NEW) - ignored`;
+`onlyColumns` compares the listed columns with `IS DISTINCT FROM`). Before this
+version a table had one `<table>_audit` trigger for all three operations;
+re-running the attach SQL replaces it with the pair. With the CLI that happens on
+its own: the attach SQL changed, so the next `kit-audit generate` ships it.
+
+**D1/SQLite.** The filter is a `WHEN` clause on the `<prefix>_audit_update`
+trigger, built from `OLD."col" IS NOT NEW."col"` checks. `onlyColumns` works on
+both variants. `ignoreColumns` needs the table's column list (SQLite can't
+enumerate a row's columns), so it only works with
+`createAttachD1AuditTriggersSqlWithColumns`, and every ignored column must be in
+`columns`:
+
+```ts
+createAttachD1AuditTriggersSqlWithColumns([
+  {
+    table: "sessions",
+    columns: ["id", "name", "last_seen_at"],
+    ignoreColumns: ["last_seen_at"],
+  },
+])
+```
+
+## Custom Events
+
+Not everything worth auditing is a row change the triggers see: an invite sent,
+a key revoked, a write made by another library. Log those by hand. `operation`
+is free-form (`"invite"`, `"revoke"`); the audit table has no CHECK on it.
+
+```ts
+import { recordAuditEvent, withAuditedTransaction } from "@willyim/kit/audit/postgres"
+
+await withAuditedTransaction(db, currentUser.id, async (tx) => {
+  await recordAuditEvent(
+    tx,
+    { table: "member", operation: "invite", rowId: member.id, newData: { email } },
+    { contextColumns }, // same options as the install
+  )
+}, { context: { workspace_id: workspaceId } })
+```
+
+`recordAuditEvent(db, event, options?)` runs one INSERT into the audit table.
+`user_id` and the context columns are read from the same GUCs the trigger reads,
+so it picks up whatever `setAuditContext` / `withAuditedTransaction` set, and it
+commits or rolls back with the surrounding transaction. Options mirror the
+installer: `auditSchema`, `auditTable`, `contextKey`, `contextColumns` (defaults
+`public`, `audit_logs`, `app.user_id`, none). Outside a transaction with context,
+`user_id` and the context columns are NULL.
+
+With the [ambient context](#ambient-context-asynclocalstorage), use
+`recordAudit(db, event, options?)` from `@willyim/kit/audit/context`: it opens or
+reuses the ambient audited transaction.
+
+On D1 the `withAudit` wrapper has the same thing as `.record(event)`.
+
+### Existing installs
+
+Audit tables installed before custom events have
+`CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE'))`, which rejects custom
+operations.
+
+- **Postgres:** add `createAuditDropOperationCheckSql({ auditSchema?, auditTable? })`
+  to a migration. It runs `ALTER TABLE … DROP CONSTRAINT IF EXISTS
+  "<auditTable>_operation_check"`.
+- **D1/SQLite:** SQLite can't drop a CHECK in place. Rebuild the table
+  (create a new one without the CHECK, copy the rows, drop the old one, rename)
+  to log custom operations, or stick to INSERT/UPDATE/DELETE.
+
 ## Ambient Context (AsyncLocalStorage)
 
 The explicit `withAuditedTransaction(db, actorId, cb)` is the cross-runtime floor —
@@ -293,8 +384,12 @@ export function createAuditSql() {
 | `createAttachAuditTriggerSql(target, options?)` | SQL to attach audit trigger to one table |
 | `createAttachAuditTriggersSql(targets, options?)` | Same, for multiple tables |
 | `createAuditAddContextColumnsSql(options)` | SQL to add context columns + regenerate trigger on existing install |
+| `createAuditDropOperationCheckSql(options?)` | SQL to drop the old `operation` CHECK so custom events fit |
 | `setAuditContext(db, actorId, options?)` | Set actor + context GUCs in the current transaction |
 | `withAuditedTransaction(db, actorId, callback, options?)` | Transaction wrapper with actor context |
+| `recordAuditEvent(db, event, options?)` | Log a custom event with the transaction's actor + context |
+
+Trigger targets accept `ignoreColumns` or `onlyColumns`; see [Update Filters](#update-filters).
 
 ### `@willyim/kit/audit/context`
 
@@ -307,6 +402,7 @@ Opt-in ambient layer (AsyncLocalStorage). See [Ambient Context](#ambient-context
 | `currentAudit()` | The resolved ambient `AuditContext` (throws if absent/unresolved) |
 | `maybeCurrentAudit()` | The resolved ambient `AuditContext`, or `null` |
 | `hasAuditContext()` | Whether an ambient context is in scope |
+| `recordAudit(db, event, options?)` | `recordAuditEvent` inside the ambient audited tx |
 
 ### `@willyim/kit/audit`
 
@@ -328,6 +424,8 @@ Opt-in ambient layer (AsyncLocalStorage). See [Ambient Context](#ambient-context
 | `setD1AuditContext(db, actorId, options?)` | Set actor in `_audit_context` table |
 | `clearD1AuditContext(db, options?)` | Clear actor from `_audit_context` table |
 | `withD1AuditedTransaction(db, actorId, callback, options?)` | Transaction wrapper with context management |
+
+Trigger targets accept `onlyColumns`, and the `WithColumns` variants also `ignoreColumns`; see [Update Filters](#update-filters).
 
 ### `@willyim/kit/audit/d1-runtime`
 
@@ -389,7 +487,7 @@ Nested objects are compared using deep equality. Fields are returned sorted alph
 CREATE TABLE audit_logs (
   id         BIGSERIAL PRIMARY KEY,
   table_name TEXT NOT NULL,
-  operation  TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+  operation  TEXT NOT NULL,  -- INSERT / UPDATE / DELETE, or a custom verb
   row_id     TEXT,
   user_id    TEXT,
   old_data   JSONB,
@@ -404,7 +502,7 @@ CREATE TABLE audit_logs (
 CREATE TABLE audit_logs (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   table_name TEXT NOT NULL,
-  operation  TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+  operation  TEXT NOT NULL,  -- INSERT / UPDATE / DELETE, or a custom verb
   row_id     TEXT,
   user_id    TEXT,
   old_data   TEXT,  -- JSON string

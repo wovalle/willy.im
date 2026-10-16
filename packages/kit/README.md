@@ -577,13 +577,17 @@ Audit logging for Drizzle (formerly `@willyim/drizzle-audit`, same API). Needs `
 SQLite use triggers or the `withAudit` wrapper. Full reference (schemas, diffs, CLI, every
 export): [AUDIT.md](AUDIT.md).
 
-| Entry                           | What                                                                                                       |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `@willyim/kit/audit/postgres`   | `pgAuditLogTable`, `createAuditInstallSql`, `createAttachAuditTriggersSql`, `withAuditedTransaction`       |
-| `@willyim/kit/audit/d1`         | `d1AuditLogTable`, `createD1AuditInstallSql`, `createAttachD1AuditTriggersSql`, `withD1AuditedTransaction` |
-| `@willyim/kit/audit/d1-runtime` | `withAudit(db, auditTable, { userId, context? })`: audited `insert` / `update` / `delete`, plus `record` |
-| `@willyim/kit/audit/context`    | `runWithAuditContext` / `ensureAuditedTx`: ambient actor over `AsyncLocalStorage` (Postgres)               |
-| `@willyim/kit/audit`            | all of the above plus `computeDiff`                                                                        |
+| Entry                           | What                                                                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `@willyim/kit/audit/postgres`   | `pgAuditLogTable`, `createAuditInstallSql`, `createAttachAuditTriggersSql`, `withAuditedTransaction`, `recordAuditEvent` (custom events) |
+| `@willyim/kit/audit/d1`         | `d1AuditLogTable`, `createD1AuditInstallSql`, `createAttachD1AuditTriggersSql`, `withD1AuditedTransaction`                               |
+| `@willyim/kit/audit/d1-runtime` | `withAudit(db, auditTable, { userId, context? })`: audited `insert` / `update` / `delete`, plus `record`                                 |
+| `@willyim/kit/audit/context`    | `runWithAuditContext` / `ensureAuditedTx`: ambient actor over `AsyncLocalStorage` (Postgres)                                             |
+| `@willyim/kit/audit`            | all of the above plus `computeDiff`                                                                                                      |
+
+Trigger targets take `ignoreColumns` or `onlyColumns` to skip noise UPDATEs (heartbeats,
+counters); custom events like `invite` go through `recordAuditEvent` (Postgres) or `.record` (D1).
+See [AUDIT.md](AUDIT.md#update-filters).
 
 Kit hands your `context` builder `actor` (the impersonator when impersonating, else the
 principal) and `tenantId`. Kit itself does no auditing; you attach it with one of two patterns.

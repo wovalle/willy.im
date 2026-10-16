@@ -7,6 +7,8 @@ import { drizzle } from "drizzle-orm/better-sqlite3"
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
 
 import {
+  createAttachD1AuditTriggerSql,
+  createAttachD1AuditTriggerSqlWithColumns,
   createAttachD1AuditTriggersSql,
   createAttachD1AuditTriggersSqlWithColumns,
   createD1AuditInstallSql,
@@ -25,7 +27,40 @@ const invoices = sqliteTable("invoices", {
   amount: integer("amount").notNull(),
 })
 
+const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  last_seen_at: text("last_seen_at"),
+  hits: integer("hits").notNull().default(0),
+})
+
 const auditLogs = d1AuditLogTable()
+
+function setupSessions(triggerSql: string) {
+  const sqlite = new Database(":memory:")
+  const db = drizzle({ client: sqlite })
+  sqlite.exec(createD1AuditInstallSql())
+  sqlite.exec(`
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      last_seen_at TEXT,
+      hits INTEGER NOT NULL DEFAULT 0
+    );
+  `)
+  sqlite.exec(triggerSql)
+  return { db, sqlite }
+}
+
+function heartbeatThenRename(db: ReturnType<typeof drizzle>) {
+  db.insert(sessions).values({ id: "s1", name: "Ada" }).run()
+  // Heartbeat: only bookkeeping columns change.
+  db.update(sessions).set({ last_seen_at: "t1", hits: 1 }).where(eq(sessions.id, "s1")).run()
+  // Real change alongside a bookkeeping one.
+  db.update(sessions).set({ name: "Ada Lovelace", last_seen_at: "t2" }).where(eq(sessions.id, "s1")).run()
+  db.delete(sessions).where(eq(sessions.id, "s1")).run()
+  return db.select().from(auditLogs).orderBy(asc(auditLogs.id)).all()
+}
 const auditContext = d1AuditContextTable()
 
 function setupDb() {
@@ -356,6 +391,123 @@ test("d1 column-aware triggers handle column names with special characters", () 
     assert.equal(logs.length, 1)
     const newData = JSON.parse(logs[0]?.new_data as string)
     assert.equal(newData["user's name"], "Ada")
+  } finally {
+    sqlite.close()
+  }
+})
+
+test("d1 onlyColumns logs only UPDATEs that change a listed column", () => {
+  const { db, sqlite } = setupSessions(
+    createAttachD1AuditTriggerSql({ table: "sessions", onlyColumns: ["name"] }),
+  )
+
+  try {
+    const logs = heartbeatThenRename(db)
+    assert.deepEqual(
+      logs.map((l) => l.operation),
+      ["INSERT", "UPDATE", "DELETE"],
+    )
+  } finally {
+    sqlite.close()
+  }
+})
+
+test("d1 onlyColumns treats NULL to value as a change", () => {
+  const { db, sqlite } = setupSessions(
+    createAttachD1AuditTriggerSql({ table: "sessions", onlyColumns: ["last_seen_at"] }),
+  )
+
+  try {
+    db.insert(sessions).values({ id: "s1", name: "Ada" }).run()
+    db.update(sessions).set({ hits: 1 }).where(eq(sessions.id, "s1")).run()
+    db.update(sessions).set({ last_seen_at: "t1" }).where(eq(sessions.id, "s1")).run()
+
+    const logs = db.select().from(auditLogs).orderBy(asc(auditLogs.id)).all()
+    assert.deepEqual(
+      logs.map((l) => l.operation),
+      ["INSERT", "UPDATE"],
+    )
+  } finally {
+    sqlite.close()
+  }
+})
+
+test("d1 ignoreColumns skips heartbeat UPDATEs and keeps ignored columns in snapshots", () => {
+  const { db, sqlite } = setupSessions(
+    createAttachD1AuditTriggerSqlWithColumns({
+      table: "sessions",
+      columns: ["id", "name", "last_seen_at", "hits"],
+      ignoreColumns: ["last_seen_at", "hits"],
+    }),
+  )
+
+  try {
+    const logs = heartbeatThenRename(db)
+    assert.deepEqual(
+      logs.map((l) => l.operation),
+      ["INSERT", "UPDATE", "DELETE"],
+    )
+    assert.deepEqual(JSON.parse(logs[1]?.old_data as string), {
+      id: "s1",
+      name: "Ada",
+      last_seen_at: "t1",
+      hits: 1,
+    })
+    assert.deepEqual(JSON.parse(logs[1]?.new_data as string), {
+      id: "s1",
+      name: "Ada Lovelace",
+      last_seen_at: "t2",
+      hits: 1,
+    })
+  } finally {
+    sqlite.close()
+  }
+})
+
+test("d1 ignoreColumns / onlyColumns validation", () => {
+  assert.throws(
+    () => createAttachD1AuditTriggerSql({ table: "sessions", ignoreColumns: ["hits"] }),
+    /createAttachD1AuditTriggerSqlWithColumns/,
+  )
+  assert.throws(
+    () =>
+      createAttachD1AuditTriggerSql({ table: "sessions", ignoreColumns: ["hits"], onlyColumns: ["name"] }),
+    /mutually exclusive/,
+  )
+  assert.throws(
+    () => createAttachD1AuditTriggerSql({ table: "sessions", onlyColumns: [] }),
+    /onlyColumns must contain at least one column/,
+  )
+  assert.throws(
+    () =>
+      createAttachD1AuditTriggerSqlWithColumns({
+        table: "sessions",
+        columns: ["id", "name"],
+        ignoreColumns: ["hits"],
+      }),
+    /not in columns: hits/,
+  )
+  assert.throws(
+    () =>
+      createAttachD1AuditTriggerSqlWithColumns({
+        table: "sessions",
+        columns: ["id", "name"],
+        ignoreColumns: ["id", " name "],
+      }),
+    /at least one column to watch/,
+  )
+})
+
+test("d1 install accepts custom operations", () => {
+  const sqlite = new Database(":memory:")
+  const db = drizzle({ client: sqlite })
+
+  try {
+    sqlite.exec(createD1AuditInstallSql())
+    db.insert(auditLogs).values({ table_name: "member", operation: "invite" }).run()
+
+    const logs = db.select().from(auditLogs).all()
+    assert.equal(logs[0]?.operation, "invite")
   } finally {
     sqlite.close()
   }

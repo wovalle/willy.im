@@ -7,6 +7,8 @@ import {
 } from "drizzle-orm"
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
 
+import type { AuditEvent } from "../audit-event.js"
+
 type JsonValue = Record<string, unknown>
 
 export type AuditContext = {
@@ -49,17 +51,6 @@ function getRowId(row: JsonValue, pk: SQLiteColumn | null): string | null {
   if (!pk) return null
   const val = row[pk.name]
   return val != null ? String(val) : null
-}
-
-/** An event `record` logs: what the wrapper can't see for itself. */
-export type AuditEvent = {
-  /** What was touched: a table, or any entity type ("user", "oauth_client"). */
-  table: string
-  /** `INSERT` / `UPDATE` / `DELETE`, or a verb of your own ("invite", "revoke"). */
-  operation: string
-  rowId?: string | null
-  oldData?: JsonValue | null
-  newData?: JsonValue | null
 }
 
 export type AuditedDb<TDb extends DrizzleSQLiteDb> = {

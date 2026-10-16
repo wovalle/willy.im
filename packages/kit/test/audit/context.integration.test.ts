@@ -11,6 +11,7 @@ import {
   ensureAuditedTx,
   hasAuditContext,
   maybeCurrentAudit,
+  recordAudit,
   runWithAuditContext,
 } from "../../src/audit/context/index.js"
 import {
@@ -60,6 +61,22 @@ test("ensureAuditedTx stamps the ambient actor + context columns", async () => {
   assert.equal((logs[0] as { workspace_id?: string }).workspace_id, "ws_1")
   assert.equal(logs[1]?.operation, "UPDATE")
   assert.equal(logs[1]?.user_id, "user_123")
+})
+
+test("recordAudit logs a custom event with the ambient actor", async () => {
+  const db = await makeDb()
+
+  await runWithAuditContext(
+    { actorId: "user_123", context: { workspace_id: "ws_1" } },
+    () => recordAudit(db, { table: "member", operation: "invite", rowId: "m1" }, { contextColumns }),
+  )
+
+  const logs = await db.select().from(auditLogs)
+  assert.equal(logs.length, 1)
+  assert.equal(logs[0]?.operation, "invite")
+  assert.equal(logs[0]?.row_id, "m1")
+  assert.equal(logs[0]?.user_id, "user_123")
+  assert.equal((logs[0] as { workspace_id?: string }).workspace_id, "ws_1")
 })
 
 test("nested ensureAuditedTx reuses one transaction (reentrant)", async () => {

@@ -1,7 +1,7 @@
 export { withAudit } from "./with-audit.js"
+export type { AuditEvent } from "../audit-event.js"
 export type {
   AuditContext,
-  AuditEvent,
   AuditedDb,
   AuditLogInsertShape,
   DrizzleSQLiteDb,
