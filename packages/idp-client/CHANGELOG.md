@@ -1,5 +1,11 @@
 # @willyim/idp
 
+## 2.0.1
+
+### Patch Changes
+
+- d7d97d9: Link the npm pages to the new project sites, willy.im/kit and willy.im/idp.
+
 ## 2.0.0
 
 ### Major Changes
