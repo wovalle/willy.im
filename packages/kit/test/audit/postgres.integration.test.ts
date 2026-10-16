@@ -7,6 +7,7 @@ import { drizzle } from "drizzle-orm/pglite"
 import { integer, pgTable, text } from "drizzle-orm/pg-core"
 
 import {
+  createAttachAuditTriggerSql,
   createAttachAuditTriggersSql,
   createAuditAddContextColumnsSql,
   createAuditInstallSql,
@@ -24,7 +25,30 @@ const invoices = pgTable("invoices", {
   amount: integer("amount").notNull(),
 })
 
+const sessions = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  last_seen_at: text("last_seen_at"),
+  hits: integer("hits").notNull().default(0),
+})
+
 const auditLogs = pgAuditLogTable()
+
+async function setupSessions(target: Parameters<typeof createAttachAuditTriggerSql>[0]) {
+  const client = new PGlite()
+  const db = drizzle({ client })
+  await client.exec(createAuditInstallSql())
+  await client.exec(`
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      last_seen_at TEXT,
+      hits INTEGER NOT NULL DEFAULT 0
+    );
+  `)
+  await client.exec(createAttachAuditTriggerSql(target))
+  return { client, db }
+}
 
 test("postgres auditing works end to end", async () => {
   const client = new PGlite()
@@ -493,11 +517,145 @@ test("install + attach SQL is idempotent — re-applying does not break or doubl
 
     const triggers = await client.query<{ tgname: string }>(
       `SELECT tgname FROM pg_trigger
-       WHERE tgrelid = 'users'::regclass AND NOT tgisinternal`,
+       WHERE tgrelid = 'users'::regclass AND NOT tgisinternal
+       ORDER BY tgname`,
     )
     assert.deepEqual(
       triggers.rows.map((r) => r.tgname),
-      ["users_audit"],
+      ["users_audit", "users_audit_update"],
+    )
+  } finally {
+    await client.close()
+  }
+})
+
+test("ignoreColumns skips UPDATEs that touch only ignored columns", async () => {
+  const { client, db } = await setupSessions({
+    table: "sessions",
+    ignoreColumns: ["last_seen_at", "hits", "hits"],
+  })
+
+  try {
+    await db.insert(sessions).values({ id: "s1", name: "Ada" })
+    // Heartbeat: only ignored columns change.
+    await db
+      .update(sessions)
+      .set({ last_seen_at: "t1", hits: 1 })
+      .where(eq(sessions.id, "s1"))
+    // No-op on ignored columns plus a real change.
+    await db
+      .update(sessions)
+      .set({ name: "Ada Lovelace", last_seen_at: "t2" })
+      .where(eq(sessions.id, "s1"))
+    await db.delete(sessions).where(eq(sessions.id, "s1"))
+
+    const logs = await db.select().from(auditLogs).orderBy(asc(auditLogs.id))
+    assert.deepEqual(
+      logs.map((l) => l.operation),
+      ["INSERT", "UPDATE", "DELETE"],
+    )
+    assert.deepEqual(logs[1]?.old_data, { id: "s1", name: "Ada", last_seen_at: "t1", hits: 1 })
+    assert.deepEqual(logs[1]?.new_data, {
+      id: "s1",
+      name: "Ada Lovelace",
+      last_seen_at: "t2",
+      hits: 1,
+    })
+  } finally {
+    await client.close()
+  }
+})
+
+test("onlyColumns logs only UPDATEs that change a listed column", async () => {
+  const { client, db } = await setupSessions({ table: "sessions", onlyColumns: ["name"] })
+
+  try {
+    await db.insert(sessions).values({ id: "s1", name: "Ada" })
+    await db
+      .update(sessions)
+      .set({ last_seen_at: "t1", hits: 1 })
+      .where(eq(sessions.id, "s1"))
+    await db
+      .update(sessions)
+      .set({ name: "Ada Lovelace", last_seen_at: "t2" })
+      .where(eq(sessions.id, "s1"))
+    await db.delete(sessions).where(eq(sessions.id, "s1"))
+
+    const logs = await db.select().from(auditLogs).orderBy(asc(auditLogs.id))
+    assert.deepEqual(
+      logs.map((l) => l.operation),
+      ["INSERT", "UPDATE", "DELETE"],
+    )
+    assert.equal((logs[1]?.new_data as Record<string, unknown>).last_seen_at, "t2")
+  } finally {
+    await client.close()
+  }
+})
+
+test("onlyColumns with several columns logs a change to any of them, NULL-safe", async () => {
+  const { client, db } = await setupSessions({
+    table: "sessions",
+    onlyColumns: ["name", "last_seen_at"],
+  })
+
+  try {
+    await db.insert(sessions).values({ id: "s1", name: "Ada" })
+    await db.update(sessions).set({ hits: 1 }).where(eq(sessions.id, "s1"))
+    await db.update(sessions).set({ last_seen_at: "t1" }).where(eq(sessions.id, "s1"))
+
+    const logs = await db.select().from(auditLogs).orderBy(asc(auditLogs.id))
+    assert.deepEqual(
+      logs.map((l) => l.operation),
+      ["INSERT", "UPDATE"],
+    )
+  } finally {
+    await client.close()
+  }
+})
+
+test("ignoreColumns / onlyColumns validation", () => {
+  assert.throws(
+    () =>
+      createAttachAuditTriggerSql({
+        table: "sessions",
+        ignoreColumns: ["hits"],
+        onlyColumns: ["name"],
+      }),
+    /mutually exclusive/,
+  )
+  assert.throws(
+    () => createAttachAuditTriggerSql({ table: "sessions", ignoreColumns: [] }),
+    /ignoreColumns must contain at least one column/,
+  )
+  assert.throws(
+    () => createAttachAuditTriggerSql({ table: "sessions", onlyColumns: [] }),
+    /onlyColumns must contain at least one column/,
+  )
+  assert.throws(
+    () => createAttachAuditTriggerSql({ table: "sessions", onlyColumns: [" "] }),
+    /onlyColumns\[\] must not be empty/,
+  )
+})
+
+test("ignoreColumns quotes awkward column names safely", async () => {
+  const client = new PGlite()
+  const db = drizzle({ client })
+
+  try {
+    await client.exec(createAuditInstallSql())
+    await client.exec(`CREATE TABLE odd (id TEXT PRIMARY KEY, "it's, ""odd""" TEXT, name TEXT);`)
+    await client.exec(
+      createAttachAuditTriggerSql({ table: "odd", ignoreColumns: [`it's, "odd"`] }),
+    )
+
+    await client.exec(`INSERT INTO odd (id, name) VALUES ('o1', 'a');`)
+    await client.exec(`UPDATE odd SET "it's, ""odd""" = 'x' WHERE id = 'o1';`)
+    await client.exec(`UPDATE odd SET name = 'b' WHERE id = 'o1';`)
+
+    const logs = await db.select().from(auditLogs).orderBy(asc(auditLogs.id))
+    assert.deepEqual(
+      logs.map((l) => l.operation),
+      ["INSERT", "UPDATE"],
     )
   } finally {
     await client.close()

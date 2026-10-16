@@ -68,6 +68,67 @@ function normalizeContextColumns(
   return resolved
 }
 
+type UpdateFilter = {
+  mode: "ignore" | "only"
+  columns: string[]
+}
+
+function normalizeColumnList(columns: string[], label: string): string[] {
+  if (columns.length === 0) {
+    throw new Error(`${label} must contain at least one column name`)
+  }
+  const resolved: string[] = []
+  for (const entry of columns) {
+    const column = entry.trim()
+    if (!column) {
+      throw new Error(`${label}[] must not be empty`)
+    }
+    if (resolved.includes(column)) {
+      continue
+    }
+    resolved.push(column)
+  }
+
+  return resolved
+}
+
+/** Validates a target's `ignoreColumns` / `onlyColumns`, returning the UPDATE filter if one is set. */
+function resolveUpdateFilter(target: AuditTriggerTarget): UpdateFilter | null {
+  if (target.ignoreColumns && target.onlyColumns) {
+    throw new Error("ignoreColumns and onlyColumns are mutually exclusive")
+  }
+  if (target.ignoreColumns) {
+    return { mode: "ignore", columns: normalizeColumnList(target.ignoreColumns, "ignoreColumns") }
+  }
+  if (target.onlyColumns) {
+    return { mode: "only", columns: normalizeColumnList(target.onlyColumns, "onlyColumns") }
+  }
+
+  return null
+}
+
+/**
+ * Builds the `WHEN` clause of the UPDATE trigger. The trigger function is shared
+ * across tables, so the per-table filter lives on the trigger, not in the function.
+ */
+function buildUpdateWhenSql(filter: UpdateFilter | null): string {
+  if (!filter) {
+    return ""
+  }
+  if (filter.mode === "ignore") {
+    const ignored = `ARRAY[${filter.columns.map(quoteLiteral).join(", ")}]::text[]`
+    return `\nWHEN ((to_jsonb(OLD) - ${ignored}) IS DISTINCT FROM (to_jsonb(NEW) - ${ignored}))`
+  }
+  if (filter.columns.length === 1) {
+    const column = quoteIdent(filter.columns[0]!)
+    return `\nWHEN (OLD.${column} IS DISTINCT FROM NEW.${column})`
+  }
+  const oldColumns = filter.columns.map((c) => `OLD.${quoteIdent(c)}`).join(", ")
+  const newColumns = filter.columns.map((c) => `NEW.${quoteIdent(c)}`).join(", ")
+
+  return `\nWHEN ((${oldColumns}) IS DISTINCT FROM (${newColumns}))`
+}
+
 function buildTriggerFunctionSql(
   qualifiedAuditTable: string,
   qualifiedTriggerFunction: string,
@@ -212,6 +273,11 @@ CREATE TABLE IF NOT EXISTS ${qualifiedAuditTable} (
   ].join("\n\n")
 }
 
+/**
+ * Generates SQL to attach the audit triggers to one table: `<triggerName>` for
+ * INSERT and DELETE, and `<triggerName>_update` for UPDATE. The UPDATE trigger
+ * carries a `WHEN` clause when the target sets `ignoreColumns` or `onlyColumns`.
+ */
 export function createAttachAuditTriggerSql(
   target: AuditTriggerTarget,
   options: AuditInstallOptions = {},
@@ -235,16 +301,27 @@ export function createAttachAuditTriggerSql(
     "triggerFunctionName",
   )
 
+  const updateWhen = buildUpdateWhenSql(resolveUpdateFilter(target))
+
   const qualifiedTable = qualifyName(table, schema)
   const qualifiedTriggerFunction = qualifyName(triggerFunctionName, auditSchema)
+  const updateTriggerName = `${triggerName}_update`
 
   return `
 DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)} ON ${qualifiedTable};
 
 CREATE TRIGGER ${quoteIdent(triggerName)}
-AFTER INSERT OR UPDATE OR DELETE
+AFTER INSERT OR DELETE
 ON ${qualifiedTable}
 FOR EACH ROW
+EXECUTE FUNCTION ${qualifiedTriggerFunction}(${quoteLiteral(rowIdColumn)});
+
+DROP TRIGGER IF EXISTS ${quoteIdent(updateTriggerName)} ON ${qualifiedTable};
+
+CREATE TRIGGER ${quoteIdent(updateTriggerName)}
+AFTER UPDATE
+ON ${qualifiedTable}
+FOR EACH ROW${updateWhen}
 EXECUTE FUNCTION ${qualifiedTriggerFunction}(${quoteLiteral(rowIdColumn)});
 `.trim()
 }

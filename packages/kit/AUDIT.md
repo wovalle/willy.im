@@ -42,6 +42,8 @@ await withAuditedTransaction(db, currentUser.id, async (tx) => {
 ```
 
 Postgres triggers capture full row snapshots (`old_data`/`new_data` as JSONB) automatically.
+Each audited table gets two triggers sharing one trigger function: `<table>_audit` for INSERT
+and DELETE, and `<table>_audit_update` for UPDATE (where [update filters](#update-filters) go).
 
 ### D1/SQLite — App-Level Wrapper
 
@@ -183,6 +185,50 @@ withD1AuditedTransaction(db, "user_1", (tx) => { /* ... */ }, {
 })
 ```
 
+## Update Filters
+
+Some columns change constantly and mean nothing (a `last_seen_at` heartbeat, a hit
+counter). Set one of two filters per table so those UPDATEs don't flood the log:
+
+```ts
+createAttachAuditTriggersSql([
+  // Skip UPDATEs that change only these columns
+  { table: "sessions", ignoreColumns: ["last_seen_at", "hits"] },
+  // Log only UPDATEs that change at least one of these columns
+  { table: "invoices", rowIdColumn: "invoice_id", onlyColumns: ["status", "amount"] },
+])
+```
+
+- The filters are mutually exclusive, and each must name at least one column.
+- They only decide **whether** an UPDATE is logged. A logged row still carries the
+  full snapshot, ignored columns included.
+- INSERT and DELETE are always logged.
+- Comparisons are NULL-safe: `NULL` → value counts as a change.
+
+**Postgres.** The filter is a `WHEN` clause on the `<table>_audit_update` trigger
+(`ignoreColumns` compares `to_jsonb(OLD) - ignored` against `to_jsonb(NEW) - ignored`;
+`onlyColumns` compares the listed columns with `IS DISTINCT FROM`). Before this
+version a table had one `<table>_audit` trigger for all three operations;
+re-running the attach SQL replaces it with the pair. With the CLI that happens on
+its own: the attach SQL changed, so the next `kit-audit generate` ships it.
+
+**D1/SQLite.** The filter is a `WHEN` clause on the `<prefix>_audit_update`
+trigger, built from `OLD."col" IS NOT NEW."col"` checks. `onlyColumns` works on
+both variants. `ignoreColumns` needs the table's column list (SQLite can't
+enumerate a row's columns), so it only works with
+`createAttachD1AuditTriggersSqlWithColumns`, and every ignored column must be in
+`columns`:
+
+```ts
+createAttachD1AuditTriggersSqlWithColumns([
+  {
+    table: "sessions",
+    columns: ["id", "name", "last_seen_at"],
+    ignoreColumns: ["last_seen_at"],
+  },
+])
+```
+
 ## Ambient Context (AsyncLocalStorage)
 
 The explicit `withAuditedTransaction(db, actorId, cb)` is the cross-runtime floor —
@@ -296,6 +342,8 @@ export function createAuditSql() {
 | `setAuditContext(db, actorId, options?)` | Set actor + context GUCs in the current transaction |
 | `withAuditedTransaction(db, actorId, callback, options?)` | Transaction wrapper with actor context |
 
+Trigger targets accept `ignoreColumns` or `onlyColumns`; see [Update Filters](#update-filters).
+
 ### `@willyim/kit/audit/context`
 
 Opt-in ambient layer (AsyncLocalStorage). See [Ambient Context](#ambient-context-asynclocalstorage).
@@ -328,6 +376,8 @@ Opt-in ambient layer (AsyncLocalStorage). See [Ambient Context](#ambient-context
 | `setD1AuditContext(db, actorId, options?)` | Set actor in `_audit_context` table |
 | `clearD1AuditContext(db, options?)` | Clear actor from `_audit_context` table |
 | `withD1AuditedTransaction(db, actorId, callback, options?)` | Transaction wrapper with context management |
+
+Trigger targets accept `onlyColumns`, and the `WithColumns` variants also `ignoreColumns`; see [Update Filters](#update-filters).
 
 ### `@willyim/kit/audit/d1-runtime`
 

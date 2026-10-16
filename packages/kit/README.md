@@ -585,6 +585,9 @@ export): [AUDIT.md](AUDIT.md).
 | `@willyim/kit/audit/context`    | `runWithAuditContext` / `ensureAuditedTx`: ambient actor over `AsyncLocalStorage` (Postgres)               |
 | `@willyim/kit/audit`            | all of the above plus `computeDiff`                                                                        |
 
+Trigger targets take `ignoreColumns` or `onlyColumns` to skip noise UPDATEs (heartbeats,
+counters). See [AUDIT.md](AUDIT.md#update-filters).
+
 Kit hands your `context` builder `actor` (the impersonator when impersonating, else the
 principal) and `tenantId`. Kit itself does no auditing; you attach it with one of two patterns.
 
