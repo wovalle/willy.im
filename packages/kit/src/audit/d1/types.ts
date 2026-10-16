@@ -30,4 +30,11 @@ export type D1AuditTriggerTarget = {
   table: string
   rowIdColumn?: string
   triggerPrefix?: string
+  /**
+   * UPDATEs that change only these columns are not logged. Logged rows still include them.
+   * Needs the column list, so only the `WithColumns` variant accepts it.
+   */
+  ignoreColumns?: string[]
+  /** Only UPDATEs that change at least one of these columns are logged. Mutually exclusive with ignoreColumns. */
+  onlyColumns?: string[]
 }

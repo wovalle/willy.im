@@ -75,6 +75,80 @@ function contextValuesClause(
     .join("")
 }
 
+type UpdateFilter = {
+  mode: "ignore" | "only"
+  columns: string[]
+}
+
+function normalizeColumnList(columns: string[], label: string): string[] {
+  if (columns.length === 0) {
+    throw new Error(`${label} must contain at least one column name`)
+  }
+  const resolved: string[] = []
+  for (const entry of columns) {
+    const column = entry.trim()
+    if (!column) {
+      throw new Error(`${label}[] must not be empty`)
+    }
+    if (resolved.includes(column)) {
+      continue
+    }
+    resolved.push(column)
+  }
+
+  return resolved
+}
+
+/** Validates a target's `ignoreColumns` / `onlyColumns`, returning the UPDATE filter if one is set. */
+function resolveUpdateFilter(target: D1AuditTriggerTarget): UpdateFilter | null {
+  if (target.ignoreColumns && target.onlyColumns) {
+    throw new Error("ignoreColumns and onlyColumns are mutually exclusive")
+  }
+  if (target.ignoreColumns) {
+    return { mode: "ignore", columns: normalizeColumnList(target.ignoreColumns, "ignoreColumns") }
+  }
+  if (target.onlyColumns) {
+    return { mode: "only", columns: normalizeColumnList(target.onlyColumns, "onlyColumns") }
+  }
+
+  return null
+}
+
+/** `WHEN` clause that fires when any of `columns` changed. `IS NOT` is null-safe. */
+function buildChangedWhenSql(columns: string[]): string {
+  return `\nWHEN (${columns.map((c) => `OLD.${quoteIdent(c)} IS NOT NEW.${quoteIdent(c)}`).join(" OR ")})`
+}
+
+/**
+ * Builds the UPDATE trigger's `WHEN` clause from the target's filter. SQLite
+ * can't enumerate a row's columns, so `ignoreColumns` is resolved against the
+ * column list and only works on the `WithColumns` variant.
+ */
+function buildUpdateWhenSql(target: D1AuditTriggerTarget, columns?: string[]): string {
+  const filter = resolveUpdateFilter(target)
+  if (!filter) {
+    return ""
+  }
+  if (filter.mode === "only") {
+    return buildChangedWhenSql(filter.columns)
+  }
+  if (!columns) {
+    throw new Error(
+      "ignoreColumns needs the table's column list: use createAttachD1AuditTriggerSqlWithColumns",
+    )
+  }
+  const unknown = filter.columns.filter((c) => !columns.includes(c))
+  if (unknown.length > 0) {
+    throw new Error(`ignoreColumns names columns not in columns: ${unknown.join(", ")}`)
+  }
+  const watched = columns.filter((c) => !filter.columns.includes(c))
+  if (watched.length === 0) {
+    throw new Error("ignoreColumns must leave at least one column to watch")
+  }
+
+  return buildChangedWhenSql(watched)
+}
+
 /**
  * Generates SQL to install the audit_logs table and _audit_context table.
  *
@@ -188,13 +262,14 @@ function buildUpdateTriggerSql(
   const triggerPrefix = target.triggerPrefix ?? table
   const triggerName = `${triggerPrefix}_audit_update`
   const contextColumns = normalizeContextColumns(options)
+  const when = buildUpdateWhenSql(target)
 
   return `
 DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)};
 
 CREATE TRIGGER ${quoteIdent(triggerName)}
 AFTER UPDATE ON ${quoteIdent(table)}
-FOR EACH ROW
+FOR EACH ROW${when}
 BEGIN
   INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${contextColsClause(contextColumns)})
   VALUES (
@@ -344,13 +419,14 @@ function buildUpdateTriggerWithColumnsSql(
   const triggerPrefix = target.triggerPrefix ?? table
   const triggerName = `${triggerPrefix}_audit_update`
   const contextColumns = normalizeContextColumns(options)
+  const when = buildUpdateWhenSql(target, target.columns)
 
   return `
 DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)};
 
 CREATE TRIGGER ${quoteIdent(triggerName)}
 AFTER UPDATE ON ${quoteIdent(table)}
-FOR EACH ROW
+FOR EACH ROW${when}
 BEGIN
   INSERT INTO ${quoteIdent(auditTable)} (table_name, operation, row_id, user_id${contextColsClause(contextColumns)}, old_data, new_data)
   VALUES (
