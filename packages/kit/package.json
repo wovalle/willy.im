@@ -1,6 +1,6 @@
 {
   "name": "@willyim/kit",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Write a capability once as a typed method; serve it to your UI, an HTTP API, MCP and any agent runtime",
   "homepage": "https://willy.im/kit",
   "type": "module",
@@ -109,7 +109,7 @@
   },
   "dependencies": {
     "@logtape/logtape": "^2.3.11",
-    "@willyim/idp": "2.0.0"
+    "@willyim/idp": "2.0.1"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",

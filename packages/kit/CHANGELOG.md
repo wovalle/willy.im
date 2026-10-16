@@ -1,5 +1,18 @@
 # @willyim/kit
 
+## 0.8.0
+
+### Minor Changes
+
+- 54aa038: Audit: custom events get their own `audit_events` table (Postgres and D1) with a dotted name, subject, actor, context columns and a JSON payload. `defineAuditEvents` (`@willyim/kit/audit/events`) builds a zod-validated catalog; `recordAuditEvent` (Postgres, atomic with `withAuditedTransaction`), `recordEvent` (`audit/context`) and `withAuditEvents` (D1) record through it; `listAuditEvents` / `listD1AuditEvents` filter by name or family (`"api_key.*"`), subject, actor, context, time window and cursor. Install the table with `createAuditEventsInstallSql` / `createD1AuditEventsInstallSql`; Drizzle tables are `pgAuditEventsTable` / `d1AuditEventsTable`.
+- 3eeab02: Audit: per-table `ignoreColumns` / `onlyColumns` UPDATE filters for Postgres and D1 triggers. UPDATEs that change only ignored columns write no audit row; logged rows keep the full snapshot. Postgres now attaches two triggers per table (`<table>_audit` for INSERT/DELETE, `<table>_audit_update` for UPDATE) and puts the filter in the UPDATE trigger's `WHEN` clause; D1 adds a `WHEN` clause to its UPDATE trigger (`ignoreColumns` needs the `WithColumns` variant).
+
+### Patch Changes
+
+- d7d97d9: Link the npm pages to the new project sites, willy.im/kit and willy.im/idp.
+- Updated dependencies [d7d97d9]
+  - @willyim/idp@2.0.1
+
 ## 0.7.0
 
 ### Minor Changes
