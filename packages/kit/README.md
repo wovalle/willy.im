@@ -583,10 +583,16 @@ export): [AUDIT.md](AUDIT.md).
 | `@willyim/kit/audit/d1`         | `d1AuditLogTable`, `createD1AuditInstallSql`, `createAttachD1AuditTriggersSql`, `withD1AuditedTransaction` |
 | `@willyim/kit/audit/d1-runtime` | `withAudit(db, auditTable, { userId, context? })`: audited `insert` / `update` / `delete`, plus `record` |
 | `@willyim/kit/audit/context`    | `runWithAuditContext` / `ensureAuditedTx`: ambient actor over `AsyncLocalStorage` (Postgres)               |
+| `@willyim/kit/audit/events`     | `defineAuditEvents`: typed catalog for custom events in `audit_events`                                     |
 | `@willyim/kit/audit`            | all of the above plus `computeDiff`                                                                        |
 
 Trigger targets take `ignoreColumns` or `onlyColumns` to skip noise UPDATEs (heartbeats,
 counters). See [AUDIT.md](AUDIT.md#update-filters).
+
+Custom events (`member.invite`, `api_key.revoke`) go to their own `audit_events` table: a
+zod-validated catalog, `recordAuditEvent` / `recordEvent` (Postgres) and `withAuditEvents` (D1) to
+write, `listAuditEvents` / `listD1AuditEvents` to filter by name, family, subject, actor, context
+and time. See [AUDIT.md](AUDIT.md#custom-events).
 
 Kit hands your `context` builder `actor` (the impersonator when impersonating, else the
 principal) and `tenantId`. Kit itself does no auditing; you attach it with one of two patterns.

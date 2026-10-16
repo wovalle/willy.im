@@ -47,6 +47,10 @@
       "types": "./dist/audit/context/index.d.ts",
       "default": "./dist/audit/context/index.js"
     },
+    "./audit/events": {
+      "types": "./dist/audit/events.d.ts",
+      "default": "./dist/audit/events.js"
+    },
     "./audit/d1": {
       "types": "./dist/audit/d1/index.d.ts",
       "default": "./dist/audit/d1/index.js"

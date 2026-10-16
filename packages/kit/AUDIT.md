@@ -229,6 +229,167 @@ createAttachD1AuditTriggersSqlWithColumns([
 ])
 ```
 
+## Custom Events
+
+Triggers record row changes. Some things worth auditing aren't a row change, or
+the row change doesn't say why: a member invited, an API key revoked, a login
+as someone else. Those are **custom events**, and they get their own table,
+`audit_events`, next to `audit_logs`:
+
+- `audit_logs` stays a pure change log (`INSERT` / `UPDATE` / `DELETE` with
+  before/after snapshots), so diffs and row history never trip over rows that
+  aren't changes.
+- An event is a dotted name (`member.invite`), an optional subject (what it's
+  about: `{ type: "workspace", id }`), the actor, the same context columns as
+  `audit_logs`, and a JSON payload. The payload is whatever the event needs,
+  not a before/after pair.
+- Every event has a zod schema, so payloads are validated when recorded and
+  typed where they're read.
+
+### Install
+
+Install the table alongside the audit log; `createAuditSql()` returns both, so
+the CLI ships it like any other audit change:
+
+```ts
+// app/db/audit.ts
+import {
+  createAttachAuditTriggersSql,
+  createAuditEventsInstallSql,
+  createAuditInstallSql,
+} from "@willyim/kit/audit/postgres"
+
+const contextColumns = [{ column: "workspace_id" }]
+
+export function createAuditSql() {
+  return [
+    createAuditInstallSql({ contextColumns }),
+    createAuditEventsInstallSql({ contextColumns }),
+    createAttachAuditTriggersSql([{ table: "members" }]),
+  ].join("\n\n")
+}
+```
+
+`createAuditEventsInstallSql({ auditSchema?, eventsTable?, contextColumns? })`
+defaults to `public.audit_events`. On D1 use
+`createD1AuditEventsInstallSql({ eventsTable?, contextColumns? })`. The Drizzle
+tables are `pgAuditEventsTable({ name?, schema?, contextColumns? })` and
+`d1AuditEventsTable({ name?, contextColumns? })`; pass the same options as the
+install.
+
+### Catalog
+
+```ts
+import { z } from "zod"
+import { defineAuditEvents } from "@willyim/kit/audit/events"
+
+export const auditEvents = defineAuditEvents({
+  "member.invite": z.object({ email: z.email(), role: z.enum(["admin", "member"]) }),
+  "api_key.create": z.object({ keyId: z.string(), permissions: z.array(z.string()) }),
+  "api_key.revoke": z.object({ keyId: z.string(), reason: z.string().optional() }),
+})
+```
+
+Names are dotted lowercase segments of `[a-z0-9_]`; `defineAuditEvents` throws
+on anything else. Recording an event parses `data` with its schema (so defaults
+and transforms apply, and the stored value is the schema's output) and throws
+on an unknown name or an invalid payload, writing nothing. `parseAuditEvent`
+exposes the same check.
+
+### Recording
+
+**Postgres.** `recordAuditEvent(db, catalog, name, { subject?, data }, options?)`
+runs one INSERT. `user_id` and the context columns are read from the same
+session GUCs the trigger reads, so inside `withAuditedTransaction` the event is
+attributed exactly like the row changes and commits or rolls back with them:
+
+```ts
+import { recordAuditEvent, withAuditedTransaction } from "@willyim/kit/audit/postgres"
+
+await withAuditedTransaction(db, actorId, async (tx) => {
+  await tx.insert(invites).values({ workspaceId, email })
+  await recordAuditEvent(tx, auditEvents, "member.invite", {
+    subject: { type: "workspace", id: workspaceId },
+    data: { email, role: "member" },
+  }, { contextColumns })
+}, { context: { workspace_id: workspaceId } })
+```
+
+Options (`auditSchema`, `eventsTable`, `contextKey`, `contextColumns`) must match
+the install. Outside a transaction with the context set, the actor and context
+columns are `NULL`.
+
+**Ambient context.** `recordEvent(db, catalog, name, input, options?)` from
+`@willyim/kit/audit/context` records inside `ensureAuditedTx`: it reuses the
+open audited transaction or opens one with the ambient actor, and throws
+outside `runWithAuditContext`.
+
+```ts
+import { recordEvent } from "@willyim/kit/audit/context"
+
+await recordEvent(db, auditEvents, "api_key.revoke", {
+  subject: { type: "api_key", id: keyId },
+  data: { keyId, reason: "leaked" },
+}, { contextColumns })
+```
+
+**D1/SQLite.** `withAuditEvents(db, eventsTable, catalog, { userId, context? })`
+from `@willyim/kit/audit/d1-runtime` takes the same context as `withAudit` and
+returns `{ record(name, input) }`. Context values are matched to the table's
+context columns by name; empty values leave the column `NULL`.
+
+```ts
+import { d1AuditEventsTable } from "@willyim/kit/audit/d1"
+import { withAuditEvents } from "@willyim/kit/audit/d1-runtime"
+
+const eventsTable = d1AuditEventsTable({ contextColumns: [{ column: "workspace_id" }] })
+const events = withAuditEvents(drizzle(env.DB), eventsTable, auditEvents, {
+  userId: actor,
+  context: { workspace_id: tenantId ?? "" },
+})
+await events.record("member.invite", {
+  subject: { type: "workspace", id: tenantId },
+  data: { email, role: "member" },
+})
+```
+
+`withAudit().record` still writes free-form events into `audit_logs`; it is
+unchanged.
+
+### Listing
+
+`listAuditEvents(db, eventsTable, filter?)` (Postgres) and
+`listD1AuditEvents(db, eventsTable, filter?)` (D1) return rows newest first
+(`ORDER BY id DESC`):
+
+```ts
+import { listAuditEvents, pgAuditEventsTable } from "@willyim/kit/audit/postgres"
+
+const eventsTable = pgAuditEventsTable({ contextColumns })
+const filter = {
+  name: "api_key.*",
+  context: { workspace_id: workspaceId },
+  after: new Date(Date.now() - 7 * 86_400_000),
+  limit: 50,
+}
+const page = await listAuditEvents(db, eventsTable, filter)
+const next = await listAuditEvents(db, eventsTable, { ...filter, cursor: page.at(-1)?.id })
+```
+
+| Filter | Matches |
+|---|---|
+| `name` | Exact name, a family with a trailing `.*` (`"api_key.*"`), or an array of either. `%` and `_` in a family prefix are literal |
+| `subject` | `{ type }`, or `{ type, id }` |
+| `userId` | The actor |
+| `context` | Context column → value (throws on a column the table doesn't have) |
+| `after` / `before` | `created_at > after`, `created_at < before` |
+| `limit` | Default 50, max 500 |
+| `cursor` | Rows with `id < cursor`: the last `id` of the previous page |
+
+Each row is `{ id, name, subjectType, subjectId, userId, data, createdAt, context }`,
+with `createdAt` a `Date` and `context` keyed by column. D1 parses `data` from
+JSON, and compares `after` / `before` at second precision (`datetime('now')`).
+
 ## Ambient Context (AsyncLocalStorage)
 
 The explicit `withAuditedTransaction(db, actorId, cb)` is the cross-runtime floor —
@@ -341,6 +502,10 @@ export function createAuditSql() {
 | `createAuditAddContextColumnsSql(options)` | SQL to add context columns + regenerate trigger on existing install |
 | `setAuditContext(db, actorId, options?)` | Set actor + context GUCs in the current transaction |
 | `withAuditedTransaction(db, actorId, callback, options?)` | Transaction wrapper with actor context |
+| `pgAuditEventsTable(options?)` | Drizzle table definition for `audit_events` |
+| `createAuditEventsInstallSql(options?)` | SQL to create the `audit_events` table and indexes |
+| `recordAuditEvent(db, catalog, name, input, options?)` | Validate and record a custom event; actor + context from the session GUCs |
+| `listAuditEvents(db, eventsTable, filter?)` | Filtered custom events, newest first |
 
 Trigger targets accept `ignoreColumns` or `onlyColumns`; see [Update Filters](#update-filters).
 
@@ -355,12 +520,22 @@ Opt-in ambient layer (AsyncLocalStorage). See [Ambient Context](#ambient-context
 | `currentAudit()` | The resolved ambient `AuditContext` (throws if absent/unresolved) |
 | `maybeCurrentAudit()` | The resolved ambient `AuditContext`, or `null` |
 | `hasAuditContext()` | Whether an ambient context is in scope |
+| `recordEvent(db, catalog, name, input, options?)` | `recordAuditEvent` inside `ensureAuditedTx` |
 
 ### `@willyim/kit/audit`
 
 | Export | Description |
 |---|---|
 | `computeDiff(operation, oldData, newData, options?)` | Compute field-by-field diff from old/new row data |
+
+Plus everything from the other entries, and the catalog below.
+
+### `@willyim/kit/audit/events`
+
+| Export | Description |
+|---|---|
+| `defineAuditEvents(schemas)` | Typed catalog of custom events: dotted name → zod payload schema |
+| `parseAuditEvent(catalog, name, input)` | Validate a name and payload; returns `{ name, subjectType, subjectId, data }` |
 
 ### `@willyim/kit/audit/d1`
 
@@ -376,6 +551,9 @@ Opt-in ambient layer (AsyncLocalStorage). See [Ambient Context](#ambient-context
 | `setD1AuditContext(db, actorId, options?)` | Set actor in `_audit_context` table |
 | `clearD1AuditContext(db, options?)` | Clear actor from `_audit_context` table |
 | `withD1AuditedTransaction(db, actorId, callback, options?)` | Transaction wrapper with context management |
+| `d1AuditEventsTable(options?)` | Drizzle SQLite table definition for `audit_events` |
+| `createD1AuditEventsInstallSql(options?)` | SQL to create the `audit_events` table and indexes |
+| `listD1AuditEvents(db, eventsTable, filter?)` | Filtered custom events, newest first, `data` parsed |
 
 Trigger targets accept `onlyColumns`, and the `WithColumns` variants also `ignoreColumns`; see [Update Filters](#update-filters).
 
@@ -384,6 +562,7 @@ Trigger targets accept `onlyColumns`, and the `WithColumns` variants also `ignor
 | Export | Description |
 |---|---|
 | `withAudit(db, auditTable, context)` | App-level audit wrapper (no triggers needed) |
+| `withAuditEvents(db, eventsTable, catalog, context)` | Custom event recorder: `.record(name, { subject?, data })` |
 
 `withAudit` returns an object with:
 - `.insert(table, data)` — Insert + audit log
@@ -462,6 +641,26 @@ CREATE TABLE audit_logs (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```
+
+### `audit_events`
+
+```sql
+-- Postgres
+CREATE TABLE audit_events (
+  id           BIGSERIAL PRIMARY KEY,
+  name         TEXT NOT NULL,       -- "member.invite"
+  subject_type TEXT,                -- "workspace"
+  subject_id   TEXT,
+  user_id      TEXT,
+  -- + one TEXT column per context column
+  data         JSONB,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Indexes: name, (subject_type, subject_id), user_id, each indexed context column, created_at DESC
+```
+
+On D1/SQLite `id` is `INTEGER PRIMARY KEY AUTOINCREMENT`, `data` is a JSON
+string in a `TEXT` column, and `created_at` is `TEXT ... DEFAULT (datetime('now'))`.
 
 ## Which Approach Should I Use?
 
