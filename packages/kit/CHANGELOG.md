@@ -1,5 +1,11 @@
 # @willyim/kit
 
+## 0.9.0
+
+### Minor Changes
+
+- 5c9ad8c: `createApp` no longer builds the registry. Building it runs every service factory (and every method's schemas) against an empty context, which each cold start paid for although only the adapters and discovery read it. The registry is now built on first use, and the view check moved into `registry()` with the tool-name and empty-context checks. Call `registry(app)` in a test to keep those failing in CI instead of on the first request that needs the registry.
+
 ## 0.8.0
 
 ### Minor Changes
