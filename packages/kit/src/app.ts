@@ -2,6 +2,7 @@ import { handle, type HandleOptions, type HandlerContext } from "./api.js"
 import { defaultLogApp } from "./log.js"
 import { logCall, type OnCall } from "./method.js"
 import type { PermissionsResult } from "./permissions.js"
+import { lazyOf, resolveLazy } from "./lazy.js"
 import { bindService, linkViews, type Factory } from "./registry.js"
 import type {
   CallEvent,
@@ -195,6 +196,8 @@ function lazyService(name: string): PropertyDescriptor {
       get(this: object) {
         const services = viewOf(this)
         const { shared, internal } = views.get(services)!
+        const lazy = lazyOf(shared.factories[name])
+        if (lazy && !lazy.resolved) return pending(services, name, lazy)
         const service = bindService(built(shared, name), shared.ctx, name, shared.onCall, internal)
         setService(services, name, service)
         return service
@@ -206,6 +209,31 @@ function lazyService(name: string): PropertyDescriptor {
     accessors.set(name, accessor)
   }
   return accessor
+}
+
+/**
+ * A lazy service before its module has loaded: each member is an async function
+ * that loads it, then calls the real member through `services` (which now
+ * builds and binds it as usual). Not kept, so the next read gets the real one.
+ */
+function pending(services: object, name: string, lazy: Parameters<typeof resolveLazy>[0]) {
+  return new Proxy(
+    {},
+    {
+      get(_, member) {
+        // Not a thenable: `await ctx.services.x` must not try to call `then`.
+        if (typeof member !== "string" || member === "then") return undefined
+        return async (...args: unknown[]) => {
+          await resolveLazy(lazy)
+          const service = (services as Record<string, Record<string, unknown>>)[name]
+          const fn = service[member]
+          if (typeof fn !== "function")
+            throw new Error(`kit: ${name}.${member} is not a function of the loaded service`)
+          return fn.apply(service, args)
+        }
+      },
+    },
+  )
 }
 
 function viewOf(target: object) {

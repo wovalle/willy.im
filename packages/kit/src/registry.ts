@@ -1,3 +1,4 @@
+import { lazyOf } from "./lazy.js"
 import { bind, isMethod, type OnCall } from "./method.js"
 import { META, type MethodMeta } from "./types.js"
 
@@ -123,6 +124,11 @@ export function registry(app: {
 }): RegistryEntry[] {
   const hit = cache.get(app.config.services)
   if (hit) return hit
+  for (const [service, factory] of Object.entries(app.config.services))
+    if (lazyOf(factory) && !lazyOf(factory)?.resolved)
+      throw new Error(
+        `kit: service "${service}" is lazy and hasn't loaded; await loadServices(app) before registry, tools or toMcpServer`,
+      )
   const entries = Object.entries(app.config.services).flatMap(([service, factory]) =>
     Object.entries(buildEmpty(factory, service)).flatMap(([method, m]) => {
       if (!isMethod(m)) return []

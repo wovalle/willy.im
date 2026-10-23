@@ -1,5 +1,6 @@
 import type { KitApp } from "./app.js"
 import { llmsTxt, openapi, visibleTo } from "./discovery.js"
+import { loadServices } from "./lazy.js"
 import { locked, lockedLlmsTxt, lockedOpenapi, unauthenticated } from "./locked.js"
 import { available, invoke, permitted, unknownMethod } from "./method.js"
 import type { PermissionChecker } from "./permissions.js"
@@ -47,6 +48,7 @@ export async function handle(
   ctx: HandlerContext,
   options: HandleOptions = {},
 ): Promise<Response | null> {
+  await loadServices(app)
   const url = new URL(request.url)
   const basePath = (options.basePath ?? "").replace(/\/+$/, "")
   if (basePath && !url.pathname.startsWith(`${basePath}/`)) return null
