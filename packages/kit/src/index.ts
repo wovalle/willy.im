@@ -3,6 +3,7 @@ export { createApp, declareService, type App, type DiscoveryOptions, type KitApp
 export { jsonSchema, llmsTxt, openapi, type JsonSchema } from "./discovery.js"
 export { fail, safe } from "./errors.js"
 export { kitImage, type KitImage } from "./image.js"
+export { lazyService, loadServices } from "./lazy.js"
 export { method } from "./method.js"
 export {
   definePermissions,

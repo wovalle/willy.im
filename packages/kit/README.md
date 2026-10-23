@@ -223,6 +223,28 @@ door; anything a caller reaches from outside is a `method()`. `app.handle`, `too
 `toMcpServer()` run the checked services whichever context they're handed, so a method that
 gives an agent `tools(app, ctx)` gives it only what the caller may call.
 
+### Lazy services
+
+A heavy service (an LLM pipeline, a big SDK) can stay out of the code your app evaluates at
+startup, which on a serverless cold start is time every first request waits for:
+
+```ts
+const services = {
+  notes,
+  bot: lazyService(() => import("./bot.service").then((m) => m.botService)),
+}
+```
+
+`lazyService` is typed as the factory it loads, so `ctx.services.bot` keeps its types. The
+module loads the first time one of the service's members is called, once per process; until
+then each member is reached through a stand-in that loads it and calls the real one, so call
+every member with `await` (methods already are; a plain member must be an async function).
+Permissions, `onCall` and the trusted/checked views work as for any service.
+
+`registry`, `tools` and `toMcpServer` need every service's contracts, so they need lazy
+services loaded: `handle` awaits `loadServices(app)` itself; anything else calls it first
+(`await loadServices(app)`). Without it they throw, naming the service.
+
 ### Images
 
 ```ts
