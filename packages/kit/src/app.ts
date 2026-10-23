@@ -2,7 +2,7 @@ import { handle, type HandleOptions, type HandlerContext } from "./api.js"
 import { defaultLogApp } from "./log.js"
 import { logCall, type OnCall } from "./method.js"
 import type { PermissionsResult } from "./permissions.js"
-import { bindService, linkViews, registry, type Factory } from "./registry.js"
+import { bindService, linkViews, type Factory } from "./registry.js"
 import type {
   CallEvent,
   Context,
@@ -140,12 +140,9 @@ export function createApp<
   }
   defaultLogApp(config.name)
   validateDiscovery(config.discovery)
-  // fail fast: a factory that uses ctx while building, a bad tool name, an unknown view
-  for (const e of registry(app)) {
-    const view = e.contract.ui?.view
-    if (view !== undefined && !Object.hasOwn(config.views ?? {}, view))
-      throw new Error(`kit: ${e.name} renders view "${view}", which views doesn't declare`)
-  }
+  // The registry (and its checks) is built on first use, not here: it runs every
+  // factory, which a cold start pays for and only the adapters and discovery need.
+  // Apps call `registry(app)` in a test to keep the checks in CI.
   return app
 }
 

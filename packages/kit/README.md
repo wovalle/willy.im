@@ -145,9 +145,11 @@ method({
   validate the return and strip it to the contract, so an internal column never leaves; a
   return the contract rejects is an error there. In process (`ctx.services`) the output isn't
   parsed: you get the method's value as is.
-- **`createApp` fails fast:** it builds the registry right away, so a bad or duplicate tool name
-  (1-64 letters, digits, `_` or `-`) or a factory that touches `ctx` while building throws at
-  startup.
+- **`registry(app)` checks the app:** a bad or duplicate tool name (1-64 letters, digits, `_` or
+  `-`), a view `views` doesn't declare, or a factory that touches `ctx` while building throws.
+  `createApp` doesn't build it (that would run every factory on every cold start); the
+  adapters and discovery build it on first use. Call `registry(app)` in a test so these fail
+  in CI.
 - **Dates:** outputs send `z.date()` as an ISO string. Inputs arrive as JSON, so take dates as
   `z.coerce.date()` or `z.iso.datetime()`; a plain `z.date()` input accepts no JSON value.
 
