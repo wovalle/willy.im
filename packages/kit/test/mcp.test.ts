@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { beforeEach, describe, expect, test } from "vitest"
 import { z } from "zod"
-import { createApp, declareService, method, tools, type Grant } from "../src/index.js"
+import { createApp, declareService, method, registry, tools, type Grant } from "../src/index.js"
 import { toMcpServer, type McpOptions } from "../src/mcp.js"
 import { app, auth, context, ctxFor, member, reset } from "./fixture.js"
 
@@ -256,15 +256,14 @@ describe("MCP Apps", () => {
     expect(client.getServerCapabilities()?.resources).toBeUndefined()
   })
 
-  test("createApp throws on a method whose view isn't declared", () => {
+  test("a method whose view isn't declared fails to type-check, and the registry throws on it", () => {
     const services = {
       x: declareService(() => ({
         y: method({ summary: "y", permission: "notes:read", ui: { view: "nope" } }, async () => {}),
       })),
     }
     // @ts-expect-error "x.y renders view "nope", which createApp's views doesn't declare"
-    expect(() => createApp({ auth, context, services })).toThrow(
-      'kit: x.y renders view "nope", which views doesn\'t declare',
-    )
+    const bad = createApp({ auth, context, services })
+    expect(() => registry(bad)).toThrow('kit: x.y renders view "nope", which views doesn\'t declare')
   })
 })

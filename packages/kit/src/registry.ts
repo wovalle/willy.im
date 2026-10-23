@@ -113,10 +113,14 @@ const cache = new WeakMap<object, RegistryEntry[]>()
 /**
  * Every public method in the app, for the adapters and discovery. Factories
  * run against an empty context here, so they must not use the context while
- * they build, only inside method bodies. Built once per app; throws on a tool
- * name that is invalid or taken twice.
+ * they build, only inside method bodies. Built once per app, on first use;
+ * throws on a tool name that is invalid or taken twice, or a view `views`
+ * doesn't declare. Call it in a test so those fail in CI, not on the first
+ * request that needs it.
  */
-export function registry(app: { config: { services: Record<string, Factory> } }): RegistryEntry[] {
+export function registry(app: {
+  config: { services: Record<string, Factory>; views?: object }
+}): RegistryEntry[] {
   const hit = cache.get(app.config.services)
   if (hit) return hit
   const entries = Object.entries(app.config.services).flatMap(([service, factory]) =>
@@ -144,6 +148,9 @@ export function registry(app: { config: { services: Record<string, Factory> } })
     const other = seen.get(e.tool)
     if (other) throw new Error(`kit: ${other} and ${e.name} share the tool name "${e.tool}"`)
     seen.set(e.tool, e.name)
+    const view = e.contract.ui?.view
+    if (view !== undefined && !Object.hasOwn(app.config.views ?? {}, view))
+      throw new Error(`kit: ${e.name} renders view "${view}", which views doesn't declare`)
   }
   cache.set(app.config.services, entries)
   return entries

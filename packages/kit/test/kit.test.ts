@@ -370,20 +370,33 @@ describe("the registry", () => {
       declareService(() => ({
         x: method({ summary: "x", permission: "notes:read", name }, async () => {}),
       }))
-    expect(() => createApp({ auth, context, services: { a: named("has space") } })).toThrow(
+    expect(() => registry(createApp({ auth, context, services: { a: named("has space") } }))).toThrow(
       'tool name "has space"',
     )
     expect(() =>
-      createApp({ auth, context, services: { a: named("same"), b: named("same") } }),
+      registry(createApp({ auth, context, services: { a: named("same"), b: named("same") } })),
     ).toThrow('a.x and b.x share the tool name "same"')
   })
 
-  test("createApp fails fast, naming the service, on a factory that uses the context while it builds", () => {
+  test("the registry fails, naming the service, on a factory that uses the context while it builds", () => {
     const eager = declareService((ctx) => {
       const db = (ctx as unknown as { db: { notes: unknown } }).db.notes
       return { db }
     })
-    expect(() => createApp({ auth, context, services: { eager } })).toThrow('service "eager"')
+    expect(() => registry(createApp({ auth, context, services: { eager } }))).toThrow('service "eager"')
+  })
+
+  test("createApp runs no factory: the registry is built on first use", () => {
+    let runs = 0
+    const counted = declareService(() => {
+      runs++
+      return { x: method({ summary: "x", permission: "notes:read" }, async () => {}) }
+    })
+    const lazy = createApp({ auth, context, services: { counted } })
+    expect(runs).toBe(0)
+    registry(lazy)
+    registry(lazy)
+    expect(runs).toBe(1)
   })
 })
 
@@ -558,7 +571,6 @@ describe("services", () => {
         }),
       },
     })
-    built.a = built.b = 0 // createApp built both against an empty context for the registry
     const ctx = async () => (await two.context(member("w1", ["notes:read"]), "w1")) as any
     return { two, built, ctx }
   }
