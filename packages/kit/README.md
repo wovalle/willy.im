@@ -468,6 +468,13 @@ Rules for working in a kit app:
   `description`, and describe fields with zod `.describe()`.
 - **Declare in `output` only what outside callers need.** Undeclared keys are stripped at the
   edges. `z.unknown()` is a last resort.
+- **A list returns rows, a get returns the record.** A `list`/`search` method's output is what
+  a caller needs to pick a row (id, name, status, dates, a short preview), paged (`limit`,
+  `cursor` or `page`). Long text, line items, prompts, bodies and blobs belong to the method
+  that gets one row by id. An agent pays for every byte a list returns, on every call.
+- **Declare `hints` on every method**: `readOnly: true` on reads; `destructive` (and
+  `idempotent` where true) on writes. MCP sends them as annotations and `/openapi.json` as
+  `x-hints`, and clients use them to decide when to ask before acting.
 - **Failures:** business rules are `fail(409, …)`, not found is `fail(404, …)`. Let kit raise
   permission and input errors.
 - **`when` is for where, `permission` for who.** Don't encode a caller check in `when`.

@@ -109,7 +109,7 @@ export function openapi(app: KitApp, methods: RegistryEntry[], origin: string) {
   }
   const paths = Object.fromEntries(
     methods.map((m) => {
-      const { summary, description, input, output } = m.contract
+      const { summary, description, input, output, hints } = m.contract
       const permission = describeAccess(m.contract.permission)
       const inputSchema = input && jsonSchema(input, "input")
       const operation = {
@@ -120,6 +120,9 @@ export function openapi(app: KitApp, methods: RegistryEntry[], origin: string) {
           .filter(Boolean)
           .join("\n\n"),
         "x-permission": permission,
+        // The same hints MCP sends as annotations, for a client that reaches the
+        // method over HTTP: what changes nothing, what may delete or overwrite.
+        ...(hints && Object.keys(hints).length > 0 && { "x-hints": hints }),
         ...(inputSchema && {
           requestBody: {
             required: (inputSchema.required?.length ?? 0) > 0,
