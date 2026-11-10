@@ -42,7 +42,8 @@ const schemaCache = {
  * A contract schema as JSON Schema (2020-12, what OpenAPI 3.1 embeds), cached per
  * schema. Dates are ISO strings on the wire: always in outputs, and in inputs
  * only for `z.coerce.date()` (a plain `z.date()` input accepts no JSON value).
- * A `format` makes zod's matching regex redundant.
+ * A `format` makes zod's matching regex redundant, and `type: integer` the
+ * safe-integer bounds of `z.int()`.
  */
 export function jsonSchema(schema: SchemaLike, io: "input" | "output"): JsonSchema {
   const hit = schemaCache[io].get(schema)
@@ -55,6 +56,9 @@ export function jsonSchema(schema: SchemaLike, io: "input" | "output"): JsonSche
       if (def.type === "date" && (io === "output" || def.coerce))
         Object.assign(jsonSchema, { type: "string", format: "date-time" })
       if (jsonSchema.format) delete jsonSchema.pattern
+      // `z.int()` bounds: they say "a safe integer", which `type: integer` already does.
+      if (jsonSchema.maximum === Number.MAX_SAFE_INTEGER) delete jsonSchema.maximum
+      if (jsonSchema.minimum === Number.MIN_SAFE_INTEGER) delete jsonSchema.minimum
     },
   }) as JsonSchema
   // Frozen: every caller shares it, so an adapter can't change /openapi.json by mutating it.

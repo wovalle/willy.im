@@ -64,7 +64,8 @@ describe("MCP", () => {
     ])
 
     const created = await client.callTool({ name: "workspaces_create", arguments: { name: "Romo", slug: "romo" } })
-    expect(created.structuredContent).toMatchObject({ name: "Romo", slug: "romo" })
+    expect(created.structuredContent).toBeUndefined()
+    expect(JSON.parse((created.content as { text: string }[])[0].text)).toMatchObject({ name: "Romo", slug: "romo" })
     const refused = await client.callTool({ name: "workspaces_create", arguments: { name: "R", slug: "romo" } })
     expect(refused.isError).toBe(true)
     expect(JSON.stringify(refused.content)).toContain('Slug \\"romo\\" is already taken.')
