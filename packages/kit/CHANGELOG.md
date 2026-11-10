@@ -1,5 +1,12 @@
 # @willyim/kit
 
+## 0.11.0
+
+### Minor Changes
+
+- 899280c: MCP sends less. `tools/list` no longer carries `outputSchema` (it was most of the list's bytes, paid by every session). `tools/call` returns the output once, as compact JSON in a text block, instead of `structuredContent` plus the same JSON as text; only a tool with a view still returns `structuredContent`, the data its view is fed. An absent optional output is `null`. Generated JSON Schemas drop `z.int()`'s safe-integer bounds (`type: integer` already says it), in `/openapi.json` too.
+- 9f9ba70: `/openapi.json` carries a method's `hints` as `x-hints` (`readOnly`, `destructive`, `idempotent`), the same ones MCP sends as annotations, so a client reaching methods over HTTP (bender's `describe`/`call`) knows which change nothing and which may delete or overwrite. README "For agents" gains two rules: a list returns rows and a get returns the record, and every method declares `hints`.
+
 ## 0.10.0
 
 ### Minor Changes
