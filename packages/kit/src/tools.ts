@@ -96,7 +96,6 @@ export function wrapSchema(key: string, schema: JsonSchema, required: boolean): 
 
 /** May the schema's value be absent? */
 export const optionalIn = (s: z.ZodType) => s._zod.optin === "optional"
-export const optionalOut = (s: z.ZodType) => s._zod.optout === "optional"
 
 /** A view's URI: `ui://<app>/<view>`. */
 export const viewUri = (app: KitApp, view: string) => `ui://${app.config.name ?? "kit"}/${view}`

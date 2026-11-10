@@ -282,11 +282,14 @@ instructions, before any method is looked up: anonymous callers can't call anyth
 description and the error descriptions in `/openapi.json` and `/llms.txt`. The defaults are
 neutral.
 
-**MCP details.** `tools/list` maps `title`, `description`, JSON Schemas and hints
-(`readOnlyHint`, `destructiveHint`, `idempotentHint`). `tools/call` returns
-`structuredContent`, the same JSON as a text block, and an image block per `kitImage`. An
-output that isn't always an object (an array, a string, an optional or nullable object) is
-wrapped as `{ result }`. Failures are `isError` results with
+**MCP details.** `tools/list` maps `title`, `description`, the input JSON Schema and hints
+(`readOnlyHint`, `destructiveHint`, `idempotentHint`). It sends no `outputSchema`: a model
+picks a tool by what it does, and result schemas were most of the list's bytes. `tools/call`
+returns the output once, as compact JSON in a text block (`Done.` for a method with no output,
+`null` for an absent optional one), and an image block per `kitImage`. Only a tool with a view
+also returns `structuredContent`, the data the view is fed; an output that isn't always an
+object (an array, a string, an optional or nullable object) is wrapped there as `{ result }`.
+Failures are `isError` results with
 the message and any invalid fields. A tool outside the caller's list, forbidden or
 nonexistent, is the same `Unknown tool` error. Build one server per request or session.
 Unauthenticated MCP never reaches kit: your transport answers 401 + `WWW-Authenticate` first.

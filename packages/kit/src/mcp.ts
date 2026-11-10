@@ -16,9 +16,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import type { KitApp } from "./app.js"
 import {
-  optionalOut,
   tools,
-  wrapSchema,
   type KitResult,
   type KitTool,
   type ToolContext,
@@ -45,21 +43,17 @@ export type McpOptions = {
 }
 
 /**
- * MCP wants `structuredContent` (and `outputSchema`) to be an object. An output
- * that isn't always one (an array, a string, an optional or nullable object)
- * goes in `{ result }`.
+ * A view's `structuredContent`: an object, so an output that isn't always one
+ * (an array, a string, an optional or nullable object) goes in `{ result }`.
+ * Decided from the schema's definition, never by parsing probe values.
  */
-function mcpOutput(t: KitTool) {
-  const schema = t.outputSchema
-  if (!schema || !t.outputZod) return undefined
-  // Decided from the schema's definition, never by parsing probe values.
-  if (t.outputZod._zod.def.type === "object") return { schema, wrap: false }
-  return { schema: wrapSchema("result", schema, !optionalOut(t.outputZod)), wrap: true }
+function viewContent(t: KitTool, data: unknown): Record<string, unknown> {
+  if (t.outputZod?._zod.def.type === "object") return data as Record<string, unknown>
+  return data === undefined ? {} : { result: data }
 }
 
 /** A kit tool as an MCP `Tool`, for apps that register tools on their own server. */
 export const toMcpTool = (t: KitTool): Tool => {
-  const out = mcpOutput(t)
   const annotations = t.hints && {
     ...(t.hints.readOnly !== undefined && { readOnlyHint: t.hints.readOnly }),
     ...(t.hints.destructive !== undefined && { destructiveHint: t.hints.destructive }),
@@ -70,7 +64,6 @@ export const toMcpTool = (t: KitTool): Tool => {
     title: t.title,
     description: t.description,
     inputSchema: t.inputSchema as Tool["inputSchema"],
-    ...(out && { outputSchema: out.schema as Tool["outputSchema"] }),
     ...(annotations && Object.keys(annotations).length > 0 && { annotations }),
     ...(t.ui && {
       _meta: {
@@ -89,34 +82,37 @@ const errorText = (message: string, fields?: Partial<Record<string, string[]>>) 
     ...Object.entries(fields ?? {}).map(([field, errors]) => `- ${field}: ${errors?.join("; ")}`),
   ].join("\n")
 
-/** A tool's result as an MCP `CallToolResult`. */
+/**
+ * A tool's result as an MCP `CallToolResult`: the output once, as compact JSON
+ * in a text block, plus an image block per `kitImage`. Only a tool with a view
+ * also carries `structuredContent`, because that is what the view is fed.
+ */
 export function toCallToolResult(t: KitTool, r: KitResult): CallToolResult {
   if (!r.ok)
     return { isError: true, content: [{ type: "text", text: errorText(r.message, r.fields) }] }
-  const out = mcpOutput(t)
   const images = r.images.map((i) => ({
     type: "image" as const,
     data: i.data,
     mimeType: i.mediaType,
   }))
-  if (!out) return { content: [{ type: "text", text: "Done." }, ...images] }
-  const structured = (
-    out.wrap ? (r.data === undefined ? {} : { result: r.data }) : r.data
-  ) as Record<string, unknown>
+  if (!t.outputZod) return { content: [{ type: "text", text: "Done." }, ...images] }
+  const text = JSON.stringify(r.data) ?? "null"
   return {
-    structuredContent: structured,
-    content: [{ type: "text", text: JSON.stringify(structured) ?? "null" }, ...images],
+    ...(t.ui && { structuredContent: viewContent(t, r.data) }),
+    content: [{ type: "text", text }, ...images],
   }
 }
 
 /**
  * An MCP server listing and calling the tools `ctx` may use (`tools(app, ctx)`):
  *
- * - `tools/list`: name, title, description, input and output JSON Schema, hints
- *   as annotations.
- * - `tools/call`: `structuredContent`, the same JSON as a text block, and one
- *   image block per `kitImage` in the output. A failure is an `isError` result
- *   whose text carries the message and any invalid-input fields.
+ * - `tools/list`: name, title, description, input JSON Schema, hints as
+ *   annotations. No `outputSchema`: a model picks a tool by what it does, and
+ *   result schemas were most of the list's bytes, paid by every session.
+ * - `tools/call`: the output once, as compact JSON in a text block, and one
+ *   image block per `kitImage` in the output. A tool with a view also carries
+ *   `structuredContent` for that view. A failure is an `isError` result whose
+ *   text carries the message and any invalid-input fields.
  * - A tool outside the caller's list, forbidden or nonexistent, is the same
  *   "Unknown tool" protocol error.
  * - MCP Apps: `resources/list` and `resources/read` serve the views the

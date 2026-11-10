@@ -17,7 +17,7 @@ async function connect(grants: Grant[], thread: string | null = null, options?: 
 }
 
 describe("MCP", () => {
-  test("tools/list shows the caller's tools with schemas and hints as annotations", async () => {
+  test("tools/list shows the caller's tools with input schemas and hints as annotations, and no output schemas", async () => {
     const client = await connect(["notes:*"], "t1")
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name)).toEqual([
@@ -35,13 +35,7 @@ describe("MCP", () => {
       inputSchema: { type: "object", required: ["id"] },
       annotations: { destructiveHint: true, idempotentHint: true },
     })
-    expect(remove.outputSchema).toBeUndefined()
-    // an array output is wrapped, since structuredContent must be an object
-    expect(tools.find((t) => t.name === "notes_list")!.outputSchema).toMatchObject({
-      type: "object",
-      properties: { result: { type: "array" } },
-      required: ["result"],
-    })
+    expect(tools.every((t) => t.outputSchema === undefined)).toBe(true)
   })
 
   test("a forbidden tool and a nonexistent one are the same unknown-tool error", async () => {
@@ -59,20 +53,23 @@ describe("MCP", () => {
     expect(missing.message).toContain("Unknown tool: nope")
   })
 
-  test("tools/call returns structuredContent, the same JSON as text, and an image block per kitImage", async () => {
+  test("tools/call returns the output once as compact JSON text, and an image block per kitImage", async () => {
     const client = await connect(["notes:read"])
     const r = await client.callTool({ name: "notes_snapshot", arguments: { id: "1" } })
     const data = {
       id: "1",
       image: { data: "(image 1, attached as an image block)", mediaType: "image/png" },
     }
-    expect(r.structuredContent).toEqual(data)
+    expect(r.structuredContent).toBeUndefined()
     expect(r.content).toEqual([
       { type: "text", text: JSON.stringify(data) },
       { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" },
     ])
     const list = await client.callTool({ name: "notes_list", arguments: {} })
-    expect(list.structuredContent).toEqual({ result: [{ id: "1", title: "First" }] })
+    expect(list.structuredContent).toBeUndefined()
+    expect(list.content).toEqual([
+      { type: "text", text: JSON.stringify([{ id: "1", title: "First" }]) },
+    ])
   })
 
   test("a failure is an isError result carrying the message and the invalid fields", async () => {
@@ -89,7 +86,7 @@ describe("MCP", () => {
     })
   })
 
-  test("an optional output is wrapped, and an absent one is an empty structuredContent", async () => {
+  test("an absent optional output is null, and an output-less method says Done.", async () => {
     const maybe = createApp({
       auth,
       context,
@@ -111,19 +108,13 @@ describe("MCP", () => {
     const [a, b] = InMemoryTransport.createLinkedPair()
     const client = new Client({ name: "test", version: "1" })
     await Promise.all([server.connect(a), client.connect(b)])
-    const [tool] = (await client.listTools()).tools
-    expect(tool.outputSchema).toMatchObject({
-      properties: { result: { type: "object" } },
-      required: [],
-    })
-    expect(
-      (await client.callTool({ name: "x_y", arguments: { found: true } })).structuredContent,
-    ).toEqual({
-      result: { id: "1" },
-    })
+    const found = await client.callTool({ name: "x_y", arguments: { found: true } })
+    expect(found.content).toEqual([{ type: "text", text: '{"id":"1"}' }])
     const none = await client.callTool({ name: "x_y", arguments: { found: false } })
-    expect(none.structuredContent).toEqual({})
-    expect(none.content).toEqual([{ type: "text", text: "{}" }])
+    expect(none.content).toEqual([{ type: "text", text: "null" }])
+    expect(none.structuredContent).toBeUndefined()
+    const done = await (await connect(["notes:*"])).callTool({ name: "notes_remove", arguments: { id: "1" } })
+    expect(done.content).toEqual([{ type: "text", text: "Done." }])
   })
 
   test("instructions can be computed from the tools the caller sees", async () => {
@@ -189,6 +180,12 @@ describe("MCP Apps", () => {
       ui: { resourceUri: "ui://board/board", visibility: ["app"] },
     })
     expect(byName.cards_plain._meta).toBeUndefined()
+  })
+
+  test("a tool with a view also returns structuredContent, the data its view is fed", async () => {
+    const r = await (await connectBoard(["notes:*"])).callTool({ name: "cards_show", arguments: {} })
+    expect(r.structuredContent).toEqual({ id: "1" })
+    expect(r.content).toEqual([{ type: "text", text: '{"id":"1"}' }])
   })
 
   test("tools() passes the view through for runtimes that render natively", async () => {
