@@ -749,6 +749,13 @@ describe("discovery", () => {
     expect((await paths(ctx)).length).toBe(7) // all but notes.reply, which needs a thread
     expect((await app.handle(post("/api/notes.get", { id: "1" }), ctx))?.status).toBe(403)
   })
+  test("a contract's hints are x-hints in openapi.json, absent when it declares none", async () => {
+    const ctx = await ctxFor(["notes:*"], "t1")
+    const doc = await (await app.handle(new Request("https://x.test/openapi.json"), ctx))!.json()
+    expect(doc.paths["/api/notes.remove"].post["x-hints"]).toEqual({ destructive: true, idempotent: true })
+    expect(doc.paths["/api/notes.snapshot"].post["x-hints"]).toEqual({ readOnly: true })
+    expect(doc.paths["/api/notes.create"].post).not.toHaveProperty("x-hints")
+  })
   test("a contract's description is in openapi.json and llms.txt", async () => {
     const ctx = await ctxFor(["notes:write"], "t1")
     const doc = await (await app.handle(new Request("https://x.test/openapi.json"), ctx))!.json()
