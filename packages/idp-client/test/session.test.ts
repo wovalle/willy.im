@@ -73,15 +73,18 @@ describe("login", () => {
     ).rejects.toMatchObject({ status: 400 })
   })
 
-  it("drops an off-site ?next= rather than becoming an open redirect", async () => {
-    const h = createHarness()
-    const started = await h.idp.startLogin({ redirectUri: REDIRECT_URI, next: "//evil.test/x" })
-    h.jar.absorb(started.headers)
-    const result = await h.idp.completeLogin(h.jar.request(h.stub.authorize(started.url)), {
-      redirectUri: REDIRECT_URI,
-    })
-    expect(result.next).toBe("/")
-  })
+  it.each(["//evil.test/x", "/\\evil.test", "/\t/evil.test", "/%09/evil.test"])(
+    "drops the off-site ?next= %j rather than becoming an open redirect",
+    async (next) => {
+      const h = createHarness()
+      const started = await h.idp.startLogin({ redirectUri: REDIRECT_URI, next })
+      h.jar.absorb(started.headers)
+      const result = await h.idp.completeLogin(h.jar.request(h.stub.authorize(started.url)), {
+        redirectUri: REDIRECT_URI,
+      })
+      expect(result.next).toBe("/")
+    },
+  )
 
   it("propagates an IdP error response from the callback", async () => {
     const h = createHarness()

@@ -31,13 +31,14 @@ export {
   createIdp,
   DEFAULT_SESSION_COOKIE,
   publicSession,
-  safeNext,
   type Idp,
   type IdpOptions,
   type PublicSession,
   type Session,
   type SessionOptions,
 } from "./session.js"
+
+export { safeNext } from "./safe-next.js"
 
 export {
   memorySessions,

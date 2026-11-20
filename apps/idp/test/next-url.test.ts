@@ -13,6 +13,7 @@ describe("safeNext", () => {
   it("returns an ordinary in-app path", () => {
     expect(safeNext("?next=%2Flink%2Fdiscord")).toBe("/link/discord")
     expect(safeNext(new URLSearchParams({ next: "/account" }))).toBe("/account")
+    expect(safeNext("?next=%2Fclientes%2F1%3Fx%3D1%23y")).toBe("/clientes/1?x=1#y")
   })
 
   it("is null when there is nothing to honour", () => {
@@ -34,6 +35,17 @@ describe("safeNext", () => {
 
   it("refuses a backslash-escaped host, the protocol-relative case in a hat", () => {
     expect(safeNext("?next=%2F%5Cevil.test")).toBeNull()
+    expect(safeNext("?next=%2F%255Cevil.test")).toBeNull()
+    expect(safeNext("?next=%2Fok%5C..%5Cevil.test")).toBeNull()
+  })
+
+  it("refuses a tab or newline before the host, which browsers strip", () => {
+    expect(safeNext("?next=%2F%09%2Fevil.test")).toBeNull()
+    expect(safeNext("?next=%2F%250A%2Fevil.test")).toBeNull()
+  })
+
+  it("refuses a protocol-relative URL hidden behind one more encoding", () => {
+    expect(safeNext("?next=%2F%252F%252Fevil.test")).toBeNull()
   })
 
   it("refuses anything that is not rooted at /", () => {

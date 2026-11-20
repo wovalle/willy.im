@@ -28,6 +28,7 @@ import {
   randomToken,
 } from "./crypto.js"
 import { parseDuration, type Duration } from "./duration.js"
+import { safeNext } from "./safe-next.js"
 import type { SessionRecord, SessionStore } from "./store.js"
 
 export const DEFAULT_SESSION_COOKIE = "idp_session"
@@ -457,7 +458,7 @@ export function createIdp(options: IdpOptions) {
         sessionCookie(await signedId(id), expiresAt.getTime() - created.getTime()),
       )
       headers.append("set-cookie", clearCookie(stateCookieName, cookieOptions))
-      return { session: toSession(row, null), headers, next: payload.next ?? "/" }
+      return { session: toSession(row, null), headers, next: safeNext(payload.next) ?? "/" }
     },
 
     /**
@@ -525,11 +526,4 @@ export function createIdp(options: IdpOptions) {
 
 function isUnauthorized(error: unknown): boolean {
   return error instanceof IdpError && (error.status === 401 || error.status === 403)
-}
-
-/** Only same-site paths survive as `?next=` — an open redirect is not a feature. */
-export function safeNext(next: string | null | undefined): string | undefined {
-  if (!next) return undefined
-  if (!next.startsWith("/") || next.startsWith("//")) return undefined
-  return next
 }
