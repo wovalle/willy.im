@@ -61,6 +61,20 @@ describe("createAuthRoute", () => {
     expect(done.headers.get("location")).toBe("/home")
   })
 
+  it.each(["%2F%5Cevil.test", "%2F%2Fevil.test", "%2F%09%2Fevil.test", "https%3A%2F%2Fevil.test"])(
+    "/auth/callback never sends ?next=%s off-site",
+    async (next) => {
+      const h = createHarness()
+      const route = routeFor(h, { defaultRedirect: "/home" })
+      const start = await route(`/auth/login?next=${next}`)
+      h.jar.absorb(start)
+      const callback = new URL(h.stub.authorize(start.headers.get("location")!))
+      const done = await route(callback.pathname + callback.search)
+
+      expect(done.headers.get("location")).toBe("/home")
+    },
+  )
+
   it("/auth/logout ends the local session and the IdP's", async () => {
     const h = createHarness()
     await loginThrough(h)

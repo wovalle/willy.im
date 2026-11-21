@@ -19,7 +19,8 @@
  */
 
 import type { Idp, Session } from "../session.js"
-import { publicSession, safeNext } from "../session.js"
+import { safeNext } from "../safe-next.js"
+import { publicSession } from "../session.js"
 
 /** The loader/action argument shape, narrowed to what the adapter reads. */
 export type RouteArgs = {
