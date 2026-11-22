@@ -5,6 +5,13 @@ import {
   pgTable,
   text,
   timestamp,
+  type PgBigSerial53Builder,
+  type PgJsonbBuilder,
+  type PgTextBuilder,
+  type PgTimestampBuilder,
+  type SetHasDefault,
+  type SetIsPrimaryKey,
+  type SetNotNull,
 } from "drizzle-orm/pg-core"
 
 import type { AuditContextColumn } from "./types.js"
@@ -29,7 +36,27 @@ function resolveColumns(options?: PgAuditLogTableOptions): string[] {
   return columns
 }
 
-export function pgAuditLogTable(options?: PgAuditLogTableOptions) {
+/**
+ * The audit table's columns, as drizzle builders. Context columns are runtime-only.
+ *
+ * The factory's return type is spelled from these builders so the emitted declarations
+ * name drizzle types instead of inlining the column configs one drizzle version computed:
+ * the consumer's drizzle builds the table type, whatever version it is.
+ */
+export type PgAuditLogColumns = {
+  id: SetIsPrimaryKey<PgBigSerial53Builder>
+  table_name: SetNotNull<PgTextBuilder>
+  operation: SetNotNull<PgTextBuilder>
+  row_id: PgTextBuilder
+  user_id: PgTextBuilder
+  old_data: PgJsonbBuilder
+  new_data: PgJsonbBuilder
+  created_at: SetNotNull<SetHasDefault<PgTimestampBuilder>>
+}
+
+export type PgAuditLogTable = ReturnType<typeof pgTable<"audit_logs", PgAuditLogColumns>>
+
+export function pgAuditLogTable(options?: PgAuditLogTableOptions): PgAuditLogTable {
   const contextColumns = resolveColumns(options)
   const columns = {
     id: bigserial("id", { mode: "number" }).primaryKey(),

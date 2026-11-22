@@ -1,7 +1,17 @@
 export { d1AuditLogTable, d1AuditContextTable } from "./audit-log-schema.js"
-export type { D1AuditLogTableOptions } from "./audit-log-schema.js"
+export type {
+  D1AuditContextColumns,
+  D1AuditContextTable,
+  D1AuditLogColumns,
+  D1AuditLogTable,
+  D1AuditLogTableOptions,
+} from "./audit-log-schema.js"
 export { d1AuditEventsTable } from "./audit-events-schema.js"
-export type { D1AuditEventsTableOptions } from "./audit-events-schema.js"
+export type {
+  D1AuditEventsColumns,
+  D1AuditEventsTable,
+  D1AuditEventsTableOptions,
+} from "./audit-events-schema.js"
 export {
   createAttachD1AuditTriggerSql,
   createAttachD1AuditTriggersSql,

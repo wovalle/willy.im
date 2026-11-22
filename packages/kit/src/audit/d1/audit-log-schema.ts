@@ -1,9 +1,11 @@
-import { sql } from "drizzle-orm"
+import { sql, type HasDefault, type IsPrimaryKey, type NotNull } from "drizzle-orm"
 import {
   index,
   integer,
   sqliteTable,
   text,
+  type SQLiteIntegerBuilder,
+  type SQLiteTextBuilder,
 } from "drizzle-orm/sqlite-core"
 
 import type { AuditContextColumn } from "./types.js"
@@ -28,14 +30,45 @@ function resolveColumns(options?: D1AuditLogTableOptions): AuditContextColumn[] 
   return columns
 }
 
-const textColumn = (name: string) => text(name)
+type Text = SQLiteTextBuilder<[string, ...string[]]>
+
+/**
+ * The audit table's columns, as drizzle builders, plus one text column per context column.
+ *
+ * The factory's return type is spelled from these builders so the emitted declarations
+ * name drizzle types instead of inlining the column configs one drizzle version computed:
+ * the consumer's drizzle builds the table type, whatever version it is.
+ */
+export type D1AuditLogColumns<C extends string = never> = {
+  id: IsPrimaryKey<HasDefault<NotNull<SQLiteIntegerBuilder>>>
+  table_name: NotNull<Text>
+  operation: NotNull<Text>
+  row_id: Text
+  user_id: Text
+  old_data: Text
+  new_data: Text
+  created_at: HasDefault<NotNull<Text>>
+} & { [K in C]: Text }
+
+export type D1AuditLogTable<C extends string = never> = ReturnType<
+  typeof sqliteTable<"audit_logs", D1AuditLogColumns<C>>
+>
+
+export type D1AuditContextColumns = {
+  key: IsPrimaryKey<NotNull<Text>>
+  value: Text
+}
+
+export type D1AuditContextTable = ReturnType<typeof sqliteTable<string, D1AuditContextColumns>>
 
 /** The audit table. Context columns are typed by name: `table.workspace_id`. */
-export function d1AuditLogTable<const C extends string = never>(options?: D1AuditLogTableOptions<C>) {
+export function d1AuditLogTable<const C extends string = never>(
+  options?: D1AuditLogTableOptions<C>,
+): D1AuditLogTable<C> {
   const contextColumns = resolveColumns(options)
   const contextDefs = Object.fromEntries(
     contextColumns.map(({ column }) => [column, text(column)]),
-  ) as { [K in C]: ReturnType<typeof textColumn> }
+  ) as { [K in C]: Text }
   const columns = {
     id: integer("id").primaryKey({ autoIncrement: true }),
     table_name: text("table_name").notNull(),
@@ -67,7 +100,7 @@ export function d1AuditLogTable<const C extends string = never>(options?: D1Audi
   )
 }
 
-export function d1AuditContextTable(options?: { contextTable?: string }) {
+export function d1AuditContextTable(options?: { contextTable?: string }): D1AuditContextTable {
   const tableName = options?.contextTable ?? "_audit_context"
   return sqliteTable(tableName, {
     key: text("key").primaryKey(),
