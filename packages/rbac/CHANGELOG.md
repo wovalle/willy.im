@@ -1,5 +1,13 @@
 # @willyim/rbac
 
+## 0.4.11
+
+### Patch Changes
+
+- Updated dependencies [15d40fc]
+- Updated dependencies [b79e50a]
+  - @willyim/kit@0.12.0
+
 ## 0.4.10
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @willyim/kit
 
+## 0.12.0
+
+### Minor Changes
+
+- 15d40fc: The audit table factories (`pgAuditLogTable`, `pgAuditEventsTable`, `d1AuditLogTable`, `d1AuditEventsTable`, `d1AuditContextTable`) now declare their return types from drizzle's builder types, so the published declarations no longer freeze the column configs computed by kit's own drizzle. The app's drizzle builds the table type, which makes `db.select().from(auditLogs)` typecheck on drizzle-orm 1.0.0-rc.6 again (it failed with TS2345) while still working on rc.4. The column and table types are exported as `PgAuditLogColumns`/`PgAuditLogTable`, `PgAuditEventsColumns`/`PgAuditEventsTable`, `D1AuditLogColumns`/`D1AuditLogTable`, `D1AuditEventsColumns`/`D1AuditEventsTable` and `D1AuditContextColumns`/`D1AuditContextTable`. Checked against drizzle-orm 1.0.0-rc.4 and 1.0.0-rc.6.
+
+### Patch Changes
+
+- b79e50a: Fix an open redirect in `safeNext`: it rejected `//host` but let `/\host`, `/%5Chost` and `/%09/host` through, which browsers follow off-site after sign-in. It now accepts only same-origin absolute paths — a single leading `/` not followed by `/` or `\`, no backslash, control character or whitespace in the raw or percent-decoded value, and resolving to the same origin — and `completeLogin` re-checks the `next` it reads back from the state cookie. Paths with encoded whitespace (`/search?q=a%20b`) or malformed percent-encoding now fall back to the default redirect. kit picks up the fixed idp.
+- Updated dependencies [b79e50a]
+  - @willyim/idp@2.0.2
+
 ## 0.11.0
 
 ### Minor Changes
