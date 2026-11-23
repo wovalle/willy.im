@@ -6,6 +6,13 @@ import {
   pgTable,
   text,
   timestamp,
+  type PgBigSerial53Builder,
+  type PgJsonbBuilder,
+  type PgTextBuilder,
+  type PgTimestampBuilder,
+  type SetHasDefault,
+  type SetIsPrimaryKey,
+  type SetNotNull,
 } from "drizzle-orm/pg-core"
 
 import type { AuditContextColumn } from "./types.js"
@@ -34,8 +41,25 @@ function resolveColumns(options?: PgAuditEventsTableOptions): AuditContextColumn
   return columns
 }
 
+/**
+ * The events table's columns, as drizzle builders. Context columns are runtime-only.
+ * Spelled out so the emitted declarations let the consumer's drizzle build the table type
+ * (see `PgAuditLogColumns`).
+ */
+export type PgAuditEventsColumns = {
+  id: SetIsPrimaryKey<PgBigSerial53Builder>
+  name: SetNotNull<PgTextBuilder>
+  subject_type: PgTextBuilder
+  subject_id: PgTextBuilder
+  user_id: PgTextBuilder
+  data: PgJsonbBuilder
+  created_at: SetNotNull<SetHasDefault<PgTimestampBuilder>>
+}
+
+export type PgAuditEventsTable = ReturnType<typeof pgTable<string, PgAuditEventsColumns>>
+
 /** The custom events table (`audit_events`), matching `createAuditEventsInstallSql`. */
-export function pgAuditEventsTable(options?: PgAuditEventsTableOptions) {
+export function pgAuditEventsTable(options?: PgAuditEventsTableOptions): PgAuditEventsTable {
   const name = options?.name ?? "audit_events"
   const schema = options?.schema && options.schema !== "public" ? options.schema : undefined
   const contextColumns = resolveColumns(options)

@@ -1,9 +1,11 @@
-import { sql } from "drizzle-orm"
+import { sql, type HasDefault, type IsPrimaryKey, type NotNull } from "drizzle-orm"
 import {
   index,
   integer,
   sqliteTable,
   text,
+  type SQLiteIntegerBuilder,
+  type SQLiteTextBuilder,
 } from "drizzle-orm/sqlite-core"
 
 import type { AuditContextColumn } from "./types.js"
@@ -30,15 +32,36 @@ function resolveColumns(options?: D1AuditEventsTableOptions): AuditContextColumn
   return columns
 }
 
-const textColumn = (name: string) => text(name)
+type Text = SQLiteTextBuilder<[string, ...string[]]>
+
+/**
+ * The events table's columns, as drizzle builders, plus one text column per context column.
+ * Spelled out so the emitted declarations let the consumer's drizzle build the table type
+ * (see `D1AuditLogColumns`).
+ */
+export type D1AuditEventsColumns<C extends string = never> = {
+  id: IsPrimaryKey<HasDefault<NotNull<SQLiteIntegerBuilder>>>
+  name: NotNull<Text>
+  subject_type: Text
+  subject_id: Text
+  user_id: Text
+  data: Text
+  created_at: HasDefault<NotNull<Text>>
+} & { [K in C]: Text }
+
+export type D1AuditEventsTable<C extends string = never> = ReturnType<
+  typeof sqliteTable<string, D1AuditEventsColumns<C>>
+>
 
 /** The custom events table (`audit_events`). Context columns are typed by name: `table.workspace_id`. */
-export function d1AuditEventsTable<const C extends string = never>(options?: D1AuditEventsTableOptions<C>) {
+export function d1AuditEventsTable<const C extends string = never>(
+  options?: D1AuditEventsTableOptions<C>,
+): D1AuditEventsTable<C> {
   const name = options?.name ?? "audit_events"
   const contextColumns = resolveColumns(options)
   const contextDefs = Object.fromEntries(
     contextColumns.map(({ column }) => [column, text(column)]),
-  ) as { [K in C]: ReturnType<typeof textColumn> }
+  ) as { [K in C]: Text }
   const columns = {
     id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),

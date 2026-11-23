@@ -1,7 +1,15 @@
 export { pgAuditLogTable } from "./audit-log-schema.js"
-export type { PgAuditLogTableOptions } from "./audit-log-schema.js"
+export type {
+  PgAuditLogColumns,
+  PgAuditLogTable,
+  PgAuditLogTableOptions,
+} from "./audit-log-schema.js"
 export { pgAuditEventsTable } from "./audit-events-schema.js"
-export type { PgAuditEventsTableOptions } from "./audit-events-schema.js"
+export type {
+  PgAuditEventsColumns,
+  PgAuditEventsTable,
+  PgAuditEventsTableOptions,
+} from "./audit-events-schema.js"
 export {
   createAttachAuditTriggerSql,
   createAttachAuditTriggersSql,
