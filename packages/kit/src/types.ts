@@ -228,8 +228,8 @@ export type PublicName = {
 
 // One message per public method whose return doesn't fit its contract.
 /**
- * Type-only: what a collection's `load` returns next to what its `row` requires,
- * compared at `createApp` like a method's return (`collection.ts`).
+ * Type-only: what a collection's `load` returns next to what its `row` (and `meta`)
+ * require, compared at `createApp` like a method's return (`collection.ts`).
  */
 export declare const LOADS: unique symbol
 export type Loads<L, Want> = { readonly [LOADS]: { load: L; want: Want } }
@@ -238,7 +238,7 @@ type Mismatch<Name extends string, M> =
   M extends Loads<infer L extends (...args: any[]) => any, infer Want>
     ? [Awaited<ReturnType<L>>] extends [Want]
       ? never
-      : `${Name} loads rows its row schema rejects`
+      : `${Name} loads rows or meta its schemas reject`
     : MethodMismatch<Name, M>
 
 type MethodMismatch<Name extends string, M> = M extends { [META]: MethodMeta<any, infer O> } & ((

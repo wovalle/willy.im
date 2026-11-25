@@ -164,6 +164,11 @@ export async function collections() {
   // the next page round-trips as input
   if (first.next) await ctx.services.notes.history(first.next)
 
+  // meta is typed by its schema, and optional: load decides which pages carry it
+  first.meta?.matching satisfies number | undefined
+  // @ts-expect-error meta may be absent
+  first.meta.matching
+
   // @ts-expect-error hidden fields aren't selectable
   await ctx.services.notes.history({ select: ["secret"] })
   // @ts-expect-error not a field
@@ -233,11 +238,112 @@ const wrongRows = declareService(() => ({
 }))
 
 export function loadChecks() {
-  // @ts-expect-error "bad.z loads rows its row schema rejects": page paging needs total
+  // @ts-expect-error "bad.z loads rows or meta its schemas reject": page paging needs total
   createApp({ auth, context, services: { ...services, bad: noTotal } })
-  // @ts-expect-error "bad.w loads rows its row schema rejects"
+  // @ts-expect-error "bad.w loads rows or meta its schemas reject"
   createApp({ auth, context, services: { ...services, bad: wrongRows } })
+  // @ts-expect-error "bad.m loads rows or meta its schemas reject": meta doesn't fit
+  createApp({ auth, context, services: { ...services, bad: wrongMeta } })
+  // @ts-expect-error "bad.u loads rows or meta its schemas reject": no meta declared
+  createApp({ auth, context, services: { ...services, bad: undeclaredMeta } })
+  // meta on some pages only is fine
+  createApp({ auth, context, services: { ...services, ok: someMeta } })
 }
+
+const metaCollection = <T>(load: (args: { after: unknown }) => T) =>
+  declareService(() => ({
+    m: collection({
+      summary: "m",
+      permission: "notes:read",
+      row: z.object({ id: z.string() }),
+      fields: { default: ["id"] },
+      sorts: { id: { dir: "asc", key: (r) => r.id } },
+      defaultSort: "id",
+      limit: { default: 10, max: 10 },
+      meta: { title: z.string() },
+      load,
+    }),
+  }))
+
+const wrongMeta = metaCollection(() => ({ rows: [{ id: "1" }], meta: { title: 1 } }))
+const someMeta = metaCollection(({ after }) =>
+  after ? { rows: [{ id: "2" }] } : { rows: [{ id: "1" }], meta: { title: "t" } },
+)
+const undeclaredMeta = declareService(() => ({
+  u: collection({
+    summary: "u",
+    permission: "notes:read",
+    row: z.object({ id: z.string() }),
+    fields: { default: ["id"] },
+    sorts: { id: { dir: "asc", key: (r) => r.id } },
+    defaultSort: "id",
+    limit: { default: 10, max: 10 },
+    load: () => ({ rows: [{ id: "1" }], meta: { title: "t" } }),
+  }),
+}))
+
+// `after.key` is typed per sort: narrowing on `sort` gives that sort's key, and `after.id` the
+// id field's type.
+export const sortKeys = collection({
+  summary: "k",
+  permission: "notes:read",
+  row: z.object({ n: z.int(), last: z.string(), first: z.string(), score: z.number() }),
+  id: "n",
+  fields: { default: ["n"] },
+  sorts: {
+    score: { dir: "desc", key: (r) => r.score },
+    name: { dir: "asc", key: (r) => [r.last, r.first] },
+  },
+  defaultSort: "score",
+  limit: { default: 10, max: 10 },
+  load: (args) => {
+    if (args.after) {
+      args.after.id satisfies number
+      // @ts-expect-error the id field is a number
+      args.after.id satisfies string
+      if (args.sort === "score") {
+        args.after.key satisfies number
+        // @ts-expect-error a number, not a tuple
+        args.after.key[0]
+      } else {
+        args.after.key satisfies readonly [string, string]
+        // @ts-expect-error a tuple, not a number
+        args.after.key satisfies number
+        // @ts-expect-error two components
+        args.after.key[2]
+      }
+    }
+    return { rows: [] }
+  },
+})
+
+// The same narrowing works on destructured arguments.
+export const sortKeysDestructured = collection({
+  summary: "k",
+  permission: "notes:read",
+  row: z.object({ id: z.string(), last: z.string(), first: z.string() }),
+  fields: { default: ["id"] },
+  sorts: {
+    name: { dir: "asc", key: (r) => [r.last, r.first] },
+    id: { dir: "asc", key: (r) => r.id },
+  },
+  defaultSort: "name",
+  limit: { default: 10, max: 10 },
+  load: ({ sort, after }) => {
+    if (after && sort === "name") {
+      // the default id field, "id", is a string here
+      after.id satisfies string
+      // @ts-expect-error not a number
+      after.id satisfies number
+      const [last, first] = after.key
+      last satisfies string
+      first satisfies string
+    }
+    // @ts-expect-error not narrowed: a string or a tuple
+    if (after) after.key satisfies string
+    return { rows: [] }
+  },
+})
 
 // Page paging, typed on the collection itself (this file never runs).
 const paged = collection({
@@ -251,6 +357,12 @@ const paged = collection({
   limit: { default: 10, max: 10 },
   load: ({ offset }) => ({ rows: [{ id: String(offset) }], total: 1 }),
 })
+
+export async function pageMeta() {
+  // without a meta schema the page has no meta
+  // @ts-expect-error no meta declared
+  ;(await paged({ page: 1 })).meta
+}
 
 export async function pagePaging() {
   const page = await paged({ page: 2 })

@@ -155,6 +155,14 @@ describe("collection", () => {
     expect((await ctx.services.tags.titles()).rows).toEqual([{ title: "b" }, { title: "First" }])
   })
 
+  test("a page carries meta when load returns it, and not when it doesn't", async () => {
+    seed(["b", "c", "d"])
+    const ctx = await ctxFor(["notes:read"])
+    const [first, second] = await walk((i) => ctx.services.notes.history(i as never))
+    expect(first.meta).toEqual({ matching: 4 })
+    expect("meta" in second).toBe(false)
+  })
+
   test("it is a method: the permission applies and onCall fires", async () => {
     const ctx = await ctxFor(["tags:read"])
     expect(await status(ctx.services.notes.history())).toBe(403)
@@ -194,6 +202,19 @@ describe("collection at the edges", () => {
     expect(all.map((r: any) => r.id)).toEqual(["4", "3", "2", "1"])
     expect(all.every((r: any) => !("secret" in r) && !("workspaceId" in r))).toBe(true)
     expect(pages[0].query).toMatchObject({ select: ["id", "title"], limit: 2 })
+  })
+
+  test("as a tool: meta passes through, declared in the output schema", async () => {
+    seed(["b", "c"])
+    const tool = tools(app, await ctxFor(["notes:read"])).find((t) => t.name === "notes_history")!
+    const first = await tool.call({})
+    if (!first.ok) throw new Error(first.message)
+    expect(first.data).toMatchObject({ meta: { matching: 3 } })
+    const second = await tool.call((first.data as any).next)
+    if (!second.ok) throw new Error(second.message)
+    expect(second.data).not.toHaveProperty("meta")
+    expect(Object.keys(tool.outputSchema?.properties as object)).toContain("meta")
+    expect(tool.outputSchema?.required ?? []).not.toContain("meta")
   })
 
   test("as a tool: a bad cursor comes back as a field error", async () => {

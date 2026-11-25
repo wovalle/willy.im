@@ -11,6 +11,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./collection/drizzle": {
+      "types": "./dist/collection/drizzle.d.ts",
+      "default": "./dist/collection/drizzle.js"
+    },
     "./mcp": {
       "types": "./dist/mcp.d.ts",
       "default": "./dist/mcp.js"
