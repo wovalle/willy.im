@@ -126,6 +126,7 @@ export const notes = declareService(
       },
       defaultSort: "id",
       limit: { default: 2, max: 3 },
+      meta: { matching: z.int().describe("How many notes match `where`.") },
       // Rows come from another public method of this service: no type cycle.
       load: async ({ where, sort, dir, after, limit }) => {
         const listed = await ctx.services.notes.list()
@@ -135,15 +136,18 @@ export const notes = declareService(
           const c = x < y ? -1 : x > y ? 1 : 0
           return dir === "asc" ? c : -c
         }
+        // narrowing on sort types after.key: [title, id] for "title", a number for "id"
         const from =
-          after &&
-          (sort === "title" ? `${(after.key as string[])[0]}\u0000${after.id}` : Number(after.id))
-        const all = listed
+          after && (sort === "title" ? `${after.key[0]}\u0000${after.key[1]}` : after.key)
+        const matching = listed
           .filter((r) => r.workspaceId === ctx.tenantId)
           .filter((r) => !where.q || r.title.includes(where.q))
+        const all = matching
           .sort(cmp)
           .filter((r) => from === null || (dir === "asc" ? key(r) > from : key(r) < from))
-        return { rows: all.slice(0, limit) }
+        // meta on the first page only: load decides when
+        if (after) return { rows: all.slice(0, limit) }
+        return { rows: all.slice(0, limit), meta: { matching: matching.length } }
       },
     }),
 

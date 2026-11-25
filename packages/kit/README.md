@@ -313,6 +313,7 @@ export const notes = declareService((ctx) => ({
   query: { where: {}, select: ["id", "title", "createdAt"], sort: "created", dir: "desc", limit: 50 },
   next: { ...query, cursor: "eyJz…" },                  // null on the last page
   total: 132,                                           // page paging only
+  meta: { … },                                          // when declared and `load` returned it
 }
 ```
 
@@ -328,11 +329,67 @@ method's description, so `/llms.txt`, `/openapi.json` and MCP all teach it.
 - `limit`: in cursor paging, the page size **plus one**, so kit can tell there is a next page
 - `after`: in cursor paging, `{ key, id }` of the last row of the previous page, or null. Return
   the rows strictly after it in `(sort key, id)` order: `(created_at, id) < ($key, $id)` for
-  `desc`. kit encodes and checks the cursor; the comparison is yours, in your SQL dialect.
+  `desc`. kit encodes and checks the cursor; the comparison is yours, in your SQL dialect (on
+  drizzle, `cursorWhere` writes it). The arguments are a union over the sorts: narrow on
+  `sort` and `after.key` has that sort's key type (`string`, `number`, `[string, string]`), and
+  `after.id` the id field's.
 - `offset`: in page paging, the rows to skip. Return `total` too.
 
-`createApp` checks what `load` returns against `row` (and `total` in page paging) at compile
-time, the way it checks a method's return, so a `load` may call `ctx.services` freely.
+It returns `{ rows }`, plus `total` in page paging and, when the collection declares `meta`,
+optionally `meta`. `createApp` checks all of it against `row` and `meta` at compile time, the
+way it checks a method's return, so a `load` may call `ctx.services` freely.
+
+**`meta`** is what a list carries besides its rows: a thread's header and participants next to
+its messages. Declare it as a schema (or shape); `load` returns it on whichever pages it decides
+(kit doesn't), and the page passes it on, typed in process and declared in the output schema
+(optional), so `tools()`, MCP and `/api` keep it.
+
+```ts
+messages: collection({
+  // …
+  meta: { subject: z.string(), participants: z.array(z.string()) },
+  load: async ({ where, after, ...page }) => {
+    const rows = await readMessages(where.thread, after, page)
+    if (after) return { rows }
+    return { rows, meta: await threadHeader(where.thread) }
+  },
+}),
+```
+
+### On drizzle: `@willyim/kit/collection/drizzle`
+
+Two helpers write the keyset part of a `load`. Both take the sort key's columns, then the id
+column last: `[t.createdAt, t.id]`, or `[t.lastName, t.firstName, t.id]` for a tuple key.
+
+```ts
+cursorWhere(columns, after, dir) // SQL | undefined: the rows strictly after `after`
+orderFor(columns, dir) //           SQL[]: `asc`/`desc` on every column, for .orderBy(...)
+```
+
+`cursorWhere` builds `(c1 < k1) OR (c1 = k1 AND c2 < k2) OR …` (`>` for `asc`), and
+`undefined` on the first page, so it goes straight into `and(...)`. A column count that doesn't
+match the key plus the id throws.
+
+```ts
+import { and, eq } from "drizzle-orm"
+import { cursorWhere, orderFor } from "@willyim/kit/collection/drizzle"
+
+load: async ({ where, sort, dir, after, limit }) => {
+  const columns =
+    sort === "created" ? [notes.createdAt, notes.id] : [notes.title, notes.id]
+  const rows = await db
+    .select()
+    .from(notes)
+    .where(and(eq(notes.workspaceId, ctx.tenantId), cursorWhere(columns, after, dir)))
+    .orderBy(...orderFor(columns, dir))
+    .limit(limit)
+  return { rows }
+},
+```
+
+`after.key` holds JSON values, and they go through each column's mapping: for a column that
+holds a `Date` (`mode: "timestamp"`), turn the key back first,
+`after && { key: new Date(after.key), id: after.id }`.
 
 Rules:
 
@@ -350,10 +407,11 @@ Rules:
   caller can't see is a 400 naming it (`"*"` leaves it out instead).
 - **Rows are picked to `select` on every surface**, in process too: a hidden field never leaves
   `load`.
-- **In process the rows are typed by `select`**: `ctx.services.notes.list({ select: ["title"] })`
-  returns `{ title: string }[]`, gated fields optional, and `next` type-checks as input again.
-- **`gate` closes over `ctx`.** A method never learns which surface called it; to gate a field
-  per surface (no PII to models), the app's own context has to carry the surface.
+- **In process the rows are typed by `select`**: the `rows` of
+  `ctx.services.notes.list({ select: ["title"] })` are `{ title: string }[]`, gated fields
+  optional; `meta` is typed by its schema, and `next` type-checks as input again.
+- **`gate` closes over `ctx`**: each check asks about the caller (`ctx.caller.has(…)`), the
+  same on every surface. A field the web shows is a field MCP shows.
 
 Not a collection (keep them plain `method()`s): counts and facets, unions of several sources,
 relevance-ranked search, ranked work queues, "open the page that holds row X", lookups by id, and
@@ -800,6 +858,7 @@ Install only `@willyim/kit`:
 | Entry                                                                                 | What                                                                               |
 | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `@willyim/kit`                                                                        | methods, services, the registry, discovery, HTTP, `tools()`, permissions, policies |
+| `@willyim/kit/collection/drizzle`                                                     | `cursorWhere`, `orderFor`: keyset paging for a collection (peer: `drizzle-orm`)    |
 | `@willyim/kit/mcp`                                                                    | `toMcpServer` (peer: `@modelcontextprotocol/sdk`)                                  |
 | `@willyim/kit/react`                                                                  | `createPermissionsHook`                                                            |
 | `@willyim/kit/log`                                                                    | `configureLog`, `getLogger`, `withLogContext`: JSON logs on LogTape                |
