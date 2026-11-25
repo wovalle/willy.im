@@ -151,8 +151,9 @@ method({
   `createApp` doesn't build it (that would run every factory on every cold start); the
   adapters and discovery build it on first use. Call `registry(app)` in a test so these fail
   in CI.
-- **An object input whose fields are all optional may be omitted**, in process as over `/api`
-  (an empty body) and MCP: `ctx.services.notes.search()` parses `{}`.
+- **At run time, an object input whose fields are all optional may be omitted**, in process as
+  over `/api` (an empty body) and MCP: it parses as `{}`. The types still ask a plain method's
+  caller for the argument; a [collection](#collections) types its input as optional.
 - **Dates:** outputs send `z.date()` as an ISO string. Inputs arrive as JSON, so take dates as
   `z.coerce.date()` or `z.iso.datetime()`; a plain `z.date()` input accepts no JSON value.
 
@@ -340,6 +341,8 @@ Rules:
 - **Every sort ends on `id`** (`id: "<field>"` to use another one). Rows that tie on the key are
   ordered by it, and the cursor carries it, so no row is skipped or repeated across pages.
 - **A nullable sort column**: coalesce it in both `key` and the SQL, or use `paging: "page"`.
+- **`where` must accept its own output**: `next.where` is parsed again. A transform that changes
+  the type (a comma string into an array) breaks the round trip; take the array instead.
 - **`normalize` must be idempotent**: it runs again on `next.where`. Use it for defaults that
   depend on other filters (`status` defaults to `open` unless there's a `q`).
 - **A cursor is bound to its sort and direction**: one from another order, or a garbled one, is a
