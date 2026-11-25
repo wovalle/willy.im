@@ -734,6 +734,7 @@ describe("discovery", () => {
       "/api/notes.list",
       "/api/notes.get",
       "/api/notes.snapshot",
+      "/api/notes.history",
       "/api/notes.broken",
     ])
     const writer = await ctxFor(["notes:write"], "t1")
@@ -746,7 +747,7 @@ describe("discovery", () => {
 
   test("an anonymous caller sees every method by default, and calls reach the method", async () => {
     const ctx = await app.context(anonymous, null)
-    expect((await paths(ctx)).length).toBe(7) // all but notes.reply, which needs a thread
+    expect((await paths(ctx)).length).toBe(8) // all but notes.reply, which needs a thread
     expect((await app.handle(post("/api/notes.get", { id: "1" }), ctx))?.status).toBe(403)
   })
   test("a contract's hints are x-hints in openapi.json, absent when it declares none", async () => {

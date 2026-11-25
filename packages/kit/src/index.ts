@@ -1,4 +1,18 @@
 export { handle, type HandleOptions, type HandlerContext } from "./api.js"
+export {
+  collection,
+  type After,
+  type Collection,
+  type CollectionDef,
+  type CollectionInput,
+  type CollectionQuery,
+  type Dir,
+  type LoadArgs,
+  type Page,
+  type Paging,
+  type SortDef,
+  type SortKey,
+} from "./collection.js"
 export { createApp, declareService, type App, type DiscoveryOptions, type KitApp } from "./app.js"
 export { jsonSchema, llmsTxt, openapi, type JsonSchema } from "./discovery.js"
 export { fail, safe } from "./errors.js"

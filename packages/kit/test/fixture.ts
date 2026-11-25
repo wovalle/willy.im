@@ -2,6 +2,7 @@
 // type tests. `Register` is global, so this is the one registration.
 import { z } from "zod"
 import {
+  collection,
   createApp,
   declareService,
   definePermissions,
@@ -103,6 +104,48 @@ export const notes = declareService(
       },
       async ({ id }) => ({ id, image: { data: "iVBORw0KGgo=", mediaType: "image/png" as const } }),
     ),
+
+    // A collection whose load goes through another public method: no type cycle.
+    history: collection({
+      summary: "List notes, paged.",
+      permission: "notes:read",
+      row: z.object({
+        id: z.string(),
+        title: z.string(),
+        workspaceId: z.string().nullable(),
+        secret: z.string(),
+      }),
+      fields: {
+        default: ["id", "title"],
+        hidden: ["secret"],
+        gate: { workspaceId: () => ctx.caller.has("notes:write") },
+      },
+      where: { q: z.string().trim().min(1).optional().describe("Substring of the title.") },
+      sorts: {
+        title: { dir: "asc", key: (r) => [r.title, r.id] },
+        id: { dir: "desc", key: (r) => Number(r.id) },
+      },
+      defaultSort: "id",
+      limit: { default: 2, max: 3 },
+      load: async ({ where, sort, dir, after, limit }) => {
+        await ctx.services.notes.list()
+        const key = (r: Row) => (sort === "title" ? `${r.title}\u0000${r.id}` : Number(r.id))
+        const cmp = (a: Row, b: Row) => {
+          const [x, y] = [key(a), key(b)]
+          const c = x < y ? -1 : x > y ? 1 : 0
+          return dir === "asc" ? c : -c
+        }
+        const from =
+          after &&
+          (sort === "title" ? `${(after.key as string[])[0]}\u0000${after.id}` : Number(after.id))
+        const all = [...rows.values()]
+          .filter((r) => r.workspaceId === ctx.tenantId)
+          .filter((r) => !where.q || r.title.includes(where.q))
+          .sort(cmp)
+          .filter((r) => from === null || (dir === "asc" ? key(r) > from : key(r) < from))
+        return { rows: all.slice(0, limit) }
+      },
+    }),
 
     broken: method(
       { summary: "Return something the contract rejects.", permission: "notes:read", output: Note },

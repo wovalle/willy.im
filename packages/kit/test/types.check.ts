@@ -2,6 +2,7 @@
 // `@ts-expect-error` must fail to compile, or tsc reports it as unused.
 import { z } from "zod"
 import {
+  collection,
   createApp,
   declareService,
   kitImage,
@@ -131,3 +132,97 @@ export async function contextArgs() {
   // @ts-expect-error `auth` is required
   createApp({ context, services })
 }
+
+export async function collections() {
+  // no input: the first page, default fields
+  const first = await ctx.services.notes.history()
+  first.rows[0]!.id satisfies string
+  first.rows[0]!.title satisfies string
+  // @ts-expect-error not in the default fields
+  first.rows[0]!.workspaceId
+  first.next satisfies object | null
+  first.query.sort satisfies "title" | "id"
+
+  // select narrows the rows
+  const picked = await ctx.services.notes.history({ select: ["title"] })
+  picked.rows[0]!.title satisfies string
+  // @ts-expect-error not selected
+  picked.rows[0]!.id
+
+  // a gated field comes back optional
+  const gated = await ctx.services.notes.history({ select: ["id", "workspaceId"] })
+  const ws: string | null | undefined = gated.rows[0]!.workspaceId
+  // @ts-expect-error gated: may be absent
+  const wsRequired: string | null = gated.rows[0]!.workspaceId
+
+  // "*": every visible field, gated ones optional, hidden never
+  const all = await ctx.services.notes.history({ select: "*" })
+  all.rows[0]!.title satisfies string
+  // @ts-expect-error hidden
+  all.rows[0]!.secret
+
+  // the next page round-trips as input
+  if (first.next) await ctx.services.notes.history(first.next)
+
+  // @ts-expect-error hidden fields aren't selectable
+  await ctx.services.notes.history({ select: ["secret"] })
+  // @ts-expect-error not a field
+  await ctx.services.notes.history({ select: ["txet"] })
+  // @ts-expect-error not a declared sort
+  await ctx.services.notes.history({ sort: "name" })
+  // @ts-expect-error cursor paging takes no page
+  await ctx.services.notes.history({ page: 2 })
+  // @ts-expect-error where is typed
+  await ctx.services.notes.history({ where: { q: 1 } })
+
+  const names: PublicName[] = ["notes.history"]
+  return [ws, wsRequired, names]
+}
+
+declareService(() => ({
+  x: collection({
+    summary: "x",
+    permission: "notes:read",
+    row: z.object({ id: z.string(), title: z.string(), secret: z.string() }),
+    // @ts-expect-error not a field of row
+    fields: { default: ["id", "txet"] },
+    sorts: { id: { dir: "asc", key: (r) => r.id } },
+    defaultSort: "id",
+    limit: { default: 10, max: 10 },
+    load: () => ({ rows: [] }),
+  }),
+  y: collection({
+    summary: "y",
+    permission: "notes:read",
+    row: z.object({ id: z.string() }),
+    fields: { default: ["id"] },
+    sorts: { id: { dir: "asc", key: (r) => r.id } },
+    // @ts-expect-error not a declared sort
+    defaultSort: "name",
+    limit: { default: 10, max: 10 },
+    load: () => ({ rows: [] }),
+  }),
+  z: collection({
+    summary: "z",
+    permission: "notes:read",
+    row: z.object({ id: z.string() }),
+    fields: { default: ["id"] },
+    sorts: { id: { dir: "asc", key: (r) => r.id } },
+    defaultSort: "id",
+    paging: "page",
+    limit: { default: 10, max: 10 },
+    // @ts-expect-error page paging must return total
+    load: () => ({ rows: [] }),
+  }),
+  w: collection({
+    summary: "w",
+    permission: "notes:read",
+    row: z.object({ id: z.string() }),
+    fields: { default: ["id"] },
+    sorts: { id: { dir: "asc", key: (r) => r.id } },
+    defaultSort: "id",
+    limit: { default: 10, max: 10 },
+    // @ts-expect-error rows must match row
+    load: () => ({ rows: [{ id: 1 }] }),
+  }),
+}))

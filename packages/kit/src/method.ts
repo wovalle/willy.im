@@ -68,6 +68,14 @@ export const toSchema = (s: SchemaLike): z.ZodType => {
   return schema
 }
 
+const isObject = (s: z.ZodType) => s._zod.def.type === "object"
+
+/** The 400 kit throws for input that doesn't parse: `{ error: "invalid input", fields }`. */
+export const invalidInput = (fields: Partial<Record<string, string[]>>) =>
+  Object.assign(publicError(Response.json({ error: "invalid input", fields }, { status: 400 })), {
+    [INVALID]: fields,
+  })
+
 /** Does the method exist in this context? A `when` that throws counts as false, and is logged. */
 export const available = (contract: Contract, ctx: unknown) => {
   if (!contract.when) return true
@@ -202,18 +210,15 @@ async function run(b: Binding, raw: unknown, edge?: Edge) {
     if (!internal) requireAccess(ctx.caller, contract.permission)
     const input = contract.input && toSchema(contract.input)
     if (input) {
-      const parsed = input.safeParse(raw)
+      // Like an empty `/api` body: an object input whose fields are all optional may be omitted.
+      const parsed = input.safeParse(raw === undefined && isObject(input) ? {} : raw)
       if (!parsed.success) {
         const { formErrors, fieldErrors } = z.flattenError(parsed.error)
         // Errors on the input as a whole (a root `.refine`, a wrong type) go under "_".
-        const fields = {
+        throw invalidInput({
           ...(formErrors.length > 0 && { _: formErrors }),
           ...fieldErrors,
-        } as Partial<Record<string, string[]>>
-        throw Object.assign(
-          publicError(Response.json({ error: "invalid input", fields }, { status: 400 })),
-          { [INVALID]: fields },
-        )
+        } as Partial<Record<string, string[]>>)
       }
       value = parsed.data
     }

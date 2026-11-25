@@ -17,6 +17,7 @@ describe("tools", () => {
       "notes_list",
       "notes_get",
       "notes_snapshot",
+      "notes_history",
       "notes_broken",
     ])
     expect([...(await byName(["notes:write"])).keys()]).toEqual(["notes_create", "notes_remove"])
