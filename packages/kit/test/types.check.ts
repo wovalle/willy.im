@@ -331,6 +331,10 @@ export const sortKeysDestructured = collection({
   limit: { default: 10, max: 10 },
   load: ({ sort, after }) => {
     if (after && sort === "name") {
+      // the default id field, "id", is a string here
+      after.id satisfies string
+      // @ts-expect-error not a number
+      after.id satisfies number
       const [last, first] = after.key
       last satisfies string
       first satisfies string
