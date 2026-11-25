@@ -27,6 +27,7 @@ describe("MCP", () => {
       "notes_remove",
       "thread_reply",
       "notes_snapshot",
+      "notes_history",
       "notes_broken",
     ])
     const remove = tools.find((t) => t.name === "notes_remove")!

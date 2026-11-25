@@ -2,6 +2,7 @@
 // type tests. `Register` is global, so this is the one registration.
 import { z } from "zod"
 import {
+  collection,
   createApp,
   declareService,
   definePermissions,
@@ -104,6 +105,48 @@ export const notes = declareService(
       async ({ id }) => ({ id, image: { data: "iVBORw0KGgo=", mediaType: "image/png" as const } }),
     ),
 
+    history: collection({
+      summary: "List notes, paged.",
+      permission: "notes:read",
+      row: z.object({
+        id: z.string(),
+        title: z.string(),
+        workspaceId: z.string().nullable(),
+        secret: z.string(),
+      }),
+      fields: {
+        default: ["id", "title"],
+        hidden: ["secret"],
+        gate: { workspaceId: () => ctx.caller.has("notes:write") },
+      },
+      where: { q: z.string().trim().min(1).optional().describe("Substring of the title.") },
+      sorts: {
+        title: { dir: "asc", key: (r) => [r.title, r.id] },
+        id: { dir: "desc", key: (r) => Number(r.id) },
+      },
+      defaultSort: "id",
+      limit: { default: 2, max: 3 },
+      // Rows come from another public method of this service: no type cycle.
+      load: async ({ where, sort, dir, after, limit }) => {
+        const listed = await ctx.services.notes.list()
+        const key = (r: Row) => (sort === "title" ? `${r.title}\u0000${r.id}` : Number(r.id))
+        const cmp = (a: Row, b: Row) => {
+          const [x, y] = [key(a), key(b)]
+          const c = x < y ? -1 : x > y ? 1 : 0
+          return dir === "asc" ? c : -c
+        }
+        const from =
+          after &&
+          (sort === "title" ? `${(after.key as string[])[0]}\u0000${after.id}` : Number(after.id))
+        const all = listed
+          .filter((r) => r.workspaceId === ctx.tenantId)
+          .filter((r) => !where.q || r.title.includes(where.q))
+          .sort(cmp)
+          .filter((r) => from === null || (dir === "asc" ? key(r) > from : key(r) < from))
+        return { rows: all.slice(0, limit) }
+      },
+    }),
+
     broken: method(
       { summary: "Return something the contract rejects.", permission: "notes:read", output: Note },
       async () => ({ id: "1", title: 7 }) as never,
@@ -113,6 +156,21 @@ export const notes = declareService(
 )
 
 export const tags = declareService((ctx) => ({
+  // A collection built on another service's collection: no type cycle across services either.
+  titles: collection({
+    summary: "List note titles.",
+    permission: "tags:read",
+    row: z.object({ id: z.string(), title: z.string() }),
+    fields: { default: ["title"] },
+    sorts: { id: { dir: "desc", key: (r) => Number(r.id) } },
+    defaultSort: "id",
+    limit: { default: 10, max: 10 },
+    load: async () => {
+      const page = await ctx.services.notes.history({ select: ["id", "title"], limit: 3 })
+      return { rows: page.rows }
+    },
+  }),
+
   forNote: method(
     {
       summary: "Get the tags of a note.",

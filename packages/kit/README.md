@@ -111,6 +111,7 @@ for (const t of tools(app, ctx)) runtime.register(t.name, t.description, t.input
 | **Register**  | The `declare module "@willyim/kit"` block. It gives `ctx`, grants and `ctx.services` their types everywhere.                                                                                               |
 | **Service**   | `declareService((ctx) => ({ ... }))`. Plain functions inside stay private; only `method(...)` entries are public. The factory runs the first time `ctx.services.<name>` is read, once per context.         |
 | **Method**    | `method(contract, fn)`. Each call runs, in order: `when`, the permission (calls that enter the app only), input validation, your function, the output check (edges only), then `onCall`.                   |
+| **Collection** | `collection({ row, fields, where, sorts, load, … })`: a list method with one grammar (`where`, `select`, `sort`, `limit`, `cursor`/`page`) and one output (`{ rows, query, next }`). See [Collections](#collections). |
 | **Caller**    | `ctx.caller`: `{ has, require, granted, grants, isSuperadmin, principal, tenantId, kind? }`. `kind: "anonymous"` marks a caller with no credentials.                                                       |
 | **Policies**  | `definePolicies({ note: (caller) => ({ workspaceId: caller.tenantId }) })`. Row scoping as plain data: `ctx.scope.note({ id })`.                                                                           |
 
@@ -150,6 +151,9 @@ method({
   `createApp` doesn't build it (that would run every factory on every cold start); the
   adapters and discovery build it on first use. Call `registry(app)` in a test so these fail
   in CI.
+- **At run time, an object input whose fields are all optional may be omitted**, in process as
+  over `/api` (an empty body) and MCP: it parses as `{}`. The types still ask a plain method's
+  caller for the argument; a [collection](#collections) types its input as optional.
 - **Dates:** outputs send `z.date()` as an ISO string. Inputs arrive as JSON, so take dates as
   `z.coerce.date()` or `z.iso.datetime()`; a plain `z.date()` input accepts no JSON value.
 
@@ -254,6 +258,106 @@ output: { url: z.string(), image: kitImage } // { data: base64, mediaType }
 
 `/api` returns images as JSON. `tools()` pulls each one out into `images` and leaves a short
 reference in the data; MCP sends them as image blocks.
+
+## Collections
+
+A list method is a `collection()`: one grammar for every list in every kit app, so a caller
+(an agent above all) learns it once and never guesses a parameter.
+
+```ts
+import { collection } from "@willyim/kit"
+
+export const notes = declareService((ctx) => ({
+  list: collection({
+    summary: "List notes, newest first.",
+    permission: "notes:read",
+    row: z.object({ id: z.string(), title: z.string(), createdAt: z.string(), body: z.string() }),
+    fields: {
+      default: ["id", "title", "createdAt"], // what a caller gets without `select`
+      hidden: ["body"], // never selectable, never returned
+      gate: { createdAt: () => ctx.caller.has("notes:audit") }, // only some callers see it
+    },
+    where: {
+      q: z.string().trim().min(1).optional().describe("Words in the title, accent-insensitive."),
+      tag: z.string().optional(),
+    },
+    sorts: {
+      created: { dir: "desc", key: (r) => r.createdAt },
+      title: { dir: "asc", key: (r) => r.title },
+    },
+    defaultSort: "created",
+    limit: { default: 50, max: 200 },
+    load: ({ where, sort, dir, after, limit }) =>
+      notesRepo.page(ctx.scope.note(), { where, sort, dir, after, limit }),
+  }),
+}))
+```
+
+**The input** every collection takes, all of it optional (`list()` is the first page):
+
+| Field    | What                                                                                    |
+| -------- | --------------------------------------------------------------------------------------- |
+| `where`  | The app's filters, typed by its schema. Search is a filter: a `q` with a `.describe()`. |
+| `select` | Field names, or `"*"` for every field the caller may see. Omitted: `fields.default`.    |
+| `sort`   | One of `sorts`. Omitted: `defaultSort`.                                                 |
+| `dir`    | `"asc"` or `"desc"`. Omitted: the sort's own `dir`.                                     |
+| `limit`  | Rows per page, clamped to `limit.max`. Omitted: `limit.default`.                        |
+| `cursor` | From `next` (`paging: "cursor"`, the default).                                          |
+| `page`   | From 1 (`paging: "page"`).                                                              |
+
+**The output** is always one page:
+
+```ts
+{
+  rows: [{ id: "n9", title: "…", createdAt: "…" }],     // picked to `select`
+  query: { where: {}, select: ["id", "title", "createdAt"], sort: "created", dir: "desc", limit: 50 },
+  next: { ...query, cursor: "eyJz…" },                  // null on the last page
+  total: 132,                                           // page paging only
+}
+```
+
+`query` is the input as applied: defaults filled in, `normalize` run, `limit` clamped. `next` is
+the whole input for the following page: send it back unchanged. kit appends this to the
+method's description, so `/llms.txt`, `/openapi.json` and MCP all teach it.
+
+**`load`** reads one page and is the only path to the data, so the tenant and any row scope
+(`ctx.scope`, assigned-to-me…) apply there, from `ctx`, never from input. It receives:
+
+- `where`: parsed, then `normalize`d
+- `sort`, `dir`, and `select` (the fields that will be returned, to skip joins nobody asked for)
+- `limit`: in cursor paging, the page size **plus one**, so kit can tell there is a next page
+- `after`: in cursor paging, `{ key, id }` of the last row of the previous page, or null. Return
+  the rows strictly after it in `(sort key, id)` order: `(created_at, id) < ($key, $id)` for
+  `desc`. kit encodes and checks the cursor; the comparison is yours, in your SQL dialect.
+- `offset`: in page paging, the rows to skip. Return `total` too.
+
+`createApp` checks what `load` returns against `row` (and `total` in page paging) at compile
+time, the way it checks a method's return, so a `load` may call `ctx.services` freely.
+
+Rules:
+
+- **`key` must survive JSON**: strings, numbers, booleans, null, or a tuple of them. Convert a
+  `Date` to an ISO string; `load` gets that string back in `after.key`.
+- **Every sort ends on `id`** (`id: "<field>"` to use another one). Rows that tie on the key are
+  ordered by it, and the cursor carries it, so no row is skipped or repeated across pages.
+- **A nullable sort column**: coalesce it in both `key` and the SQL, or use `paging: "page"`.
+- **`where` must accept its own output**: `next.where` is parsed again. A transform that changes
+  the type (a comma string into an array) breaks the round trip; take the array instead.
+- **`normalize` must be idempotent**: it runs again on `next.where`. Use it for defaults that
+  depend on other filters (`status` defaults to `open` unless there's a `q`).
+- **A cursor is bound to its sort and direction**: one from another order, or a garbled one, is a
+  400 on `cursor`. Selecting a hidden or unknown field is a 400 on `select`; a gated field the
+  caller can't see is a 400 naming it (`"*"` leaves it out instead).
+- **Rows are picked to `select` on every surface**, in process too: a hidden field never leaves
+  `load`.
+- **In process the rows are typed by `select`**: `ctx.services.notes.list({ select: ["title"] })`
+  returns `{ title: string }[]`, gated fields optional, and `next` type-checks as input again.
+- **`gate` closes over `ctx`.** A method never learns which surface called it; to gate a field
+  per surface (no PII to models), the app's own context has to carry the surface.
+
+Not a collection (keep them plain `method()`s): counts and facets, unions of several sources,
+relevance-ranked search, ranked work queues, "open the page that holds row X", lookups by id, and
+reads that need the whole set to check a rule.
 
 ## Surfaces
 
@@ -468,10 +572,14 @@ Rules for working in a kit app:
   `description`, and describe fields with zod `.describe()`.
 - **Declare in `output` only what outside callers need.** Undeclared keys are stripped at the
   edges. `z.unknown()` is a last resort.
-- **A list returns rows, a get returns the record.** A `list`/`search` method's output is what
-  a caller needs to pick a row (id, name, status, dates, a short preview), paged (`limit`,
-  `cursor` or `page`). Long text, line items, prompts, bodies and blobs belong to the method
-  that gets one row by id. An agent pays for every byte a list returns, on every call.
+- **A list is a [`collection()`](#collections), a get returns the record.** Never hand-roll
+  `limit`/`offset`/`cursor` params on a `method()`. `fields.default` is what a caller needs to
+  pick a row (id, name, status, dates, a short preview); long text, line items, prompts, bodies
+  and blobs belong to the method that gets one row by id, or behind `select`. An agent pays for
+  every byte a list returns, on every call.
+- **Calling a collection:** start with no input (or just `where`), read `query` to see what was
+  applied, and send `next` back unchanged to read on. Ask for more fields with `select`, never
+  by calling a get per row.
 - **Declare `hints` on every method**: `readOnly: true` on reads; `destructive` (and
   `idempotent` where true) on writes. MCP sends them as annotations and `/openapi.json` as
   `x-hints`, and clients use them to decide when to ask before acting.
