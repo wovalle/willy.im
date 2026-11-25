@@ -1,6 +1,13 @@
 import { z } from "zod"
 import { invalidInput, method, toSchema } from "./method.js"
-import { META, type Contract, type MethodMeta, type SchemaLike, type SchemaOf } from "./types.js"
+import {
+  META,
+  type Contract,
+  type Loads,
+  type MethodMeta,
+  type SchemaLike,
+  type SchemaOf,
+} from "./types.js"
 
 /** A sort direction. */
 export type Dir = "asc" | "desc"
@@ -40,9 +47,17 @@ export type LoadArgs<W, S extends string, F extends string> = {
   offset: number
 }
 
+/**
+ * The shape of `load`. Its return is checked at `createApp`, not here: checking it here makes a
+ * `load` that calls `ctx.services` circular, as it would a method's body.
+ */
+type LoadFn<R extends RowSchema, W, S, H extends readonly string[]> = (
+  args: LoadArgs<WhereOut<W>, keyof S & string, Exclude<FieldOf<R>, H[number]>>,
+) => any
+
 type LoadResult<Row, P extends Paging> = P extends "page"
   ? { rows: Row[]; total: number }
-  : { rows: Row[]; total?: number }
+  : { rows: Row[] }
 
 /** `"cursor"` (the default): an opaque `cursor`, stable under inserts. `"page"`: `page` numbers and a `total`. */
 export type Paging = "cursor" | "page"
@@ -55,6 +70,7 @@ export type CollectionDef<
   H extends readonly FieldOf<R>[],
   G extends Exclude<FieldOf<R>, H[number]>,
   P extends Paging,
+  L extends LoadFn<R, W, S, H>,
 > = Omit<Contract, "input" | "output" | "ui"> & {
   /** Every field a row can have: what `load` returns. */
   row: R
@@ -76,10 +92,11 @@ export type CollectionDef<
   defaultSort: keyof S & string
   paging?: P
   limit: { default: number; max: number }
-  /** Reads one page. Apply the tenant and any row scope here, from `ctx`: it is the only path to the data. */
-  load: (
-    args: LoadArgs<WhereOut<W>, keyof S & string, Exclude<FieldOf<R>, H[number]>>,
-  ) => LoadResult<RowOf<R>, P> | Promise<LoadResult<RowOf<R>, P>>
+  /**
+   * Reads one page. Apply the tenant and any row scope here, from `ctx`: it is the only path to
+   * the data. Its rows are checked against `row` at `createApp`, like a method's return.
+   */
+  load: L
 }
 
 type Selection<F extends string> = "*" | readonly F[]
@@ -108,16 +125,14 @@ type Picked<Row, Sel, D extends string, F extends string, G extends string> = Se
     ? Pick<Row, Exclude<K, G> & keyof Row> & Partial<Pick<Row, K & G & keyof Row>>
     : Pick<Row, Exclude<D, G> & keyof Row> & Partial<Pick<Row, D & G & keyof Row>>
 
-/** One page of a collection. */
-export type Page<Row, Q> = {
+/** One page of a collection. Page paging adds `total`, how many rows match. */
+export type Page<Row, Q, P extends Paging = "cursor"> = {
   rows: Row[]
   /** The input as applied: defaults filled in, filters normalized, `limit` clamped. */
   query: Q
   /** The whole input for the following page; null on the last one. */
   next: Q | null
-  /** Page paging only: how many rows match. */
-  total?: number
-}
+} & (P extends "page" ? { total: number } : {})
 
 /**
  * What `collection` returns: a method whose rows are narrowed to the `select`
@@ -131,10 +146,11 @@ export type Collection<
   G extends string,
   S extends string,
   P extends Paging,
-> = {
+  L = unknown,
+> = Loads<L, LoadResult<Row, P>> & {
   <const Sel extends Selection<F> = readonly Extract<D, F>[]>(
     input?: CollectionInput<W, F, S, P, Sel>,
-  ): Promise<Page<Picked<Row, Sel, D, F, G>, CollectionQuery<W, F, S, P>>>
+  ): Promise<Page<Picked<Row, Sel, D, F, G>, CollectionQuery<W, F, S, P>, P>>
   readonly [META]: MethodMeta<z.ZodType, z.ZodType<any>, never>
 }
 
@@ -206,9 +222,10 @@ export function collection<
   const H extends readonly FieldOf<R>[] = [],
   G extends Exclude<FieldOf<R>, H[number]> = never,
   P extends Paging = "cursor",
+  L extends LoadFn<R, W, S, H> = LoadFn<R, W, S, H>,
 >(
-  def: CollectionDef<R, W, S, D, H, G, P>,
-): Collection<RowOf<R>, W, Exclude<FieldOf<R>, H[number]>, D[number], G, keyof S & string, P> {
+  def: CollectionDef<R, W, S, D, H, G, P, L>,
+): Collection<RowOf<R>, W, Exclude<FieldOf<R>, H[number]>, D[number], G, keyof S & string, P, L> {
   const paging: Paging = def.paging ?? "cursor"
   const idField = def.id ?? "id"
   const hidden = new Set<string>(def.fields.hidden ?? [])
@@ -229,7 +246,7 @@ export function collection<
   const input = z.object({
     where: where.describe("Filters."),
     select: z
-      .union([z.literal("*"), z.array(z.enum(visible as [string, ...string[]])).min(1)])
+      .union([z.literal("*"), z.array(z.enum(visible as [string, ...string[]]))])
       .optional()
       .describe(
         `Fields to return. Omitted: ${def.fields.default.join(", ")}. "*": every field you may see.`,
@@ -262,7 +279,7 @@ export function collection<
 
   const contract: Contract = {
     summary: def.summary,
-    description: [def.description, PAGING_NOTE[paging]].filter(Boolean).join("\n\n"),
+    description: `${def.description ?? def.summary}\n\n${PAGING_NOTE[paging]}`,
     permission: def.permission,
     input,
     output,
@@ -295,7 +312,7 @@ export function collection<
     if (position && (position.s !== sort || position.d !== dir)) badCursor()
     const page = paging === "page" ? (args.page ?? 1) : null
 
-    const result = await def.load({
+    const result: { rows: Record<string, unknown>[]; total?: number } = await def.load({
       where: filters as never,
       sort,
       dir,
@@ -347,7 +364,6 @@ export function collection<
       rows: rows.map((r) => pick(r, select)),
       query: position ? { ...query, cursor: args.cursor } : query,
       next,
-      ...(typeof result.total === "number" && { total: result.total }),
     }
   }) as never
 }

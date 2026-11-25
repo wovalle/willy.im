@@ -105,7 +105,6 @@ export const notes = declareService(
       async ({ id }) => ({ id, image: { data: "iVBORw0KGgo=", mediaType: "image/png" as const } }),
     ),
 
-    // A collection whose load goes through another public method: no type cycle.
     history: collection({
       summary: "List notes, paged.",
       permission: "notes:read",
@@ -127,8 +126,9 @@ export const notes = declareService(
       },
       defaultSort: "id",
       limit: { default: 2, max: 3 },
+      // Rows come from another public method of this service: no type cycle.
       load: async ({ where, sort, dir, after, limit }) => {
-        await ctx.services.notes.list()
+        const listed = await ctx.services.notes.list()
         const key = (r: Row) => (sort === "title" ? `${r.title}\u0000${r.id}` : Number(r.id))
         const cmp = (a: Row, b: Row) => {
           const [x, y] = [key(a), key(b)]
@@ -138,7 +138,7 @@ export const notes = declareService(
         const from =
           after &&
           (sort === "title" ? `${(after.key as string[])[0]}\u0000${after.id}` : Number(after.id))
-        const all = [...rows.values()]
+        const all = listed
           .filter((r) => r.workspaceId === ctx.tenantId)
           .filter((r) => !where.q || r.title.includes(where.q))
           .sort(cmp)
@@ -156,6 +156,21 @@ export const notes = declareService(
 )
 
 export const tags = declareService((ctx) => ({
+  // A collection built on another service's collection: no type cycle across services either.
+  titles: collection({
+    summary: "List note titles.",
+    permission: "tags:read",
+    row: z.object({ id: z.string(), title: z.string() }),
+    fields: { default: ["title"] },
+    sorts: { id: { dir: "desc", key: (r) => Number(r.id) } },
+    defaultSort: "id",
+    limit: { default: 10, max: 10 },
+    load: async () => {
+      const page = await ctx.services.notes.history({ select: ["id", "title"], limit: 3 })
+      return { rows: page.rows }
+    },
+  }),
+
   forNote: method(
     {
       summary: "Get the tags of a note.",

@@ -202,6 +202,10 @@ declareService(() => ({
     limit: { default: 10, max: 10 },
     load: () => ({ rows: [] }),
   }),
+}))
+
+// A collection's load is checked at createApp, like a method's return.
+const noTotal = declareService(() => ({
   z: collection({
     summary: "z",
     permission: "notes:read",
@@ -211,9 +215,11 @@ declareService(() => ({
     defaultSort: "id",
     paging: "page",
     limit: { default: 10, max: 10 },
-    // @ts-expect-error page paging must return total
-    load: () => ({ rows: [] }),
+    load: () => ({ rows: [{ id: "1" }] }),
   }),
+}))
+
+const wrongRows = declareService(() => ({
   w: collection({
     summary: "w",
     permission: "notes:read",
@@ -222,7 +228,34 @@ declareService(() => ({
     sorts: { id: { dir: "asc", key: (r) => r.id } },
     defaultSort: "id",
     limit: { default: 10, max: 10 },
-    // @ts-expect-error rows must match row
-    load: () => ({ rows: [{ id: 1 }] }),
+    load: async () => ({ rows: [{ id: 1 }] }),
   }),
 }))
+
+export function loadChecks() {
+  // @ts-expect-error "bad.z loads rows its row schema rejects": page paging needs total
+  createApp({ auth, context, services: { ...services, bad: noTotal } })
+  // @ts-expect-error "bad.w loads rows its row schema rejects"
+  createApp({ auth, context, services: { ...services, bad: wrongRows } })
+}
+
+// Page paging, typed on the collection itself (this file never runs).
+const paged = collection({
+  summary: "p",
+  permission: "notes:read",
+  row: z.object({ id: z.string() }),
+  fields: { default: ["id"] },
+  sorts: { id: { dir: "asc", key: (r) => r.id } },
+  defaultSort: "id",
+  paging: "page",
+  limit: { default: 10, max: 10 },
+  load: ({ offset }) => ({ rows: [{ id: String(offset) }], total: 1 }),
+})
+
+export async function pagePaging() {
+  const page = await paged({ page: 2 })
+  page.total satisfies number
+  page.query.page satisfies number
+  // @ts-expect-error page paging takes no cursor
+  await paged({ cursor: "x" })
+}

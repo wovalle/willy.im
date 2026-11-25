@@ -328,12 +328,15 @@ method's description, so `/llms.txt`, `/openapi.json` and MCP all teach it.
 - `after`: in cursor paging, `{ key, id }` of the last row of the previous page, or null. Return
   the rows strictly after it in `(sort key, id)` order: `(created_at, id) < ($key, $id)` for
   `desc`. kit encodes and checks the cursor; the comparison is yours, in your SQL dialect.
-- `offset`: in page paging, the rows to skip. Return `total` too (the type requires it).
+- `offset`: in page paging, the rows to skip. Return `total` too.
+
+`createApp` checks what `load` returns against `row` (and `total` in page paging) at compile
+time, the way it checks a method's return, so a `load` may call `ctx.services` freely.
 
 Rules:
 
-- **`key` must survive JSON**: strings, numbers, booleans, null, or a tuple of them. A `Date`
-  becomes an ISO string; `load` gets the string back in `after.key`.
+- **`key` must survive JSON**: strings, numbers, booleans, null, or a tuple of them. Convert a
+  `Date` to an ISO string; `load` gets that string back in `after.key`.
 - **Every sort ends on `id`** (`id: "<field>"` to use another one). Rows that tie on the key are
   ordered by it, and the cursor carries it, so no row is skipped or repeated across pages.
 - **A nullable sort column**: coalesce it in both `key` and the SQL, or use `paging: "page"`.

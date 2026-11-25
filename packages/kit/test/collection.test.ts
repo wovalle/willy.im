@@ -149,6 +149,12 @@ describe("collection", () => {
     expect(titles).toEqual(["mine", "First"])
   })
 
+  test("a collection can read another service's collection", async () => {
+    seed(["b"])
+    const ctx = await ctxFor(["tags:read"])
+    expect((await ctx.services.tags.titles()).rows).toEqual([{ title: "b" }, { title: "First" }])
+  })
+
   test("it is a method: the permission applies and onCall fires", async () => {
     const ctx = await ctxFor(["tags:read"])
     expect(await status(ctx.services.notes.history())).toBe(403)
@@ -168,6 +174,7 @@ describe("collection at the edges", () => {
       "cursor",
     ])
     expect(tool.inputSchema.required ?? []).toEqual([])
+    expect(tool.description).toMatch(/^List notes, paged\.\n\nReturns one page: /)
     expect(tool.description).toContain("send `next` back unchanged")
     expect(tool.hints).toEqual({ readOnly: true })
   })
